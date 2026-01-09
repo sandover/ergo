@@ -1,150 +1,145 @@
 # ergo
 
-Minimal multi-agent DAG task planner built on an append-only JSONL event log.
+**A tiny, repo-local task graph for humans + agents.**
 
-`ergo` is designed for “agents in a repo” workflows: multiple processes can safely claim READY work from a shared task graph, while humans can inspect and steer with simple, pipe-friendly commands.
+[![License](https://img.shields.io/github/license/sandover/ergo)](LICENSE)
+[![CI](https://github.com/sandover/ergo/actions/workflows/ci.yml/badge.svg)](https://github.com/sandover/ergo/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/sandover/ergo)](https://github.com/sandover/ergo/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo)](https://goreportcard.com/report/github.com/sandover/ergo)
 
-## Quickstart
+`ergo` is a small CLI that stores tasks and dependencies in an append-only log under `.ergo/`.
+It’s meant for “agents in a repo” workflows where multiple processes can safely claim READY work, and humans can inspect and steer with plain, pipe-friendly commands.
 
-```sh
-# from your project root
+## ⚡ Quick Start
+
+```bash
+# Install (pick one)
+brew install sandover/tap/ergo
+# or: go install github.com/sandover/ergo@latest
+
+# Initialize (run once per repo)
 ergo init
 
-# create an epic (multi-line body via stdin)
+# Tell your agent (optional but recommended)
+echo "Use 'ergo' for task tracking in this repo." >> AGENTS.md
+
+# Create an epic
 epic=$(ergo epic new <<'EOF'
 Improve Linux support
-
-Motivation:
-...
-
-AC:
-...
-
-Validation:
-...
 EOF
 )
 
-# create a task under the epic
-cat <<'EOF' | ergo task new --epic "$epic"
+# Create two tasks and a dependency (A depends B => A waits for B)
+t1=$(cat <<'EOF' | ergo task new --epic "$epic"
 Locking: add unix lock abstraction for Linux
-
-Motivation:
-...
-
-AC:
-...
-
-Validation:
-...
 EOF
+)
+t2=$(cat <<'EOF' | ergo task new --epic "$epic"
+Docs: add Linux notes
+EOF
+)
+ergo link "$t2" depends "$t1"
 
-# see what’s ready
+# See what's READY, then claim one
 ergo ls --ready
-
-# atomically claim + move to doing; prints the task body to stdout
 ergo take
 ```
 
-## Installation (local)
+## 🛠 Features
 
-Requirements: Go 1.21+
+- **Repo-local + inspectable:** state lives in `.ergo/` as an append-only JSONL log.
+- **Dependency-aware:** tasks become READY automatically when blockers are done/canceled.
+- **Concurrency-safe:** writes are serialized with a file lock; `take` is safe under races.
+- **Plain output:** intentionally simple text/TSV for piping and shell scripts.
+- **No server:** no accounts, no daemon, no external service.
 
-```sh
-go build -o ergo .
-sudo mv ergo /usr/local/bin/
-```
+## 📖 Essential Commands
 
-## Installation (Go)
-
-```sh
-go install github.com/sandover/ergo@latest
-```
-
-## Installation (Homebrew)
-
-Once releases are published, install via:
-
-```sh
-brew install sandover/tap/ergo
-```
-
-## Concepts
-
-- **Storage:** `.ergo/events.jsonl` is the source of truth (append-only JSONL). `.ergo/lock` is used to lock all writes.
-- **Tasks & epics:** Epics are tasks with no `epic_id`. Tasks reference their epic via `--epic <id>`.
-- **States:** `todo | doing | done | blocked | canceled`
-- **Dependencies:** `link A depends B` means “A waits for B”. A dependency is satisfied when the prerequisite is `done` or `canceled`.
-- **READY:** `state=todo`, not claimed, and all dependencies satisfied.
-- **Claims:** `take` appends a `claim` event and a `state=doing` event under a single lock.
-- **Re-queue:** `state <id> todo` clears the current claim (making the task eligible to become READY again).
-
-## Usage
+| Command | Action |
+| --- | --- |
+| `ergo init [dir]` | Create `.ergo/` in the repo (or `dir`). |
+| `ergo epic new` | Create an epic (prints id). |
+| `ergo task new --epic <epic_id>` | Create a task under an epic (prints id). |
+| `ergo ls --ready` | List READY tasks. |
+| `ergo take` | Atomically claim oldest READY task and set it to `doing`. |
+| `ergo state <id> <state>` | Set state: `todo | doing | done | blocked | canceled`. |
+| `ergo link <from> depends <to>` | Add a dependency edge (“from waits for to”). |
+| `ergo show <id>` | Show details and body. |
+| `ergo plan` | Summarize epics/tasks and READY/BLOCKED. |
+| `ergo compact` | Rewrite the log to current state (drops history). |
 
 Run `ergo --help` for the full compact manual.
 
-Common commands:
+## 🔗 Workflow (Humans + Agents)
 
-```sh
-ergo init [dir]
-ergo epic new
-ergo task new --epic <epic_id>
-ergo edit <id>
-ergo state <id> <state>
-ergo link <from> depends <to>
-ergo unlink <from> depends <to>
-ergo ls [--epic <id>] [--ready|--blocked|--all]
-ergo take [--epic <id>]
-ergo show <id>
-ergo deps <id>
-ergo rdeps <id>
-ergo plan [--epic <id>]
-ergo compact
+The usual loop:
+
+1. You initialize once (`ergo init`) and write tasks as you think of them.
+2. Agents (or other humans) run `ergo ls --ready` to find unblocked work.
+3. A worker runs `ergo take` to claim a task (safe under concurrency).
+4. When done, they mark it `done`, unblocking dependents automatically.
+
+If you want ergo to be “invisible infrastructure”, keep `.ergo/` uncommitted and use it locally.
+If you want shared memory across collaborators/agents, commit `.ergo/` and treat it like project state.
+
+## 👀 What You’ll See
+
+Example `ergo ls --ready` output (TSV):
+
+```text
+ABC123  todo   EPIC01  -  Locking: add unix lock abstraction for Linux
 ```
 
-### Multi-line bodies
+Example `ergo take` output (prints the task body):
+
+```text
+Locking: add unix lock abstraction for Linux
+```
+
+## 📦 Installation
+
+- **Homebrew:** `brew install sandover/tap/ergo`
+- **Go:** `go install github.com/sandover/ergo@latest`
+- **Build from source:** `go build -o ergo .`
+
+**Requirements:** Go 1.21+ (for building). Prebuilt releases are used by Homebrew.
+
+## 🗂 Where Your Data Lives
+
+- `.ergo/events.jsonl` is the source of truth (append-only JSONL).
+- `.ergo/lock` is a filesystem lock used to serialize writes.
+
+Recommended `.gitignore` (personal/stealth mode):
+
+```gitignore
+/.ergo/
+```
+
+## ✍️ Editing Task Bodies
 
 - If stdin is piped, the body is read from stdin.
 - Otherwise, `ergo` opens `$EDITOR` (default `nano`).
-- For `edit`, piping empty stdin keeps the existing body (useful in some non-interactive shells).
+- For `edit`, piping empty stdin keeps the existing body.
 
-## Data format (events.jsonl)
+## 🧭 Design Principles
 
-Events are JSON objects, one per line:
+- Boring storage you can inspect (`.ergo/` on disk).
+- Output meant for terminals and pipes.
+- Explicit concurrency model (lock + append-only log).
+- Easy to reason about; easy to delete.
 
-```json
-{ "ts":"<RFC3339Nano>", "type":"new_task", "data":{"id":"ABC123","uuid":"...","epic_id":"EPIC01","state":"todo","body":"...","created_at":"..."} }
-{ "ts":"<RFC3339Nano>", "type":"new_epic", "data":{"id":"EPIC01","uuid":"...","state":"todo","body":"...","created_at":"..."} }
-{ "ts":"<RFC3339Nano>", "type":"state", "data":{"id":"ABC123","new_state":"doing","ts":"..."} }
-{ "ts":"<RFC3339Nano>", "type":"link", "data":{"from_id":"ABC123","to_id":"XYZ999","type":"depends"} }
-{ "ts":"<RFC3339Nano>", "type":"unlink", "data":{"from_id":"ABC123","to_id":"XYZ999","type":"depends"} }
-{ "ts":"<RFC3339Nano>", "type":"claim", "data":{"id":"ABC123","agent_id":"user@host","ts":"..."} }
-{ "ts":"<RFC3339Nano>", "type":"edit", "data":{"id":"ABC123","body":"...","ts":"..."} }
-```
+## 🚫 Non-goals
 
-`ergo` replays this log on each command to reconstruct the task graph in memory.
+- Being a hosted PM tool or a full replacement for Jira/Linear.
+- Managing your calendar, sprints, or team process.
+- Hiding state in a server or requiring a daemon.
 
-## Concurrency model
+## 📝 Documentation
 
-- All writes are serialized via an OS file lock on `.ergo/lock`.
-- Read-only commands replay without locking.
-- `take` is safe under concurrent use: only one agent will win the claim for a given READY task.
+- [Installing](docs/INSTALLING.md) | [Agent Workflow](docs/AGENT_WORKFLOW.md) | [Troubleshooting](docs/TROUBLESHOOTING.md) | [FAQ](docs/FAQ.md)
 
-## Compaction
+## ✅ Status
 
-`ergo compact` rewrites `events.jsonl` to the minimal canonical set of events representing the current state and active dependency links.
-
-This **drops history** (past edits/claims/transitions) by design.
-
-## Status / limitations
-
-- Current root discovery is minimal: run commands from the directory containing `.ergo`.
-- Output is intentionally plain text / TSV for piping; there is no JSON output mode yet.
-- Tested primarily on macOS; Linux is expected to work but is not yet a promised support tier; Windows is not supported yet.
-
-## Roadmap ideas
-
-- Root auto-discovery (walk up like git)
-- Optional `--json` output for `ls/plan/show`
-- Stronger claim ownership / release workflows (explicit `release` command)
-- Linux/Windows support tiers + CI matrix
+- Tested primarily on macOS; Linux should work; Windows is not supported yet.
+- Root discovery is minimal: run commands from the directory containing `.ergo/`.
+- Output is intentionally plain text / TSV; there is no JSON output mode yet.
