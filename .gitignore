@@ -1,0 +1,8 @@
+/.ergo/
+/.gocache/
+/ergo
+*.exe
+*.test
+*.out
+/dist/
+/build/
