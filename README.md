@@ -61,6 +61,14 @@ sudo mv ergo /usr/local/bin/
 go install github.com/sandover/ergo@latest
 ```
 
+## Installation (Homebrew)
+
+Once releases are published, install via:
+
+```sh
+brew install sandover/tap/ergo
+```
+
 ## Concepts
 
 - **Storage:** `.ergo/events.jsonl` is the source of truth (append-only JSONL). `.ergo/lock` is used to lock all writes.
