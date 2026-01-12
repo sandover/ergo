@@ -194,9 +194,12 @@ func replayEvents(events []Event) (*Graph, error) {
 			}
 			// Prepend to keep newest first
 			result := Result{
-				Summary:   data.Summary,
-				Ref:       data.Ref,
-				CreatedAt: ts,
+				Summary:           data.Summary,
+				Path:              data.Path,
+				Sha256AtAttach:    data.Sha256AtAttach,
+				MtimeAtAttach:     data.MtimeAtAttach,
+				GitCommitAtAttach: data.GitCommitAtAttach,
+				CreatedAt:         ts,
 			}
 			task.Results = append([]Result{result}, task.Results...)
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
@@ -261,7 +264,7 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			CreatedAt: formatTime(createdAt),
 		}
 		eventType := "new_task"
-		if task.EpicID == "" {
+		if task.IsEpic {
 			eventType = "new_epic"
 		}
 		event, err := newEvent(eventType, createdAt, payload)
@@ -307,6 +310,24 @@ func compactEvents(graph *Graph) ([]Event, error) {
 				return nil, err
 			}
 			events = append(events, workerEvent)
+		}
+
+		// Emit result events (in chronological order, oldest first)
+		for i := len(task.Results) - 1; i >= 0; i-- {
+			result := task.Results[i]
+			resultEvent, err := newEvent("result", result.CreatedAt, ResultEvent{
+				TaskID:            task.ID,
+				Summary:           result.Summary,
+				Path:              result.Path,
+				Sha256AtAttach:    result.Sha256AtAttach,
+				MtimeAtAttach:     result.MtimeAtAttach,
+				GitCommitAtAttach: result.GitCommitAtAttach,
+				TS:                formatTime(result.CreatedAt),
+			})
+			if err != nil {
+				return nil, err
+			}
+			events = append(events, resultEvent)
 		}
 	}
 

@@ -64,9 +64,9 @@
     claim=                                clear claim (no state change)
 
   Result (task-only, both required together):
-    summary=<text>                        one-line summary (max 120 chars)
-    result=@-                             read artifact from stdin
-    result=<url>                          external URL reference
+    result.path=<relpath>                 path to result file (relative to project root; must exist)
+    result.summary=<text>                 one-line summary (max 120 chars)
+                                          ergo records sha256 and git commit at attach time
 
   Epic-only:
     (epics ignore state/worker/claim — use epic-deps instead)

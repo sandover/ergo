@@ -41,26 +41,21 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := filepath.Join(dir, "events.jsonl")
 
-	// Handle result separately (requires artifact I/O)
-	summary, hasSummary := updates["summary"]
-	result, hasResult := updates["result"]
-	if hasSummary || hasResult {
+	// Handle result.path + result.summary (requires file I/O before lock)
+	resultPath, hasPath := updates["result.path"]
+	resultSummary, hasSummary := updates["result.summary"]
+	if hasPath || hasSummary {
+		if !hasPath {
+			return errors.New("result.summary requires result.path=")
+		}
 		if !hasSummary {
-			return errors.New("result requires summary=")
+			return errors.New("result.path requires result.summary=")
 		}
-		if !hasResult {
-			return errors.New("summary requires result=")
-		}
-		// Resolve result content
-		content, urlRef, err := resolveResultValue(result)
-		if err != nil {
+		if err := writeResultEvent(dir, opts, id, resultSummary, resultPath); err != nil {
 			return err
 		}
-		if err := writeResultEvent(dir, opts, id, summary, content, urlRef); err != nil {
-			return err
-		}
-		delete(updates, "summary")
-		delete(updates, "result")
+		delete(updates, "result.path")
+		delete(updates, "result.summary")
 		// If no other updates, we're done
 		if len(updates) == 0 {
 			return nil
@@ -285,24 +280,6 @@ func resolveSetBody(value string) (string, error) {
 	}
 }
 
-// resolveResultValue parses result= value.
-// Returns (content, urlRef, error). Exactly one of content/urlRef will be non-empty.
-func resolveResultValue(value string) (string, string, error) {
-	switch {
-	case value == "@-":
-		// Read from stdin
-		content, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return "", "", err
-		}
-		return string(content), "", nil
-	case strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://"):
-		return "", value, nil
-	default:
-		return "", "", fmt.Errorf("result= must be @- (stdin) or a URL, got: %s", value)
-	}
-}
-
 func runDep(args []string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "dep"); err != nil {
 		return err
@@ -353,6 +330,7 @@ func runList(args []string, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
+	repoDir := filepath.Dir(dir)
 
 	graph, err := loadGraph(dir)
 	if err != nil {
@@ -388,10 +366,10 @@ func runList(args []string, opts GlobalOptions) error {
 
 	if format == outputFormatJSON {
 		result := map[string]interface{}{
-			"tasks": buildTaskListItems(tasks, graph),
+			"tasks": buildTaskListItems(tasks, graph, repoDir),
 		}
 		if showEpics {
-			result["epics"] = buildTaskListItems(epics, graph)
+			result["epics"] = buildTaskListItems(epics, graph, repoDir)
 		}
 		return writeJSON(os.Stdout, result)
 	}
@@ -411,6 +389,13 @@ func runList(args []string, opts GlobalOptions) error {
 			marker = "[R] "
 		}
 		fmt.Printf("%s\t%s\t%s\t%s\t%s%s\n", task.ID, task.State, epic, claimed, marker, firstLine(task.Body))
+
+		// For done/canceled tasks with results, show latest result on second line
+		if (task.State == stateDone || task.State == stateCanceled) && len(task.Results) > 0 {
+			latest := task.Results[0]
+			fileURL := deriveFileURL(latest.Path, repoDir)
+			fmt.Printf("\t→ %s\n\t  %s\n", latest.Summary, fileURL)
+		}
 	}
 
 	if showEpics && len(epics) > 0 {
@@ -574,6 +559,7 @@ func runShow(args []string, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
+	repoDir := filepath.Dir(dir)
 	graph, err := loadGraph(dir)
 	if err != nil {
 		return err
@@ -597,7 +583,7 @@ func runShow(args []string, opts GlobalOptions) error {
 			Deps:      task.Deps,
 			RDeps:     task.RDeps,
 			Body:      task.Body,
-			Results:   task.Results,
+			Results:   buildResultOutputItems(task.Results, repoDir),
 		})
 	}
 	if short {
@@ -636,7 +622,12 @@ func runShow(args []string, opts GlobalOptions) error {
 	if len(task.Results) > 0 {
 		fmt.Printf("results: %d\n", len(task.Results))
 		for i, r := range task.Results {
-			fmt.Printf("  [%d] %s (%s) %s\n", i+1, r.Summary, formatTime(r.CreatedAt), r.Ref)
+			fileURL := deriveFileURL(r.Path, repoDir)
+			fmt.Printf("  [%d] %s\n", i+1, r.Summary)
+			fmt.Printf("      path: %s\n", r.Path)
+			fmt.Printf("      file_url: %s\n", fileURL)
+			fmt.Printf("      sha256: %s\n", r.Sha256AtAttach)
+			fmt.Printf("      attached: %s\n", formatTime(r.CreatedAt))
 		}
 	}
 	fmt.Println()

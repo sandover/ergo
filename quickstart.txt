@@ -72,7 +72,32 @@
 {{COMMENT}}or give up:{{RESET}}
 {{CMD}}ergo set T-impl state=canceled{{RESET}}
 
-{{HEADER}}7. HUMAN VS AGENT TASKS{{RESET}}
+{{HEADER}}7. ATTACH RESULTS{{RESET}}
+
+{{COMMENT}}tasks can have result files — visible in normal tools (editor, finder):{{RESET}}
+{{CMD}}echo "# Analysis Report" > docs/analysis.md{{RESET}}
+{{CMD}}ergo set T-design result.path=docs/analysis.md result.summary="Token format analysis"{{RESET}}
+
+{{COMMENT}}results are attached, not moved:{{RESET}}
+{{COMMENT}}  - file stays in your project (not in .ergo/){{RESET}}
+{{COMMENT}}  - ergo stores: path, sha256, mtime, git commit (at attach time){{RESET}}
+{{COMMENT}}  - humans open docs/analysis.md directly; agents use show --json{{RESET}}
+
+{{CMD}}ergo show T-design{{RESET}}
+{{COMMENT}}shows result summary, path, and file:// URL{{RESET}}
+
+{{CMD}}ergo show T-design --json | jq '.results'{{RESET}}
+{{COMMENT}}structured: path, file_url, sha256_at_attach, etc.{{RESET}}
+
+{{COMMENT}}attach multiple results by repeating set:{{RESET}}
+{{CMD}}ergo set T-design result.path=docs/spec.md result.summary="Final spec document"{{RESET}}
+
+{{COMMENT}}verify drift (agent pattern):{{RESET}}
+{{COMMENT}}  1. get sha256_at_attach from show --json{{RESET}}
+{{COMMENT}}  2. compute sha256 of current file{{RESET}}
+{{COMMENT}}  3. if different, file was edited since attach{{RESET}}
+
+{{HEADER}}8. HUMAN VS AGENT TASKS{{RESET}}
 
 {{COMMENT}}some tasks need human judgment:{{RESET}}
 {{CMD}}ergo new task "Choose token expiry policy" --epic E-a1b2c3{{RESET}}
@@ -83,7 +108,7 @@
 {{CMD}}ergo list --ready --as agent{{RESET}}
 {{CMD}}ergo next --as agent{{RESET}}
 
-{{HEADER}}8. EPIC HIERARCHIES{{RESET}}
+{{HEADER}}9. EPIC HIERARCHIES{{RESET}}
 
 {{COMMENT}}epics can depend on other epics (nested work):{{RESET}}
 {{CMD}}ergo new epic "Design phase"{{RESET}}
@@ -97,7 +122,7 @@
 {{COMMENT}}tasks in Build are blocked until Design's tasks are done{{RESET}}
 {{COMMENT}}an epic is "complete" when all its tasks are done|canceled{{RESET}}
 
-{{HEADER}}9. AGENT INTEGRATION{{RESET}}
+{{HEADER}}10. AGENT INTEGRATION{{RESET}}
 
 {{COMMENT}}agents should use --json for structured output:{{RESET}}
 {{CMD}}ergo --json list --ready --as agent{{RESET}}
@@ -105,4 +130,9 @@
 {{COMMENT}}recommended agent loop:{{RESET}}
 {{COMMENT}}  1. ergo next --as agent  (claim work){{RESET}}
 {{COMMENT}}  2. do the work{{RESET}}
-{{COMMENT}}  3. ergo set <id> state=done  (or state=error if failed){{RESET}}
+{{COMMENT}}  3. write results to project files (e.g., docs/, reports/){{RESET}}
+{{COMMENT}}  4. ergo set <id> result.path=<path> result.summary="<summary>"{{RESET}}
+{{COMMENT}}  5. ergo set <id> state=done  (or state=error if failed){{RESET}}
+
+{{COMMENT}}find results from other tasks:{{RESET}}
+{{CMD}}ergo show <id> --json | jq '.results[] | {path, summary, sha256_at_attach}'{{RESET}}

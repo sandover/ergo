@@ -278,12 +278,118 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 	}
 	return output, nil
 }
-// writeResultEvent attaches a result to a task.
-// If content is non-empty, it writes an artifact file and uses its ref.
-// If content is empty, ref must be a URL.
-func writeResultEvent(dir string, opts GlobalOptions, taskID, summary, content, urlRef string) error {
+
+// ResultEvidence holds evidence metadata captured when attaching a result.
+type ResultEvidence struct {
+	Sha256AtAttach    string
+	MtimeAtAttach     string
+	GitCommitAtAttach string
+}
+
+// validateResultPath ensures path is relative, within project root, and exists.
+// Returns the cleaned relative path.
+func validateResultPath(repoDir, relPath string) (string, error) {
+	relPath = filepath.Clean(relPath)
+
+	// Must be relative (no leading /)
+	if filepath.IsAbs(relPath) {
+		return "", fmt.Errorf("result path must be relative: %s", relPath)
+	}
+
+	// No .. traversal outside project
+	if strings.HasPrefix(relPath, "..") || strings.Contains(relPath, string(filepath.Separator)+"..") {
+		return "", fmt.Errorf("result path must be within project: %s", relPath)
+	}
+
+	// Must not point into .ergo/
+	if strings.HasPrefix(relPath, dataDirName+string(filepath.Separator)) || relPath == dataDirName {
+		return "", fmt.Errorf("result path cannot be inside .ergo/: %s", relPath)
+	}
+
+	// File must exist
+	fullPath := filepath.Join(repoDir, relPath)
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("result file does not exist: %s", relPath)
+		}
+		return "", fmt.Errorf("cannot access result file: %w", err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("result path must be a file, not directory: %s", relPath)
+	}
+
+	return relPath, nil
+}
+
+// captureResultEvidence computes evidence metadata for a result file.
+func captureResultEvidence(repoDir, relPath string) (ResultEvidence, error) {
+	fullPath := filepath.Join(repoDir, relPath)
+
+	// Read file and compute SHA256
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return ResultEvidence{}, fmt.Errorf("cannot read result file: %w", err)
+	}
+	hash := sha256.Sum256(content)
+
+	// Get mtime
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		return ResultEvidence{}, fmt.Errorf("cannot stat result file: %w", err)
+	}
+
+	evidence := ResultEvidence{
+		Sha256AtAttach: fmt.Sprintf("%x", hash),
+		MtimeAtAttach:  formatTime(info.ModTime().UTC()),
+	}
+
+	// Try to get git HEAD commit (best-effort)
+	if gitCommit := getGitHead(repoDir); gitCommit != "" {
+		evidence.GitCommitAtAttach = gitCommit
+	}
+
+	return evidence, nil
+}
+
+// getGitHead returns the current HEAD commit SHA, or empty if not a git repo.
+func getGitHead(repoDir string) string {
+	// Check if .git exists
+	gitDir := filepath.Join(repoDir, ".git")
+	if _, err := os.Stat(gitDir); err != nil {
+		return ""
+	}
+
+	// Read HEAD
+	headPath := filepath.Join(gitDir, "HEAD")
+	headContent, err := os.ReadFile(headPath)
+	if err != nil {
+		return ""
+	}
+
+	head := strings.TrimSpace(string(headContent))
+
+	// If it's a ref (e.g., "ref: refs/heads/main"), resolve it
+	if strings.HasPrefix(head, "ref: ") {
+		refPath := filepath.Join(gitDir, strings.TrimPrefix(head, "ref: "))
+		refContent, err := os.ReadFile(refPath)
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(refContent))
+	}
+
+	// Detached HEAD: already a commit SHA
+	return head
+}
+
+// writeResultEvent attaches a result file reference to a task.
+// The file must exist and be within the project root.
+func writeResultEvent(dir string, opts GlobalOptions, taskID, summary, relPath string) error {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := filepath.Join(dir, "events.jsonl")
+	repoDir := filepath.Dir(dir)
+
 	return withLock(lockPath, syscall.LOCK_EX, opts.LockTimeout, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
@@ -300,61 +406,31 @@ func writeResultEvent(dir string, opts GlobalOptions, taskID, summary, content, 
 			return err
 		}
 
-		var ref string
-		if content != "" {
-			// Write artifact file
-			artifactRef, err := writeArtifact(dir, content)
-			if err != nil {
-				return err
-			}
-			ref = artifactRef
-		} else if urlRef != "" {
-			ref = urlRef
-		} else {
-			return errors.New("result requires content or URL")
+		// Validate and normalize path
+		cleanPath, err := validateResultPath(repoDir, relPath)
+		if err != nil {
+			return err
+		}
+
+		// Capture evidence
+		evidence, err := captureResultEvidence(repoDir, cleanPath)
+		if err != nil {
+			return err
 		}
 
 		now := time.Now().UTC()
 		event, err := newEvent("result", now, ResultEvent{
-			TaskID:  taskID,
-			Summary: strings.TrimSpace(summary),
-			Ref:     ref,
-			TS:      formatTime(now),
+			TaskID:            taskID,
+			Summary:           strings.TrimSpace(summary),
+			Path:              cleanPath,
+			Sha256AtAttach:    evidence.Sha256AtAttach,
+			MtimeAtAttach:     evidence.MtimeAtAttach,
+			GitCommitAtAttach: evidence.GitCommitAtAttach,
+			TS:                formatTime(now),
 		})
 		if err != nil {
 			return err
 		}
 		return appendEvents(eventsPath, []Event{event})
 	})
-}
-
-// writeArtifact writes content to .ergo/artifacts/ with content-addressed naming.
-// Returns the relative ref (e.g., "artifacts/a1b2c3d4.txt").
-func writeArtifact(dir, content string) (string, error) {
-	artifactsDir := filepath.Join(dir, "artifacts")
-	if err := os.MkdirAll(artifactsDir, 0755); err != nil {
-		return "", err
-	}
-
-	// Content-addressed filename using SHA256 prefix
-	hash := sha256.Sum256([]byte(content))
-	filename := fmt.Sprintf("%x.txt", hash[:8]) // 16 hex chars
-	ref := filepath.Join("artifacts", filename)
-	fullPath := filepath.Join(dir, ref)
-
-	// Write atomically (write to temp, rename)
-	if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
-		return "", err
-	}
-	return ref, nil
-}
-
-// readArtifact reads an artifact file from .ergo/.
-func readArtifact(dir, ref string) (string, error) {
-	fullPath := filepath.Join(dir, ref)
-	content, err := os.ReadFile(fullPath)
-	if err != nil {
-		return "", err
-	}
-	return string(content), nil
 }

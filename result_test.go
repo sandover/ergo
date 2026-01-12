@@ -34,108 +34,107 @@ func TestValidateResultSummary(t *testing.T) {
 	}
 }
 
-func TestWriteArtifact(t *testing.T) {
-	dir := t.TempDir()
+func TestValidateResultPath(t *testing.T) {
+	repoDir := t.TempDir()
 
-	content := "Test artifact content"
-	ref, err := writeArtifact(dir, content)
-	if err != nil {
-		t.Fatalf("writeArtifact failed: %v", err)
+	// Create a test file
+	testFile := filepath.Join(repoDir, "docs", "report.md")
+	if err := os.MkdirAll(filepath.Dir(testFile), 0755); err != nil {
+		t.Fatalf("failed to create test dir: %v", err)
 	}
-
-	// Check ref format
-	if !strings.HasPrefix(ref, "artifacts/") {
-		t.Errorf("ref should start with 'artifacts/', got: %s", ref)
-	}
-	if !strings.HasSuffix(ref, ".txt") {
-		t.Errorf("ref should end with '.txt', got: %s", ref)
+	if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	// Check file exists and has correct content
-	fullPath := filepath.Join(dir, ref)
-	data, err := os.ReadFile(fullPath)
-	if err != nil {
-		t.Fatalf("failed to read artifact: %v", err)
+	// Create .ergo directory
+	ergoDir := filepath.Join(repoDir, ".ergo")
+	if err := os.MkdirAll(ergoDir, 0755); err != nil {
+		t.Fatalf("failed to create .ergo dir: %v", err)
 	}
-	if string(data) != content {
-		t.Errorf("artifact content = %q, want %q", string(data), content)
-	}
-
-	// Same content should produce same ref (content-addressed)
-	ref2, err := writeArtifact(dir, content)
-	if err != nil {
-		t.Fatalf("second writeArtifact failed: %v", err)
-	}
-	if ref != ref2 {
-		t.Errorf("same content should produce same ref: got %s and %s", ref, ref2)
+	ergoFile := filepath.Join(ergoDir, "internal.txt")
+	if err := os.WriteFile(ergoFile, []byte("internal"), 0644); err != nil {
+		t.Fatalf("failed to create internal file: %v", err)
 	}
 
-	// Different content should produce different ref
-	ref3, err := writeArtifact(dir, "Different content")
-	if err != nil {
-		t.Fatalf("third writeArtifact failed: %v", err)
-	}
-	if ref == ref3 {
-		t.Errorf("different content should produce different ref")
-	}
-}
-
-func TestReadArtifact(t *testing.T) {
-	dir := t.TempDir()
-
-	content := "Test artifact content for reading"
-	ref, err := writeArtifact(dir, content)
-	if err != nil {
-		t.Fatalf("writeArtifact failed: %v", err)
-	}
-
-	// Read it back
-	readContent, err := readArtifact(dir, ref)
-	if err != nil {
-		t.Fatalf("readArtifact failed: %v", err)
-	}
-	if readContent != content {
-		t.Errorf("readArtifact = %q, want %q", readContent, content)
-	}
-
-	// Reading non-existent artifact should fail
-	_, err = readArtifact(dir, "artifacts/nonexistent.txt")
-	if err == nil {
-		t.Error("readArtifact should fail for non-existent file")
-	}
-}
-
-func TestResolveResultValue(t *testing.T) {
 	tests := []struct {
-		name       string
-		value      string
-		wantURL    bool
-		wantErr    bool
+		name    string
+		path    string
+		wantErr bool
 	}{
-		{"http URL", "http://example.com/result", true, false},
-		{"https URL", "https://example.com/result", true, false},
-		{"invalid format", "just text", false, true},
-		{"file path", "/path/to/file", false, true},
-		// Note: @- requires stdin, tested separately
+		{"valid relative path", "docs/report.md", false},
+		{"absolute path rejected", "/docs/report.md", true},
+		{"parent traversal rejected", "../outside/file.txt", true},
+		{"hidden traversal rejected", "docs/../../../etc/passwd", true},
+		{"file not found", "docs/missing.md", true},
+		{"directory rejected", "docs", true},
+		{".ergo path rejected", ".ergo/internal.txt", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			content, urlRef, err := resolveResultValue(tt.value)
+			_, err := validateResultPath(repoDir, tt.path)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("resolveResultValue(%q) error = %v, wantErr %v", tt.value, err, tt.wantErr)
-				return
+				t.Errorf("validateResultPath(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
 			}
-			if tt.wantErr {
-				return
-			}
-			if tt.wantURL {
-				if urlRef != tt.value {
-					t.Errorf("expected urlRef = %q, got %q", tt.value, urlRef)
-				}
-				if content != "" {
-					t.Errorf("expected content = \"\", got %q", content)
-				}
+		})
+	}
+}
+
+func TestCaptureResultEvidence(t *testing.T) {
+	repoDir := t.TempDir()
+
+	// Create test file with known content
+	content := "Hello, World!"
+	testFile := filepath.Join(repoDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	evidence, err := captureResultEvidence(repoDir, "test.txt")
+	if err != nil {
+		t.Fatalf("captureResultEvidence failed: %v", err)
+	}
+
+	// SHA256 of "Hello, World!" is known
+	expectedSha256 := "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
+	if evidence.Sha256AtAttach != expectedSha256 {
+		t.Errorf("sha256 = %q, want %q", evidence.Sha256AtAttach, expectedSha256)
+	}
+
+	if evidence.MtimeAtAttach == "" {
+		t.Error("mtime_at_attach should not be empty")
+	}
+
+	// GitCommitAtAttach is optional (may be empty if not a git repo)
+}
+
+func TestGetGitHead(t *testing.T) {
+	// Test with non-git directory
+	tmpDir := t.TempDir()
+	result := getGitHead(tmpDir)
+	if result != "" {
+		t.Errorf("expected empty string for non-git dir, got %q", result)
+	}
+
+	// We don't test with a real git repo since that would require git setup
+}
+
+func TestDeriveFileURL(t *testing.T) {
+	tests := []struct {
+		relPath string
+		repoDir string
+		want    string
+	}{
+		{"docs/report.md", "/home/user/project", "file:///home/user/project/docs/report.md"},
+		{"file.txt", "/tmp", "file:///tmp/file.txt"},
+		{"path with spaces/file.txt", "/home/user", "file:///home/user/path%20with%20spaces/file.txt"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.relPath, func(t *testing.T) {
+			got := deriveFileURL(tt.relPath, tt.repoDir)
+			if got != tt.want {
+				t.Errorf("deriveFileURL(%q, %q) = %q, want %q", tt.relPath, tt.repoDir, got, tt.want)
 			}
 		})
 	}
@@ -156,16 +155,18 @@ func TestResultEventReplay(t *testing.T) {
 		CreatedAt: nowStr,
 	})
 	result1Event, _ := newEvent("result", now.Add(time.Hour), ResultEvent{
-		TaskID:  "T1",
-		Summary: "First result",
-		Ref:     "https://example.com/1",
-		TS:      formatTime(now.Add(time.Hour)),
+		TaskID:         "T1",
+		Summary:        "First result",
+		Path:           "docs/result1.md",
+		Sha256AtAttach: "abc123",
+		TS:             formatTime(now.Add(time.Hour)),
 	})
 	result2Event, _ := newEvent("result", now.Add(2*time.Hour), ResultEvent{
-		TaskID:  "T1",
-		Summary: "Second result",
-		Ref:     "artifacts/abc123.txt",
-		TS:      formatTime(now.Add(2 * time.Hour)),
+		TaskID:         "T1",
+		Summary:        "Second result",
+		Path:           "docs/result2.md",
+		Sha256AtAttach: "def456",
+		TS:             formatTime(now.Add(2 * time.Hour)),
 	})
 
 	events := []Event{createEvent, result1Event, result2Event}
@@ -187,7 +188,78 @@ func TestResultEventReplay(t *testing.T) {
 	if task.Results[0].Summary != "Second result" {
 		t.Errorf("first result should be newest: got %q", task.Results[0].Summary)
 	}
+	if task.Results[0].Path != "docs/result2.md" {
+		t.Errorf("first result path = %q, want %q", task.Results[0].Path, "docs/result2.md")
+	}
 	if task.Results[1].Summary != "First result" {
 		t.Errorf("second result should be oldest: got %q", task.Results[1].Summary)
+	}
+}
+
+func TestResultCompaction(t *testing.T) {
+	// Create graph with results
+	now := time.Now().UTC()
+	graph := &Graph{
+		Tasks: map[string]*Task{
+			"T1": {
+				ID:        "T1",
+				UUID:      "uuid-1",
+				State:     stateDone,
+				Body:      "Test task",
+				Worker:    workerAny,
+				CreatedAt: now,
+				UpdatedAt: now.Add(time.Hour),
+				Results: []Result{
+					{
+						Summary:        "Second result",
+						Path:           "docs/result2.md",
+						Sha256AtAttach: "def456",
+						CreatedAt:      now.Add(time.Hour),
+					},
+					{
+						Summary:        "First result",
+						Path:           "docs/result1.md",
+						Sha256AtAttach: "abc123",
+						CreatedAt:      now.Add(30 * time.Minute),
+					},
+				},
+			},
+		},
+		Deps:  map[string]map[string]struct{}{},
+		RDeps: map[string]map[string]struct{}{},
+		Meta: map[string]*TaskMeta{
+			"T1": {
+				CreatedBody:  "Test task",
+				CreatedState: stateTodo,
+				CreatedAt:    now,
+			},
+		},
+	}
+
+	// Compact and replay
+	events, err := compactEvents(graph)
+	if err != nil {
+		t.Fatalf("compactEvents failed: %v", err)
+	}
+
+	replayedGraph, err := replayEvents(events)
+	if err != nil {
+		t.Fatalf("replayEvents failed: %v", err)
+	}
+
+	task := replayedGraph.Tasks["T1"]
+	if task == nil {
+		t.Fatal("task T1 not found after replay")
+	}
+
+	// Should preserve both results in correct order
+	if len(task.Results) != 2 {
+		t.Fatalf("expected 2 results after compaction, got %d", len(task.Results))
+	}
+	if task.Results[0].Summary != "Second result" {
+		t.Errorf("first result should be 'Second result', got %q", task.Results[0].Summary)
+	}
+	if task.Results[1].Summary != "First result" {
+		t.Errorf("second result should be 'First result', got %q", task.Results[1].Summary)
 	}
 }
