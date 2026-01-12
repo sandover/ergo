@@ -10,7 +10,7 @@ import (
 func TestBuildSetEvents_StateValidation(t *testing.T) {
 	now := time.Now().UTC()
 	task := &Task{ID: "T1", State: stateTodo, ClaimedBy: "", EpicID: "E1"} // task not epic
-	
+
 	tests := []struct {
 		name        string
 		updates     map[string]string
@@ -47,16 +47,16 @@ func TestBuildSetEvents_StateValidation(t *testing.T) {
 			errorMsg:    "title cannot be empty",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Mock body resolver that just returns the input
 			bodyResolver := func(s string) (string, error) {
 				return s, nil
 			}
-			
+
 			_, _, err := buildSetEvents("T1", task, tt.updates, now, bodyResolver)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("Expected error containing %q, got nil", tt.errorMsg)
@@ -74,7 +74,7 @@ func TestBuildSetEvents_StateValidation(t *testing.T) {
 
 func TestBuildSetEvents_ClaimHandling(t *testing.T) {
 	now := time.Now().UTC()
-	
+
 	tests := []struct {
 		name          string
 		task          *Task
@@ -102,16 +102,16 @@ func TestBuildSetEvents_ClaimHandling(t *testing.T) {
 			expectEvents: 0,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bodyResolver := func(s string) (string, error) { return s, nil }
-			
+
 			events, _, err := buildSetEvents(tt.task.ID, tt.task, tt.updates, now, bodyResolver)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			
+
 			if len(events) != tt.expectEvents {
 				t.Errorf("Expected %d events, got %d", tt.expectEvents, len(events))
 			}
@@ -122,37 +122,37 @@ func TestBuildSetEvents_ClaimHandling(t *testing.T) {
 func TestBuildSetEvents_BodyResolution(t *testing.T) {
 	now := time.Now().UTC()
 	task := &Task{ID: "T1", State: stateTodo}
-	
+
 	t.Run("body resolver called", func(t *testing.T) {
 		called := false
 		bodyResolver := func(s string) (string, error) {
 			called = true
 			return "resolved: " + s, nil
 		}
-		
+
 		updates := map[string]string{"body": "test"}
 		events, _, err := buildSetEvents("T1", task, updates, now, bodyResolver)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
-		
+
 		if !called {
 			t.Error("Body resolver was not called")
 		}
-		
+
 		if len(events) != 1 {
 			t.Fatalf("Expected 1 event, got %d", len(events))
 		}
 	})
-	
+
 	t.Run("body resolver error propagates", func(t *testing.T) {
 		bodyResolver := func(s string) (string, error) {
 			return "", errors.New("resolver error")
 		}
-		
+
 		updates := map[string]string{"body": "test"}
 		_, _, err := buildSetEvents("T1", task, updates, now, bodyResolver)
-		
+
 		if err == nil {
 			t.Error("Expected error from body resolver")
 		}
@@ -163,25 +163,25 @@ func TestBuildSetEvents_UnknownKeys(t *testing.T) {
 	now := time.Now().UTC()
 	task := &Task{ID: "T1", State: stateTodo}
 	bodyResolver := func(s string) (string, error) { return s, nil }
-	
+
 	updates := map[string]string{
 		"valid":   "done",
 		"unknown": "value",
 	}
-	
+
 	// Map "valid" to "state" for this test
 	updates["state"] = "done"
 	delete(updates, "valid")
-	
+
 	_, remaining, err := buildSetEvents("T1", task, updates, now, bodyResolver)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	
+
 	// The function should have consumed "state" but left "unknown"
 	updates2 := map[string]string{"unknown": "value", "state": "done"}
 	_, remaining2, _ := buildSetEvents("T1", task, updates2, now, bodyResolver)
-	
+
 	if len(remaining2) != 1 {
 		t.Errorf("Expected 1 unknown key, got %d (remaining: %v)", len(remaining2), remaining)
 	}
@@ -194,23 +194,23 @@ func TestBuildSetEvents_EventOrdering(t *testing.T) {
 	now := time.Now().UTC()
 	task := &Task{ID: "T1", State: stateTodo, ClaimedBy: "", EpicID: "E1"} // task not epic
 	bodyResolver := func(s string) (string, error) { return s, nil }
-	
+
 	// State must come last per spec
 	updates := map[string]string{
 		"worker": "human",
 		"state":  "doing",
 		"claim":  "agent-1",
 	}
-	
+
 	events, _, err := buildSetEvents("T1", task, updates, now, bodyResolver)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	
+
 	if len(events) == 0 {
 		t.Fatal("Expected some events")
 	}
-	
+
 	// Last event should be state change
 	lastEvent := events[len(events)-1]
 	if lastEvent.Type != "state" {

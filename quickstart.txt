@@ -1,0 +1,89 @@
+{{BOLD}}ergo quickstart{{RESET}}
+{{CYAN}}A 5-minute walkthrough. Run these commands as you read.{{RESET}}
+
+{{HEADER}}1. INITIALIZE{{RESET}}
+
+{{CMD}}mkdir demo && cd demo{{RESET}}
+{{CMD}}ergo init{{RESET}}
+
+{{COMMENT}}creates .ergo/ with events.jsonl{{RESET}}
+{{COMMENT}}ergo discovers .ergo/ like git finds .git/{{RESET}}
+
+{{CMD}}ergo where{{RESET}}
+{{COMMENT}}prints the active .ergo path{{RESET}}
+
+{{HEADER}}2. CREATE AN EPIC AND TASKS{{RESET}}
+
+{{CMD}}ergo new epic "Build auth system"{{RESET}}
+{{COMMENT}}prints epic ID, e.g. E-a1b2c3{{RESET}}
+{{CMD}}ergo new task "Design token format" --epic E-a1b2c3{{RESET}}
+{{CMD}}ergo new task "Implement JWT signing" --epic E-a1b2c3{{RESET}}
+{{CMD}}ergo new task "Add refresh tokens" --epic E-a1b2c3{{RESET}}
+
+{{COMMENT}}each prints a task ID, e.g. T-d4e5f6{{RESET}}
+{{CMD}}ergo list{{RESET}}
+
+{{HEADER}}3. ADD DEPENDENCIES{{RESET}}
+
+{{COMMENT}}'dep A B' means A depends on B (B blocks A){{RESET}}
+{{COMMENT}}JWT signing depends on token format design:{{RESET}}
+{{CMD}}ergo dep T-impl T-design{{RESET}}
+{{COMMENT}}refresh tokens depend on JWT signing:{{RESET}}
+{{CMD}}ergo dep T-refresh T-impl{{RESET}}
+{{CMD}}ergo list --blocked{{RESET}}
+{{COMMENT}}shows T-impl and T-refresh (waiting on deps){{RESET}}
+
+{{CMD}}ergo list --ready{{RESET}}
+{{COMMENT}}only T-design is ready (no unmet deps){{RESET}}
+{{CMD}}ergo dep rm T-refresh T-impl{{RESET}}
+{{COMMENT}}removes the dependency if needed{{RESET}}
+
+{{HEADER}}4. WORK ON TASKS{{RESET}}
+
+{{CMD}}ergo next{{RESET}}
+{{COMMENT}}claims oldest ready task, sets state=doing, prints it{{RESET}}
+{{COMMENT}}if no ready tasks, exits with code 3{{RESET}}
+{{CMD}}ergo next --peek{{RESET}}
+{{COMMENT}}see what's next without claiming{{RESET}}
+
+{{COMMENT}}mark your work done:{{RESET}}
+{{CMD}}ergo set T-design state=done{{RESET}}
+{{CMD}}ergo list --ready{{RESET}}
+
+{{HEADER}}5. UPDATE TASKS{{RESET}}
+
+{{CMD}}ergo set T-impl title="Implement JWT signing (HS256)"{{RESET}}
+{{CMD}}ergo set T-impl state=blocked{{RESET}}
+{{COMMENT}}explicit block (waiting on external input){{RESET}}
+
+{{CMD}}ergo set T-impl state=todo{{RESET}}
+{{COMMENT}}unblock when ready to resume{{RESET}}
+
+{{HEADER}}6. HUMAN VS AGENT TASKS{{RESET}}
+
+{{COMMENT}}some tasks need human judgment:{{RESET}}
+{{CMD}}ergo new task "Choose token expiry policy" --epic E-a1b2c3{{RESET}}
+{{CMD}}ergo set T-policy worker=human{{RESET}}
+{{CMD}}ergo list --ready --as human{{RESET}}
+
+{{COMMENT}}agents filter for their work:{{RESET}}
+{{CMD}}ergo list --ready --as agent{{RESET}}
+{{CMD}}ergo next --as agent{{RESET}}
+
+{{HEADER}}7. AGENT INTEGRATION{{RESET}}
+
+{{COMMENT}}agents should use --json for structured output:{{RESET}}
+{{CMD}}ergo --json list --ready --as agent{{RESET}}
+{{CMD}}ergo --json next --as agent{{RESET}}
+{{COMMENT}}recommended agent loop:{{RESET}}
+{{COMMENT}}  1. ergo next --as agent  (claim work){{RESET}}
+{{COMMENT}}  2. do the work{{RESET}}
+{{COMMENT}}  3. ergo set <id> state=done{{RESET}}
+{{COMMENT}}  4. repeat{{RESET}}
+
+{{HEADER}}NEXT STEPS{{RESET}}
+
+  ergo --help           full reference
+  ergo show <id>        inspect any item
+  ergo list --epics     see epics too
+  ergo compact          shrink the event log

@@ -1,21 +1,9 @@
-// --help text and colorized section formatting.
-package main
+{{BOLD}}ergo{{RESET}} — fast, minimal plan tracker (tasks + epics + deps). safe for parallel agents.
 
-import "strings"
-
-const (
-	ansiReset = "\x1b[0m"
-	ansiBold  = "\x1b[1m"
-	ansiCyan  = "\x1b[36m"
-)
-
-func usageText(color bool) string {
-	text := `ergo — fast, minimal plan tracker (tasks + epics + deps). safe for parallel agents.
-
-USAGE
+{{HEADER}}USAGE{{RESET}}
   ergo [global flags] <command> [args]
 
-COMMANDS
+{{HEADER}}COMMANDS{{RESET}}
   init [dir]                              create .ergo/ in dir (arg overrides --dir)
 
   new epic <title>                        create epic (prints ID) [title required]
@@ -39,7 +27,7 @@ COMMANDS
   compact                                 rewrite log to current state (drops history)
   quickstart                              guided walkthrough
 
-GLOBAL FLAGS
+{{HEADER}}GLOBAL FLAGS{{RESET}}
   --dir <path>                            discovery start dir (or explicit .ergo dir)
   --as <any|agent|human>                  filter READY/BLOCKED and next (default: any)
   --agent <id>                            claim identity (default: hostname:pid)
@@ -49,13 +37,13 @@ GLOBAL FLAGS
   -h, --help                              show help
   -V, --version                           print version
 
-READY DEFINITION (tasks only)
+{{HEADER}}READY DEFINITION (tasks only){{RESET}}
   state=todo, unclaimed, worker matches --as, and all deps are done or canceled.
 
-BLOCKED DEFINITION (tasks only)
+{{HEADER}}BLOCKED DEFINITION (tasks only){{RESET}}
   state=blocked OR (state=todo AND unmet deps).
 
-KEYS (for 'set')
+{{HEADER}}KEYS (for 'set'){{RESET}}
   Common:
     title=<text>                          required; cannot be cleared
     body=@-                               read body from stdin
@@ -70,32 +58,4 @@ KEYS (for 'set')
     claim=                                clear claim (no state change)
 
   Epic-only:
-    (epics ignore state/worker/claim/dep)`
-
-	if !color {
-		return text
-	}
-
-	lines := strings.Split(text, "\n")
-	if len(lines) > 0 {
-		lines[0] = ansiBold + lines[0] + ansiReset
-	}
-	text = strings.Join(lines, "\n")
-
-	for _, header := range []string{
-		"USAGE",
-		"COMMANDS",
-		"GLOBAL FLAGS",
-		"READY DEFINITION (tasks only)",
-		"BLOCKED DEFINITION (tasks only)",
-		"KEYS (for 'set')",
-	} {
-		text = strings.ReplaceAll(text, header, ansiCyanBold(header))
-	}
-
-	return text
-}
-
-func ansiCyanBold(s string) string {
-	return ansiBold + ansiCyan + s + ansiReset
-}
+    (epics ignore state/worker/claim/dep)

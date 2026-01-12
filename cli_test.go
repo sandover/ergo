@@ -42,18 +42,18 @@ func TestParseKeyValuePairs_ValidInput(t *testing.T) {
 			expected: map[string]string{"key": " value with spaces "},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := parseKeyValuePairs(tt.input)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			
+
 			if len(result) != len(tt.expected) {
 				t.Errorf("Expected %d pairs, got %d", len(tt.expected), len(result))
 			}
-			
+
 			for key, expectedValue := range tt.expected {
 				if actualValue, ok := result[key]; !ok {
 					t.Errorf("Key %q not found in result", key)
@@ -83,7 +83,7 @@ func TestParseKeyValuePairs_InvalidInput(t *testing.T) {
 			input: []string{""},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := parseKeyValuePairs(tt.input)
@@ -127,7 +127,7 @@ func TestExtractTitle(t *testing.T) {
 			expected: "Title",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := extractTitle(tt.body)
@@ -154,11 +154,11 @@ func TestParseWorker(t *testing.T) {
 		{name: "whitespace trimmed", input: " human ", expected: workerHuman, wantErr: false},
 		{name: "invalid worker", input: "robot", expected: "", wantErr: true},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := parseWorker(tt.input)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error, got nil")
@@ -191,11 +191,11 @@ func TestParseKind(t *testing.T) {
 		{name: "whitespace trimmed", input: " epic ", expected: kindEpic, wantErr: false},
 		{name: "invalid kind", input: "story", expected: "", wantErr: true},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := parseKind(tt.input)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error, got nil")

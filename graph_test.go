@@ -9,7 +9,7 @@ import (
 // Test event replay - core event sourcing logic
 func TestReplayEvents_StateTransitions(t *testing.T) {
 	now := time.Now().UTC()
-	
+
 	events := []Event{
 		mustNewEvent("new_task", now, NewTaskEvent{
 			ID:        "T1",
@@ -30,12 +30,12 @@ func TestReplayEvents_StateTransitions(t *testing.T) {
 			TS:       formatTime(now.Add(2 * time.Second)),
 		}),
 	}
-	
+
 	graph, err := replayEvents(events)
 	if err != nil {
 		t.Fatalf("replayEvents failed: %v", err)
 	}
-	
+
 	task := graph.Tasks["T1"]
 	if task == nil {
 		t.Fatal("Task T1 not found")
@@ -47,7 +47,7 @@ func TestReplayEvents_StateTransitions(t *testing.T) {
 
 func TestReplayEvents_Claims(t *testing.T) {
 	now := time.Now().UTC()
-	
+
 	events := []Event{
 		mustNewEvent("new_task", now, NewTaskEvent{
 			ID:        "T1",
@@ -68,12 +68,12 @@ func TestReplayEvents_Claims(t *testing.T) {
 			TS:       formatTime(now.Add(2 * time.Second)),
 		}),
 	}
-	
+
 	graph, err := replayEvents(events)
 	if err != nil {
 		t.Fatalf("replayEvents failed: %v", err)
 	}
-	
+
 	task := graph.Tasks["T1"]
 	if task.ClaimedBy != "" {
 		t.Errorf("Expected claim cleared by state=todo, got ClaimedBy=%s", task.ClaimedBy)
@@ -82,7 +82,7 @@ func TestReplayEvents_Claims(t *testing.T) {
 
 func TestReplayEvents_Dependencies(t *testing.T) {
 	now := time.Now().UTC()
-	
+
 	events := []Event{
 		mustNewEvent("new_task", now, NewTaskEvent{
 			ID:        "T1",
@@ -106,12 +106,12 @@ func TestReplayEvents_Dependencies(t *testing.T) {
 			Type:   "depends",
 		}),
 	}
-	
+
 	graph, err := replayEvents(events)
 	if err != nil {
 		t.Fatalf("replayEvents failed: %v", err)
 	}
-	
+
 	if len(graph.Deps["T1"]) != 1 {
 		t.Errorf("Expected T1 to have 1 dep, got %d", len(graph.Deps["T1"]))
 	}
@@ -174,14 +174,14 @@ func TestIsReady_BasicCases(t *testing.T) {
 			expected: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			graph := &Graph{
 				Tasks: map[string]*Task{tt.task.ID: tt.task},
 				Deps:  map[string]map[string]struct{}{},
 			}
-			
+
 			// Add deps
 			if len(tt.deps) > 0 {
 				graph.Deps[tt.task.ID] = make(map[string]struct{})
@@ -190,7 +190,7 @@ func TestIsReady_BasicCases(t *testing.T) {
 					graph.Deps[tt.task.ID][depID] = struct{}{}
 				}
 			}
-			
+
 			result := isReady(tt.task, graph)
 			if result != tt.expected {
 				t.Errorf("Expected isReady=%v, got %v", tt.expected, result)
@@ -231,14 +231,14 @@ func TestIsBlocked_BasicCases(t *testing.T) {
 			expected: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			graph := &Graph{
 				Tasks: map[string]*Task{tt.task.ID: tt.task},
 				Deps:  map[string]map[string]struct{}{},
 			}
-			
+
 			if len(tt.deps) > 0 {
 				graph.Deps[tt.task.ID] = make(map[string]struct{})
 				for depID, depTask := range tt.deps {
@@ -246,7 +246,7 @@ func TestIsBlocked_BasicCases(t *testing.T) {
 					graph.Deps[tt.task.ID][depID] = struct{}{}
 				}
 			}
-			
+
 			result := isBlocked(tt.task, graph)
 			if result != tt.expected {
 				t.Errorf("Expected isBlocked=%v, got %v", tt.expected, result)
