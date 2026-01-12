@@ -63,6 +63,11 @@
     claim=<agent_id>                      set claim and (by default) state=doing
     claim=                                clear claim (no state change)
 
+  Result (task-only, both required together):
+    summary=<text>                        one-line summary (max 120 chars)
+    result=@-                             read artifact from stdin
+    result=<url>                          external URL reference
+
   Epic-only:
     (epics ignore state/worker/claim — use epic-deps instead)
 

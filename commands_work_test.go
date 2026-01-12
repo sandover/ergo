@@ -97,7 +97,7 @@ func TestBuildSetEvents_ClaimHandling(t *testing.T) {
 		},
 		{
 			name:         "claim on epic ignored",
-			task:         &Task{ID: "E1", State: stateTodo, ClaimedBy: "", EpicID: ""}, // epic has no EpicID
+			task:         &Task{ID: "E1", State: stateTodo, ClaimedBy: "", EpicID: "", IsEpic: true}, // epic has IsEpic=true
 			updates:      map[string]string{"claim": "agent-1"},
 			expectEvents: 0,
 		},

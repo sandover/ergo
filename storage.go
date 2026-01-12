@@ -3,11 +3,13 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -275,4 +277,84 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 		return createOutput{}, err
 	}
 	return output, nil
+}
+// writeResultEvent attaches a result to a task.
+// If content is non-empty, it writes an artifact file and uses its ref.
+// If content is empty, ref must be a URL.
+func writeResultEvent(dir string, opts GlobalOptions, taskID, summary, content, urlRef string) error {
+	lockPath := filepath.Join(dir, "lock")
+	eventsPath := filepath.Join(dir, "events.jsonl")
+	return withLock(lockPath, syscall.LOCK_EX, opts.LockTimeout, func() error {
+		graph, err := loadGraph(dir)
+		if err != nil {
+			return err
+		}
+		task, ok := graph.Tasks[taskID]
+		if !ok {
+			return fmt.Errorf("unknown task id %s", taskID)
+		}
+		if isEpic(task) {
+			return errors.New("cannot attach result to epic")
+		}
+		if err := validateResultSummary(summary); err != nil {
+			return err
+		}
+
+		var ref string
+		if content != "" {
+			// Write artifact file
+			artifactRef, err := writeArtifact(dir, content)
+			if err != nil {
+				return err
+			}
+			ref = artifactRef
+		} else if urlRef != "" {
+			ref = urlRef
+		} else {
+			return errors.New("result requires content or URL")
+		}
+
+		now := time.Now().UTC()
+		event, err := newEvent("result", now, ResultEvent{
+			TaskID:  taskID,
+			Summary: strings.TrimSpace(summary),
+			Ref:     ref,
+			TS:      formatTime(now),
+		})
+		if err != nil {
+			return err
+		}
+		return appendEvents(eventsPath, []Event{event})
+	})
+}
+
+// writeArtifact writes content to .ergo/artifacts/ with content-addressed naming.
+// Returns the relative ref (e.g., "artifacts/a1b2c3d4.txt").
+func writeArtifact(dir, content string) (string, error) {
+	artifactsDir := filepath.Join(dir, "artifacts")
+	if err := os.MkdirAll(artifactsDir, 0755); err != nil {
+		return "", err
+	}
+
+	// Content-addressed filename using SHA256 prefix
+	hash := sha256.Sum256([]byte(content))
+	filename := fmt.Sprintf("%x.txt", hash[:8]) // 16 hex chars
+	ref := filepath.Join("artifacts", filename)
+	fullPath := filepath.Join(dir, ref)
+
+	// Write atomically (write to temp, rename)
+	if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+		return "", err
+	}
+	return ref, nil
+}
+
+// readArtifact reads an artifact file from .ergo/.
+func readArtifact(dir, ref string) (string, error) {
+	fullPath := filepath.Join(dir, ref)
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", err
+	}
+	return string(content), nil
 }

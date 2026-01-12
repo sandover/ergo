@@ -38,6 +38,7 @@ func replayEvents(events []Event) (*Graph, error) {
 				ID:        data.ID,
 				UUID:      data.UUID,
 				EpicID:    data.EpicID,
+				IsEpic:    event.Type == "new_epic",
 				State:     data.State,
 				Body:      data.Body,
 				Worker:    taskWorker,
@@ -178,6 +179,27 @@ func replayEvents(events []Event) (*Graph, error) {
 				continue
 			}
 			task.ClaimedBy = ""
+		case "result":
+			var data ResultEvent
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				return nil, err
+			}
+			task, ok := graph.Tasks[data.TaskID]
+			if !ok {
+				continue
+			}
+			ts, err := parseTime(data.TS)
+			if err != nil {
+				return nil, err
+			}
+			// Prepend to keep newest first
+			result := Result{
+				Summary:   data.Summary,
+				Ref:       data.Ref,
+				CreatedAt: ts,
+			}
+			task.Results = append([]Result{result}, task.Results...)
+			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
 		}
 	}
 

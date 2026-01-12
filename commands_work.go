@@ -41,6 +41,32 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := filepath.Join(dir, "events.jsonl")
 
+	// Handle result separately (requires artifact I/O)
+	summary, hasSummary := updates["summary"]
+	result, hasResult := updates["result"]
+	if hasSummary || hasResult {
+		if !hasSummary {
+			return errors.New("result requires summary=")
+		}
+		if !hasResult {
+			return errors.New("summary requires result=")
+		}
+		// Resolve result content
+		content, urlRef, err := resolveResultValue(result)
+		if err != nil {
+			return err
+		}
+		if err := writeResultEvent(dir, opts, id, summary, content, urlRef); err != nil {
+			return err
+		}
+		delete(updates, "summary")
+		delete(updates, "result")
+		// If no other updates, we're done
+		if len(updates) == 0 {
+			return nil
+		}
+	}
+
 	return withLock(lockPath, syscall.LOCK_EX, opts.LockTimeout, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
@@ -259,6 +285,24 @@ func resolveSetBody(value string) (string, error) {
 	}
 }
 
+// resolveResultValue parses result= value.
+// Returns (content, urlRef, error). Exactly one of content/urlRef will be non-empty.
+func resolveResultValue(value string) (string, string, error) {
+	switch {
+	case value == "@-":
+		// Read from stdin
+		content, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", "", err
+		}
+		return string(content), "", nil
+	case strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://"):
+		return "", value, nil
+	default:
+		return "", "", fmt.Errorf("result= must be @- (stdin) or a URL, got: %s", value)
+	}
+}
+
 func runDep(args []string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "dep"); err != nil {
 		return err
@@ -362,7 +406,11 @@ func runList(args []string, opts GlobalOptions) error {
 		if claimed == "" {
 			claimed = "-"
 		}
-		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", task.ID, task.State, epic, claimed, firstLine(task.Body))
+		marker := ""
+		if len(task.Results) > 0 {
+			marker = "[R] "
+		}
+		fmt.Printf("%s\t%s\t%s\t%s\t%s%s\n", task.ID, task.State, epic, claimed, marker, firstLine(task.Body))
 	}
 
 	if showEpics && len(epics) > 0 {
@@ -549,6 +597,7 @@ func runShow(args []string, opts GlobalOptions) error {
 			Deps:      task.Deps,
 			RDeps:     task.RDeps,
 			Body:      task.Body,
+			Results:   task.Results,
 		})
 	}
 	if short {
@@ -583,6 +632,12 @@ func runShow(args []string, opts GlobalOptions) error {
 	}
 	if len(task.RDeps) > 0 {
 		fmt.Printf("rdeps: %s\n", strings.Join(task.RDeps, ","))
+	}
+	if len(task.Results) > 0 {
+		fmt.Printf("results: %d\n", len(task.Results))
+		for i, r := range task.Results {
+			fmt.Printf("  [%d] %s (%s) %s\n", i+1, r.Summary, formatTime(r.CreatedAt), r.Ref)
+		}
 	}
 	fmt.Println()
 	fmt.Print(task.Body)

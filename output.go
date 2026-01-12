@@ -8,16 +8,17 @@ import (
 )
 
 type taskListItem struct {
-	Kind      string `json:"kind"`
-	ID        string `json:"id"`
-	EpicID    string `json:"epic_id"`
-	State     string `json:"state"`
-	ClaimedBy string `json:"claimed_by"`
-	ClaimedAt string `json:"claimed_at"`
-	Title     string `json:"title"`
-	Worker    string `json:"worker"`
-	Ready     bool   `json:"ready"`
-	Blocked   bool   `json:"blocked"`
+	Kind       string `json:"kind"`
+	ID         string `json:"id"`
+	EpicID     string `json:"epic_id"`
+	State      string `json:"state"`
+	ClaimedBy  string `json:"claimed_by"`
+	ClaimedAt  string `json:"claimed_at"`
+	Title      string `json:"title"`
+	Worker     string `json:"worker"`
+	Ready      bool   `json:"ready"`
+	Blocked    bool   `json:"blocked"`
+	HasResults bool   `json:"has_results,omitempty"`
 }
 
 type taskShowOutput struct {
@@ -33,6 +34,7 @@ type taskShowOutput struct {
 	Deps      []string `json:"deps"`
 	RDeps     []string `json:"rdeps"`
 	Body      string   `json:"body"`
+	Results   []Result `json:"results,omitempty"`
 }
 
 type initOutput struct {
@@ -65,16 +67,17 @@ func buildTaskListItems(tasks []*Task, graph *Graph) []taskListItem {
 	for _, task := range tasks {
 		meta := graph.Meta[task.ID]
 		items = append(items, taskListItem{
-			Kind:      string(kindForTask(task)),
-			ID:        task.ID,
-			EpicID:    task.EpicID,
-			State:     task.State,
-			ClaimedBy: task.ClaimedBy,
-			ClaimedAt: claimedAtForTask(task, meta),
-			Title:     firstLine(task.Body),
-			Worker:    string(task.Worker),
-			Ready:     isReady(task, graph),
-			Blocked:   isBlocked(task, graph),
+			Kind:       string(kindForTask(task)),
+			ID:         task.ID,
+			EpicID:     task.EpicID,
+			State:      task.State,
+			ClaimedBy:  task.ClaimedBy,
+			ClaimedAt:  claimedAtForTask(task, meta),
+			Title:      firstLine(task.Body),
+			Worker:     string(task.Worker),
+			Ready:      isReady(task, graph),
+			Blocked:    isBlocked(task, graph),
+			HasResults: len(task.Results) > 0,
 		})
 	}
 	return items

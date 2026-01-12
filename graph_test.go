@@ -395,7 +395,7 @@ func TestIsReady_EpicDeps(t *testing.T) {
 			name: "task ready when epic has no deps",
 			task: &Task{ID: "T1", EpicID: "E1", State: stateTodo},
 			setup: func(g *Graph) {
-				g.Tasks["E1"] = &Task{ID: "E1", EpicID: ""} // E1 is an epic
+				g.Tasks["E1"] = &Task{ID: "E1", EpicID: "", IsEpic: true} // E1 is an epic
 			},
 			expected: true,
 		},
@@ -403,8 +403,8 @@ func TestIsReady_EpicDeps(t *testing.T) {
 			name: "task blocked when epic dep incomplete",
 			task: &Task{ID: "T1", EpicID: "E-build", State: stateTodo},
 			setup: func(g *Graph) {
-				g.Tasks["E-build"] = &Task{ID: "E-build", EpicID: ""}   // epic
-				g.Tasks["E-design"] = &Task{ID: "E-design", EpicID: ""} // epic
+				g.Tasks["E-build"] = &Task{ID: "E-build", EpicID: "", IsEpic: true}   // epic
+				g.Tasks["E-design"] = &Task{ID: "E-design", EpicID: "", IsEpic: true} // epic
 				g.Tasks["T-design"] = &Task{ID: "T-design", EpicID: "E-design", State: stateTodo}
 				g.Deps["E-build"] = map[string]struct{}{"E-design": {}}
 			},
@@ -414,8 +414,8 @@ func TestIsReady_EpicDeps(t *testing.T) {
 			name: "task ready when epic dep complete",
 			task: &Task{ID: "T1", EpicID: "E-build", State: stateTodo},
 			setup: func(g *Graph) {
-				g.Tasks["E-build"] = &Task{ID: "E-build", EpicID: ""}   // epic
-				g.Tasks["E-design"] = &Task{ID: "E-design", EpicID: ""} // epic
+				g.Tasks["E-build"] = &Task{ID: "E-build", EpicID: "", IsEpic: true}   // epic
+				g.Tasks["E-design"] = &Task{ID: "E-design", EpicID: "", IsEpic: true} // epic
 				g.Tasks["T-design"] = &Task{ID: "T-design", EpicID: "E-design", State: stateDone}
 				g.Deps["E-build"] = map[string]struct{}{"E-design": {}}
 			},

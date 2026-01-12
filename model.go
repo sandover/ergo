@@ -76,7 +76,7 @@ func kindForTask(task *Task) Kind {
 	if task == nil {
 		return kindTask
 	}
-	if task.EpicID == "" {
+	if task.IsEpic {
 		return kindEpic
 	}
 	return kindTask
@@ -86,7 +86,7 @@ func isEpic(task *Task) bool {
 	if task == nil {
 		return false
 	}
-	return task.EpicID == ""
+	return task.IsEpic
 }
 
 var (
@@ -202,6 +202,7 @@ type Task struct {
 	ID        string
 	UUID      string
 	EpicID    string
+	IsEpic    bool
 	State     string
 	Body      string
 	Worker    Worker
@@ -210,6 +211,7 @@ type Task struct {
 	UpdatedAt time.Time
 	Deps      []string
 	RDeps     []string
+	Results   []Result // Attached results/artifacts, newest first
 }
 
 type TaskMeta struct {
@@ -284,4 +286,34 @@ type EpicAssignEvent struct {
 type UnclaimEvent struct {
 	ID string `json:"id"`
 	TS string `json:"ts"`
+}
+type ResultEvent struct {
+	TaskID  string `json:"task_id"`
+	Summary string `json:"summary"`
+	Ref     string `json:"ref"`
+	TS      string `json:"ts"`
+}
+
+// Result represents an attached result/artifact for a task.
+type Result struct {
+	Summary   string    `json:"summary"`
+	Ref       string    `json:"ref"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+const maxResultSummaryLen = 120
+
+// validateResultSummary ensures summary is non-empty, single-line, and ≤120 chars.
+func validateResultSummary(summary string) error {
+	summary = strings.TrimSpace(summary)
+	if summary == "" {
+		return errors.New("result summary required")
+	}
+	if strings.ContainsAny(summary, "\n\r") {
+		return errors.New("result summary must be single line")
+	}
+	if len(summary) > maxResultSummaryLen {
+		return fmt.Errorf("result summary too long (max %d chars)", maxResultSummaryLen)
+	}
+	return nil
 }
