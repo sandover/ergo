@@ -1,5 +1,6 @@
 /.ergo/
 /.gocache/
+/.scratch/
 /ergo
 *.exe
 *.test

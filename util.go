@@ -1,0 +1,175 @@
+// Shared helpers: sorting, locking, event building, ids, time, and agent identity.
+package main
+
+import (
+	"crypto/rand"
+	"encoding/base32"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/user"
+	"sort"
+	"strings"
+	"syscall"
+	"time"
+)
+
+func sortedKeys(items map[string]struct{}) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(items))
+	for key := range items {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedMapKeys(items map[string]map[string]struct{}) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(items))
+	for key := range items {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func withLock(path string, lockType int, timeout time.Duration, fn func() error) error {
+	fd, err := syscall.Open(path, syscall.O_RDONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer syscall.Close(fd)
+
+	tryLock := func() error {
+		return syscall.Flock(fd, lockType|syscall.LOCK_NB)
+	}
+	isWouldBlock := func(err error) bool {
+		return errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN)
+	}
+
+	if timeout == 0 {
+		if err := tryLock(); err != nil {
+			if isWouldBlock(err) {
+				return errLockBusy
+			}
+			return err
+		}
+	} else {
+		var deadline time.Time
+		if timeout > 0 {
+			deadline = time.Now().Add(timeout)
+		}
+		for {
+			if err := tryLock(); err == nil {
+				break
+			} else if isWouldBlock(err) {
+				if !deadline.IsZero() && time.Now().After(deadline) {
+					return errLockTimeout
+				}
+				time.Sleep(50 * time.Millisecond)
+				continue
+			} else {
+				return err
+			}
+		}
+	}
+	defer syscall.Flock(fd, syscall.LOCK_UN)
+	return fn()
+}
+
+func newEvent(eventType string, ts time.Time, payload interface{}) (Event, error) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return Event{}, err
+	}
+	return Event{Type: eventType, TS: formatTime(ts), Data: data}, nil
+}
+
+func newShortID(existing map[string]*Task) (string, error) {
+	const maxAttempts = 64
+	for i := 0; i < maxAttempts; i++ {
+		id, err := shortID()
+		if err != nil {
+			return "", err
+		}
+		if _, exists := existing[id]; !exists {
+			return id, nil
+		}
+	}
+	return "", errors.New("failed to generate unique id")
+}
+
+func shortID() (string, error) {
+	buf := make([]byte, 4)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(buf)
+	return strings.ToUpper(encoded[:6]), nil
+}
+
+func newUUID() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	buf[6] = (buf[6] & 0x0f) | 0x40
+	buf[8] = (buf[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		buf[0:4],
+		buf[4:6],
+		buf[6:8],
+		buf[8:10],
+		buf[10:16],
+	), nil
+}
+
+func parseTime(value string) (time.Time, error) {
+	return time.Parse(time.RFC3339Nano, value)
+}
+
+func formatTime(value time.Time) string {
+	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func pickTime(candidate, fallback time.Time) time.Time {
+	if !candidate.IsZero() {
+		return candidate
+	}
+	return fallback
+}
+
+func maxTime(current, next time.Time) time.Time {
+	if next.After(current) {
+		return next
+	}
+	return current
+}
+
+func defaultAgentID() string {
+	current, err := user.Current()
+	if err != nil || current == nil || current.Username == "" {
+		return "unknown"
+	}
+	hostname, err := os.Hostname()
+	if err != nil || hostname == "" {
+		return current.Username
+	}
+	return fmt.Sprintf("%s@%s", current.Username, hostname)
+}
+
+func resolveAgentID(opts GlobalOptions) string {
+	if opts.AgentID != "" {
+		return opts.AgentID
+	}
+	if value := os.Getenv("ERGO_AGENT_ID"); value != "" {
+		return value
+	}
+	return defaultAgentID()
+}
