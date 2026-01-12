@@ -149,14 +149,17 @@ func writeLinkEvent(dir string, opts GlobalOptions, eventType, from, to string) 
 		if !ok {
 			return fmt.Errorf("unknown id %s", to)
 		}
-		// Both must be same kind: both epics or both tasks
-		if isEpic(fromItem) != isEpic(toItem) {
-			return fmt.Errorf("cannot mix epic and task dependencies: %s and %s", from, to)
+		// Validate dependency rules
+		if err := validateDepSelf(from, to); err != nil {
+			return err
+		}
+		if err := validateDepKinds(isEpic(fromItem), isEpic(toItem)); err != nil {
+			return err
 		}
 		// Cycle detection for new links
 		if eventType == "link" {
 			if hasCycle(graph, from, to) {
-				return fmt.Errorf("dependency would create a cycle")
+				return errors.New("dependency would create a cycle")
 			}
 		}
 		now := time.Now().UTC()

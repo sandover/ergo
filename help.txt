@@ -72,3 +72,9 @@
   blocked  → todo, doing, done, canceled
   done     → todo (reopen only)
   canceled → todo (reopen only)
+{{HEADER}}DEPENDENCY RULES{{RESET}}
+  task → task: allowed
+  epic → epic: allowed
+  task ↔ epic: forbidden (no mixing)
+  self-dep:    forbidden (A cannot depend on A)
+  cycles:      forbidden (A→B→...→A rejected)

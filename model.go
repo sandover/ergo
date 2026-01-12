@@ -148,6 +148,34 @@ func validateClaimInvariant(state, claimedBy string) error {
 	return nil
 }
 
+// Dependency rules: defines valid dependency relationships.
+// Design decisions:
+// - task→task: allowed (standard dependency)
+// - epic→epic: allowed (epic hierarchies)
+// - task→epic: forbidden (tasks cannot depend on epics)
+// - epic→task: forbidden (epics cannot depend on tasks)
+// - self-dep: forbidden (A cannot depend on A)
+// - cycles: forbidden (A→B→...→A not allowed)
+
+// validateDepKinds checks if a dependency between from and to is valid based on their kinds.
+// Both must be the same kind (both tasks or both epics).
+func validateDepKinds(fromIsEpic, toIsEpic bool) error {
+	if fromIsEpic != toIsEpic {
+		if fromIsEpic {
+			return errors.New("epic cannot depend on task")
+		}
+		return errors.New("task cannot depend on epic")
+	}
+	return nil
+}
+
+// validateDepSelf checks for self-dependencies.
+func validateDepSelf(from, to string) error {
+	if from == to {
+		return errors.New("cannot depend on self")
+	}
+	return nil
+}
 type GlobalOptions struct {
 	StartDir    string
 	ReadOnly    bool

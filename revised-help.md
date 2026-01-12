@@ -73,3 +73,9 @@ STATE MACHINE
   blocked  → todo, doing, done, canceled
   done     → todo (reopen only)
   canceled → todo (reopen only)
+DEPENDENCY RULES
+  task → task: allowed
+  epic → epic: allowed
+  task ↔ epic: forbidden (no mixing)
+  self-dep:    forbidden (A cannot depend on A)
+  cycles:      forbidden (A→B→...→A rejected)
