@@ -255,6 +255,49 @@ func TestIsBlocked_BasicCases(t *testing.T) {
 	}
 }
 
+func TestStateClearsClaim(t *testing.T) {
+	now := time.Now().UTC()
+	tests := []struct {
+		name           string
+		newState       string
+		expectClaimNil bool
+	}{
+		{name: "todo clears claim", newState: stateTodo, expectClaimNil: true},
+		{name: "done clears claim", newState: stateDone, expectClaimNil: true},
+		{name: "canceled clears claim", newState: stateCanceled, expectClaimNil: true},
+		{name: "doing keeps claim", newState: stateDoing, expectClaimNil: false},
+		{name: "blocked keeps claim", newState: stateBlocked, expectClaimNil: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			events := []Event{
+				mustNewEvent("new_task", now, NewTaskEvent{
+					ID:        "T1",
+					UUID:      "uuid-1",
+					State:     stateDoing,
+					Body:      "Test",
+					Worker:    "any",
+					CreatedAt: formatTime(now),
+				}),
+				mustNewEvent("claim", now, ClaimEvent{ID: "T1", AgentID: "agent-1", TS: formatTime(now)}),
+				mustNewEvent("state", now, StateEvent{ID: "T1", NewState: tt.newState, TS: formatTime(now)}),
+			}
+			graph, err := replayEvents(events)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			task := graph.Tasks["T1"]
+			if tt.expectClaimNil && task.ClaimedBy != "" {
+				t.Errorf("Expected claim cleared, got %q", task.ClaimedBy)
+			}
+			if !tt.expectClaimNil && task.ClaimedBy == "" {
+				t.Error("Expected claim kept, but was cleared")
+			}
+		})
+	}
+}
+
 // Helper to create events without error handling in tests
 func mustNewEvent(eventType string, ts time.Time, payload interface{}) Event {
 	data, err := json.Marshal(payload)

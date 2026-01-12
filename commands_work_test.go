@@ -84,10 +84,10 @@ func TestBuildSetEvents_ClaimHandling(t *testing.T) {
 		expectClaimed bool
 	}{
 		{
-			name:         "set claim generates claim event",
+			name:         "set claim generates claim event and state=doing",
 			task:         &Task{ID: "T1", State: stateTodo, ClaimedBy: "", EpicID: "E1"}, // task has EpicID
 			updates:      map[string]string{"claim": "agent-1"},
-			expectEvents: 1,
+			expectEvents: 2, // claim + state=doing
 		},
 		{
 			name:         "clear claim generates unclaim event",

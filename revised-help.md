@@ -32,7 +32,7 @@ COMMANDS
 GLOBAL FLAGS
   --dir <path>                            discovery start dir (or explicit .ergo dir)
   --as <any|agent|human>                  filter READY/BLOCKED and next (default: any)
-  --agent <id>                            claim identity (default: hostname:pid)
+  --agent <id>                            claim identity (default: username@hostname)
   --json                                  JSON output (default: text), recommended for agents
   --readonly                              block commands that write
   --lock-timeout <duration>               default 30s; 0 = fail fast
@@ -55,7 +55,6 @@ KEYS (for `set`)
   Common:
     title=<text>                          required; cannot be cleared
     body=@-                               read body from stdin
-    body=@editor                          edit body in $EDITOR
 
   Task-only:
     epic=<epic_id> | epic=                assign / unassign

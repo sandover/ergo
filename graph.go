@@ -66,7 +66,8 @@ func replayEvents(events []Event) (*Graph, error) {
 			}
 			task.State = data.NewState
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
-			if data.NewState == stateTodo {
+			// todo/done/canceled clear claim
+			if data.NewState == stateTodo || data.NewState == stateDone || data.NewState == stateCanceled {
 				task.ClaimedBy = ""
 			}
 			meta := graph.Meta[data.ID]

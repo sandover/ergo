@@ -161,7 +161,9 @@ func buildSetEvents(id string, task *Task, updates map[string]string, now time.T
 
 	// Handle claim
 	claimWasSet := false
-	if claimValue, ok := remainingUpdates["claim"]; ok {
+	claimValue := ""
+	if cv, ok := remainingUpdates["claim"]; ok {
+		claimValue = cv
 		if !isEpic(task) {
 			if claimValue == "" {
 				// Clear claim
@@ -190,6 +192,7 @@ func buildSetEvents(id string, task *Task, updates map[string]string, now time.T
 	}
 
 	// Handle state (must come last)
+	stateWasSet := false
 	if stateStr, ok := remainingUpdates["state"]; ok {
 		if _, valid := validStates[stateStr]; !valid {
 			return nil, nil, fmt.Errorf("invalid state: %s", stateStr)
@@ -209,6 +212,20 @@ func buildSetEvents(id string, task *Task, updates map[string]string, now time.T
 		}
 		events = append(events, event)
 		delete(remainingUpdates, "state")
+		stateWasSet = true
+	}
+
+	// If claim was set to a non-empty value and state wasn't explicitly set, default to doing
+	if claimWasSet && claimValue != "" && !stateWasSet {
+		event, err := newEvent("state", now, StateEvent{
+			ID:       id,
+			NewState: stateDoing,
+			TS:       formatTime(now),
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		events = append(events, event)
 	}
 
 	return events, remainingUpdates, nil
