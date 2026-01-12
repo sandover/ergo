@@ -60,9 +60,16 @@ KEYS (for `set`)
     epic=<epic_id> | epic=                assign / unassign
     worker=any|agent|human
     state=todo|doing|done|blocked|canceled
-                                          state applied last; todo/done/canceled clear claim; doing requires claim
+                                          doing requires claim; todo/done/canceled clear claim
     claim=<agent_id>                      set claim and (by default) state=doing
     claim=                                clear claim (no state change)
 
   Epic-only:
     (epics ignore state/worker/claim — use epic-deps instead)
+
+STATE MACHINE
+  todo     → doing, done, blocked, canceled
+  doing    → todo, done, blocked, canceled
+  blocked  → todo, doing, done, canceled
+  done     → todo (reopen only)
+  canceled → todo (reopen only)

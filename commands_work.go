@@ -197,10 +197,21 @@ func buildSetEvents(id string, task *Task, updates map[string]string, now time.T
 		if _, valid := validStates[stateStr]; !valid {
 			return nil, nil, fmt.Errorf("invalid state: %s", stateStr)
 		}
-		if stateStr == stateDoing {
-			if !claimWasSet && task.ClaimedBy == "" {
-				return nil, nil, errors.New("state=doing requires a claim")
-			}
+		// Validate state transition
+		if err := validateTransition(task.State, stateStr); err != nil {
+			return nil, nil, err
+		}
+		// Validate claim invariant for new state
+		newClaimedBy := task.ClaimedBy
+		if claimWasSet {
+			newClaimedBy = claimValue
+		}
+		// done/canceled/todo will clear claim, so check with empty
+		if stateStr == stateTodo || stateStr == stateDone || stateStr == stateCanceled {
+			newClaimedBy = ""
+		}
+		if err := validateClaimInvariant(stateStr, newClaimedBy); err != nil {
+			return nil, nil, err
 		}
 		event, err := newEvent("state", now, StateEvent{
 			ID:       id,

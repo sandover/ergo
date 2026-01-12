@@ -1,0 +1,101 @@
+package main
+
+import (
+	"testing"
+)
+
+// TestValidTransitions exhaustively tests all state×state combinations.
+func TestValidTransitions(t *testing.T) {
+	allStates := []string{stateTodo, stateDoing, stateDone, stateBlocked, stateCanceled}
+
+	// Expected valid transitions (from → to)
+	expected := map[string]map[string]bool{
+		stateTodo:     {stateDoing: true, stateDone: true, stateBlocked: true, stateCanceled: true},
+		stateDoing:    {stateTodo: true, stateDone: true, stateBlocked: true, stateCanceled: true},
+		stateBlocked:  {stateTodo: true, stateDoing: true, stateDone: true, stateCanceled: true},
+		stateDone:     {stateTodo: true}, // reopen only
+		stateCanceled: {stateTodo: true}, // reopen only
+	}
+
+	for _, from := range allStates {
+		for _, to := range allStates {
+			t.Run(from+"→"+to, func(t *testing.T) {
+				err := validateTransition(from, to)
+
+				if from == to {
+					// no-op always valid
+					if err != nil {
+						t.Errorf("no-op %s→%s should be valid, got: %v", from, to, err)
+					}
+					return
+				}
+
+				shouldBeValid := expected[from][to]
+				if shouldBeValid && err != nil {
+					t.Errorf("%s→%s should be valid, got: %v", from, to, err)
+				}
+				if !shouldBeValid && err == nil {
+					t.Errorf("%s→%s should be invalid, but was allowed", from, to)
+				}
+			})
+		}
+	}
+}
+
+// TestClaimInvariants tests the claim/state relationship.
+func TestClaimInvariants(t *testing.T) {
+	tests := []struct {
+		name      string
+		state     string
+		claimedBy string
+		wantErr   bool
+	}{
+		// doing requires claim
+		{name: "doing with claim", state: stateDoing, claimedBy: "agent-1", wantErr: false},
+		{name: "doing without claim", state: stateDoing, claimedBy: "", wantErr: true},
+
+		// todo/done/canceled must have no claim
+		{name: "todo without claim", state: stateTodo, claimedBy: "", wantErr: false},
+		{name: "todo with claim", state: stateTodo, claimedBy: "agent-1", wantErr: true},
+		{name: "done without claim", state: stateDone, claimedBy: "", wantErr: false},
+		{name: "done with claim", state: stateDone, claimedBy: "agent-1", wantErr: true},
+		{name: "canceled without claim", state: stateCanceled, claimedBy: "", wantErr: false},
+		{name: "canceled with claim", state: stateCanceled, claimedBy: "agent-1", wantErr: true},
+
+		// blocked can have or not have claim
+		{name: "blocked without claim", state: stateBlocked, claimedBy: "", wantErr: false},
+		{name: "blocked with claim", state: stateBlocked, claimedBy: "agent-1", wantErr: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateClaimInvariant(tt.state, tt.claimedBy)
+			if tt.wantErr && err == nil {
+				t.Errorf("expected error for state=%s claimedBy=%q", tt.state, tt.claimedBy)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestInvalidTransitionsFromTerminalStates verifies done/canceled can only go to todo.
+func TestInvalidTransitionsFromTerminalStates(t *testing.T) {
+	terminalStates := []string{stateDone, stateCanceled}
+	invalidTargets := []string{stateDoing, stateBlocked, stateDone, stateCanceled}
+
+	for _, from := range terminalStates {
+		for _, to := range invalidTargets {
+			if from == to {
+				continue // no-op is always valid
+			}
+			t.Run(from+"→"+to, func(t *testing.T) {
+				err := validateTransition(from, to)
+				if err == nil {
+					t.Errorf("%s→%s should be invalid (terminal state)", from, to)
+				}
+			})
+		}
+	}
+}

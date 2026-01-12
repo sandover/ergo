@@ -102,6 +102,52 @@ var validStates = map[string]struct{}{
 	stateCanceled: {},
 }
 
+// State machine: valid transitions and claim invariants.
+// Design decisions:
+// - done/canceled are NOT terminal (can reopen via →todo)
+// - todo→done allowed (quick completion without claiming)
+// - blocked can transition to any non-terminal state
+var validTransitions = map[string]map[string]struct{}{
+	stateTodo:     {stateDoing: {}, stateDone: {}, stateBlocked: {}, stateCanceled: {}},
+	stateDoing:    {stateTodo: {}, stateDone: {}, stateBlocked: {}, stateCanceled: {}},
+	stateBlocked:  {stateTodo: {}, stateDoing: {}, stateDone: {}, stateCanceled: {}},
+	stateDone:     {stateTodo: {}}, // reopen only
+	stateCanceled: {stateTodo: {}}, // reopen only
+}
+
+// validateTransition checks if from→to is a valid state transition.
+// Returns nil if valid, error describing why if not.
+func validateTransition(from, to string) error {
+	if from == to {
+		return nil // no-op is always valid
+	}
+	allowed, ok := validTransitions[from]
+	if !ok {
+		return fmt.Errorf("unknown state: %s", from)
+	}
+	if _, valid := allowed[to]; !valid {
+		return fmt.Errorf("invalid transition: %s → %s", from, to)
+	}
+	return nil
+}
+
+// validateClaimInvariant checks that the claim/state relationship is valid.
+// doing requires a claim; todo/done/canceled must have no claim.
+func validateClaimInvariant(state, claimedBy string) error {
+	switch state {
+	case stateDoing:
+		if claimedBy == "" {
+			return errors.New("state=doing requires a claim")
+		}
+	case stateTodo, stateDone, stateCanceled:
+		if claimedBy != "" {
+			return fmt.Errorf("state=%s must have no claim", state)
+		}
+	}
+	// blocked can have or not have a claim
+	return nil
+}
+
 type GlobalOptions struct {
 	StartDir    string
 	ReadOnly    bool
