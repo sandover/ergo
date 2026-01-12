@@ -59,8 +59,8 @@ KEYS (for `set`)
   Task-only:
     epic=<epic_id> | epic=                assign / unassign
     worker=any|agent|human
-    state=todo|doing|done|blocked|canceled
-                                          doing requires claim; todo/done/canceled clear claim
+    state=todo|doing|done|blocked|canceled|error
+                                          doing/error require claim; todo/done/canceled clear claim
     claim=<agent_id>                      set claim and (by default) state=doing
     claim=                                clear claim (no state change)
 
@@ -69,10 +69,12 @@ KEYS (for `set`)
 
 STATE MACHINE
   todo     → doing, done, blocked, canceled
-  doing    → todo, done, blocked, canceled
+  doing    → todo, done, blocked, canceled, error
   blocked  → todo, doing, done, canceled
   done     → todo (reopen only)
   canceled → todo (reopen only)
+  error    → todo, doing, canceled (retry, reassign, or give up)
+
 DEPENDENCY RULES
   task → task: allowed
   epic → epic: allowed

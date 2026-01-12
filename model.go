@@ -15,6 +15,7 @@ const (
 	stateDone     = "done"
 	stateBlocked  = "blocked"
 	stateCanceled = "canceled"
+	stateError    = "error"
 
 	dependsLinkType = "depends"
 )
@@ -100,6 +101,7 @@ var validStates = map[string]struct{}{
 	stateDone:     {},
 	stateBlocked:  {},
 	stateCanceled: {},
+	stateError:    {},
 }
 
 // State machine: valid transitions and claim invariants.
@@ -107,12 +109,15 @@ var validStates = map[string]struct{}{
 // - done/canceled are NOT terminal (can reopen via →todo)
 // - todo→done allowed (quick completion without claiming)
 // - blocked can transition to any non-terminal state
+// - error represents failed work; can retry (→doing), reassign (→todo), or give up (→canceled)
+// - error preserves claim to show who failed
 var validTransitions = map[string]map[string]struct{}{
 	stateTodo:     {stateDoing: {}, stateDone: {}, stateBlocked: {}, stateCanceled: {}},
-	stateDoing:    {stateTodo: {}, stateDone: {}, stateBlocked: {}, stateCanceled: {}},
+	stateDoing:    {stateTodo: {}, stateDone: {}, stateBlocked: {}, stateCanceled: {}, stateError: {}},
 	stateBlocked:  {stateTodo: {}, stateDoing: {}, stateDone: {}, stateCanceled: {}},
 	stateDone:     {stateTodo: {}}, // reopen only
 	stateCanceled: {stateTodo: {}}, // reopen only
+	stateError:    {stateTodo: {}, stateDoing: {}, stateCanceled: {}}, // retry, reassign, or give up
 }
 
 // validateTransition checks if from→to is a valid state transition.
@@ -133,11 +138,16 @@ func validateTransition(from, to string) error {
 
 // validateClaimInvariant checks that the claim/state relationship is valid.
 // doing requires a claim; todo/done/canceled must have no claim.
+// error keeps claim (shows who failed); blocked can have or not have claim.
 func validateClaimInvariant(state, claimedBy string) error {
 	switch state {
 	case stateDoing:
 		if claimedBy == "" {
 			return errors.New("state=doing requires a claim")
+		}
+	case stateError:
+		if claimedBy == "" {
+			return errors.New("state=error requires a claim (shows who failed)")
 		}
 	case stateTodo, stateDone, stateCanceled:
 		if claimedBy != "" {

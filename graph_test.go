@@ -230,6 +230,12 @@ func TestIsBlocked_BasicCases(t *testing.T) {
 			deps:     map[string]*Task{"T2": {ID: "T2", State: stateTodo}},
 			expected: false,
 		},
+		{
+			name:     "todo with error dep is blocked",
+			task:     &Task{ID: "T1", State: stateTodo, ClaimedBy: ""},
+			deps:     map[string]*Task{"T2": {ID: "T2", State: stateError, ClaimedBy: "agent-1"}},
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -267,6 +273,7 @@ func TestStateClearsClaim(t *testing.T) {
 		{name: "canceled clears claim", newState: stateCanceled, expectClaimNil: true},
 		{name: "doing keeps claim", newState: stateDoing, expectClaimNil: false},
 		{name: "blocked keeps claim", newState: stateBlocked, expectClaimNil: false},
+		{name: "error keeps claim", newState: stateError, expectClaimNil: false},
 	}
 
 	for _, tt := range tests {

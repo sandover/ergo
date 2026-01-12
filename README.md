@@ -65,14 +65,13 @@ If a task needs a human decision, create it with `--worker human` (or set it lat
 | Command | Action |
 | --- | --- |
 | `ergo init [dir]` | Create `.ergo/` in the repo (or `dir`). |
-| `ergo task new --kind epic [title] [--body-file <path|->]` | Create an epic (prints id). |
-| `ergo task new --epic <epic_id> [title] [--body-file <path|->]` | Create a task under an epic (prints id). |
-| `ergo ready` | List READY work items. |
-| `ergo take` | Atomically claim the oldest-created READY item and set it to `doing`. |
-| `ergo state <id> <state>` | Set state: `todo | doing | done | blocked | canceled`. |
-| `ergo dep <from> depends <to>` | Add a dependency edge (“from waits for to”). |
+| `ergo new epic <title>` | Create an epic (prints id). |
+| `ergo new task <title> [--epic <id>]` | Create a task (prints id). |
+| `ergo list [--ready\|--blocked] [--epics]` | List tasks (filter by status). |
+| `ergo next [--peek]` | Atomically claim the oldest READY task and set it to `doing`. |
+| `ergo set <id> state=<state>` | Set state: `todo\|doing\|done\|blocked\|canceled\|error`. |
+| `ergo dep <A> <B>` | Add dependency: A depends on B. |
 | `ergo show <id>` | Show details and body. |
-| `ergo plan` | Summarize epics/tasks and READY/BLOCKED. |
 | `ergo where` | Print the active `.ergo/` directory path. |
 | `ergo compact` | Rewrite the log to current state (drops history). |
 
@@ -95,13 +94,13 @@ If you want shared memory across collaborators/agents, commit `.ergo/` and treat
 
 ## 👀 What You’ll See
 
-Example `ergo ready` output:
+Example `ergo list --ready` output:
 
 ```text
 ABC123  todo   EPIC01  -  Locking: add unix lock abstraction for Linux
 ```
 
-Example `ergo take` output (prints the task body):
+Example `ergo next` output (prints the task body):
 
 ```text
 Locking: add unix lock abstraction for Linux
