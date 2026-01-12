@@ -8,6 +8,9 @@ import (
 	"strings"
 )
 
+// version is set by goreleaser via ldflags
+var version = "dev"
+
 func main() {
 	opts, args, err := parseGlobalOptions(os.Args[1:])
 	if err != nil {
@@ -62,7 +65,7 @@ func printUsage() {
 }
 
 func printVersion() {
-	fmt.Println("ergo dev")
+	fmt.Println("ergo " + version)
 }
 
 func exitErr(err error, opts *GlobalOptions) {
