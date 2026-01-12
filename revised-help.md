@@ -20,8 +20,10 @@ COMMANDS
                                           exit code 3 if no READY task.
 
   set <id> key=value [key=value ...]      update fields (see KEYS). rejects empty title.
-  dep <A> <B>                             add task dependency: A depends on B (B blocks A). rejects cycles.
-  dep rm <A> <B>                          remove task dependency
+  dep <A> <B>                             A depends on B (B blocks A).
+                                          tasks can depend on tasks; epics can depend on epics.
+                                          rejects cycles; rejects mixed (task↔epic) deps.
+  dep rm <A> <B>                          remove dependency
 
   where                                   print active .ergo directory path
   compact                                 rewrite log to current state (drops history)
@@ -38,10 +40,16 @@ GLOBAL FLAGS
   -V, --version                           print version
 
 READY DEFINITION (tasks only)
-  state=todo, unclaimed, worker matches --as, and all deps are done or canceled.
+  state=todo, unclaimed, worker matches --as, all task deps done|canceled,
+  and all epic-deps of the task's epic are complete.
 
 BLOCKED DEFINITION (tasks only)
-  state=blocked OR (state=todo AND unmet deps).
+  state=blocked, OR (state=todo AND unmet task deps), OR task's epic has
+  incomplete epic-deps.
+
+EPIC COMPLETION
+  An epic is complete when all its tasks are done or canceled.
+  Epic-to-epic deps: tasks in epic A are blocked until epic B is complete.
 
 KEYS (for `set`)
   Common:
@@ -58,4 +66,4 @@ KEYS (for `set`)
     claim=                                clear claim (no state change)
 
   Epic-only:
-    (epics ignore state/worker/claim/dep)
+    (epics ignore state/worker/claim — use epic-deps instead)

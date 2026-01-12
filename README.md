@@ -88,7 +88,7 @@ The usual loop:
 4. When done, they mark it `done`, unblocking dependents automatically.
 
 By default, `ready`/`take` return tasks only. Use `--kind any` (or `--kind epic`) to include epics.
-Dependencies are task-to-task by default; epics are containers.
+Tasks depend on tasks; epics depend on epics. Epics are completed when all their tasks are done|canceled.
 
 If you want ergo to be “invisible infrastructure”, keep `.ergo/` uncommitted and use it locally.
 If you want shared memory across collaborators/agents, commit `.ergo/` and treat it like project state.

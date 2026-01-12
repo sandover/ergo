@@ -263,3 +263,197 @@ func mustNewEvent(eventType string, ts time.Time, payload interface{}) Event {
 	}
 	return Event{Type: eventType, TS: formatTime(ts), Data: data}
 }
+
+func TestIsEpicComplete(t *testing.T) {
+	tests := []struct {
+		name     string
+		epicID   string
+		tasks    map[string]*Task
+		expected bool
+	}{
+		{
+			name:     "empty epic is complete",
+			epicID:   "E1",
+			tasks:    map[string]*Task{},
+			expected: true,
+		},
+		{
+			name:   "all tasks done",
+			epicID: "E1",
+			tasks: map[string]*Task{
+				"T1": {ID: "T1", EpicID: "E1", State: stateDone},
+				"T2": {ID: "T2", EpicID: "E1", State: stateDone},
+			},
+			expected: true,
+		},
+		{
+			name:   "all tasks canceled",
+			epicID: "E1",
+			tasks: map[string]*Task{
+				"T1": {ID: "T1", EpicID: "E1", State: stateCanceled},
+			},
+			expected: true,
+		},
+		{
+			name:   "mix of done and canceled",
+			epicID: "E1",
+			tasks: map[string]*Task{
+				"T1": {ID: "T1", EpicID: "E1", State: stateDone},
+				"T2": {ID: "T2", EpicID: "E1", State: stateCanceled},
+			},
+			expected: true,
+		},
+		{
+			name:   "one task not done",
+			epicID: "E1",
+			tasks: map[string]*Task{
+				"T1": {ID: "T1", EpicID: "E1", State: stateDone},
+				"T2": {ID: "T2", EpicID: "E1", State: stateTodo},
+			},
+			expected: false,
+		},
+		{
+			name:   "task in different epic ignored",
+			epicID: "E1",
+			tasks: map[string]*Task{
+				"T1": {ID: "T1", EpicID: "E1", State: stateDone},
+				"T2": {ID: "T2", EpicID: "E2", State: stateTodo}, // different epic
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			graph := &Graph{Tasks: tt.tasks}
+			result := isEpicComplete(tt.epicID, graph)
+			if result != tt.expected {
+				t.Errorf("Expected isEpicComplete=%v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestIsReady_EpicDeps(t *testing.T) {
+	tests := []struct {
+		name     string
+		task     *Task
+		setup    func(*Graph)
+		expected bool
+	}{
+		{
+			name: "task ready when epic has no deps",
+			task: &Task{ID: "T1", EpicID: "E1", State: stateTodo},
+			setup: func(g *Graph) {
+				g.Tasks["E1"] = &Task{ID: "E1", EpicID: ""} // E1 is an epic
+			},
+			expected: true,
+		},
+		{
+			name: "task blocked when epic dep incomplete",
+			task: &Task{ID: "T1", EpicID: "E-build", State: stateTodo},
+			setup: func(g *Graph) {
+				g.Tasks["E-build"] = &Task{ID: "E-build", EpicID: ""}   // epic
+				g.Tasks["E-design"] = &Task{ID: "E-design", EpicID: ""} // epic
+				g.Tasks["T-design"] = &Task{ID: "T-design", EpicID: "E-design", State: stateTodo}
+				g.Deps["E-build"] = map[string]struct{}{"E-design": {}}
+			},
+			expected: false,
+		},
+		{
+			name: "task ready when epic dep complete",
+			task: &Task{ID: "T1", EpicID: "E-build", State: stateTodo},
+			setup: func(g *Graph) {
+				g.Tasks["E-build"] = &Task{ID: "E-build", EpicID: ""}   // epic
+				g.Tasks["E-design"] = &Task{ID: "E-design", EpicID: ""} // epic
+				g.Tasks["T-design"] = &Task{ID: "T-design", EpicID: "E-design", State: stateDone}
+				g.Deps["E-build"] = map[string]struct{}{"E-design": {}}
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			graph := &Graph{
+				Tasks: map[string]*Task{tt.task.ID: tt.task},
+				Deps:  map[string]map[string]struct{}{},
+			}
+			if tt.setup != nil {
+				tt.setup(graph)
+			}
+			result := isReady(tt.task, graph)
+			if result != tt.expected {
+				t.Errorf("Expected isReady=%v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestHasCycle(t *testing.T) {
+	tests := []struct {
+		name     string
+		deps     map[string]map[string]struct{}
+		from     string
+		to       string
+		expected bool
+	}{
+		{
+			name:     "self loop",
+			deps:     map[string]map[string]struct{}{},
+			from:     "A",
+			to:       "A",
+			expected: true,
+		},
+		{
+			name:     "no existing deps - no cycle",
+			deps:     map[string]map[string]struct{}{},
+			from:     "A",
+			to:       "B",
+			expected: false,
+		},
+		{
+			name: "direct cycle: A->B, adding B->A",
+			deps: map[string]map[string]struct{}{
+				"A": {"B": {}},
+			},
+			from:     "B",
+			to:       "A",
+			expected: true,
+		},
+		{
+			name: "indirect cycle: A->B->C, adding C->A",
+			deps: map[string]map[string]struct{}{
+				"A": {"B": {}},
+				"B": {"C": {}},
+			},
+			from:     "C",
+			to:       "A",
+			expected: true,
+		},
+		{
+			name: "no cycle in diamond: A->B, A->C, B->D, C->D",
+			deps: map[string]map[string]struct{}{
+				"A": {"B": {}, "C": {}},
+				"B": {"D": {}},
+				"C": {"D": {}},
+			},
+			from:     "D",
+			to:       "E", // new node
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			graph := &Graph{
+				Tasks: map[string]*Task{},
+				Deps:  tt.deps,
+			}
+			result := hasCycle(graph, tt.from, tt.to)
+			if result != tt.expected {
+				t.Errorf("Expected hasCycle=%v, got %v", tt.expected, result)
+			}
+		})
+	}
+}

@@ -141,22 +141,23 @@ func writeLinkEvent(dir string, opts GlobalOptions, eventType, from, to string) 
 		if err != nil {
 			return err
 		}
-		fromTask, ok := graph.Tasks[from]
+		fromItem, ok := graph.Tasks[from]
 		if !ok {
-			return fmt.Errorf("unknown task id %s", from)
+			return fmt.Errorf("unknown id %s", from)
 		}
-		toTask, ok := graph.Tasks[to]
+		toItem, ok := graph.Tasks[to]
 		if !ok {
-			return fmt.Errorf("unknown task id %s", to)
+			return fmt.Errorf("unknown id %s", to)
 		}
-		if eventType == "link" && (isEpic(fromTask) || isEpic(toTask)) {
-			if isEpic(fromTask) && isEpic(toTask) {
-				return fmt.Errorf("dependencies must link tasks (got epics %s and %s)", from, to)
+		// Both must be same kind: both epics or both tasks
+		if isEpic(fromItem) != isEpic(toItem) {
+			return fmt.Errorf("cannot mix epic and task dependencies: %s and %s", from, to)
+		}
+		// Cycle detection for new links
+		if eventType == "link" {
+			if hasCycle(graph, from, to) {
+				return fmt.Errorf("dependency would create a cycle")
 			}
-			if isEpic(fromTask) {
-				return fmt.Errorf("dependencies must link tasks (got epic %s)", from)
-			}
-			return fmt.Errorf("dependencies must link tasks (got epic %s)", to)
 		}
 		now := time.Now().UTC()
 		event, err := newEvent(eventType, now, LinkEvent{

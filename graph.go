@@ -405,6 +405,12 @@ func isReady(task *Task, graph *Graph) bool {
 			return false
 		}
 	}
+	// For tasks in an epic, check if epic's epic-deps are complete
+	if task.EpicID != "" {
+		if !areEpicDepsComplete(task.EpicID, graph) {
+			return false
+		}
+	}
 	return true
 }
 
@@ -424,6 +430,71 @@ func isBlocked(task *Task, graph *Graph) bool {
 			continue
 		}
 		if other.State != stateDone && other.State != stateCanceled {
+			return true
+		}
+	}
+	// For tasks in an epic, check if epic's epic-deps are incomplete
+	if task.EpicID != "" {
+		if !areEpicDepsComplete(task.EpicID, graph) {
+			return true
+		}
+	}
+	return false
+}
+
+// isEpicComplete returns true if all tasks in the epic are done or canceled.
+// An epic with no tasks is considered complete.
+func isEpicComplete(epicID string, graph *Graph) bool {
+	for _, task := range graph.Tasks {
+		if task.EpicID == epicID {
+			if task.State != stateDone && task.State != stateCanceled {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// areEpicDepsComplete returns true if all epics that the given epic depends on are complete.
+func areEpicDepsComplete(epicID string, graph *Graph) bool {
+	for depID := range graph.Deps[epicID] {
+		depEpic, ok := graph.Tasks[depID]
+		if !ok {
+			continue
+		}
+		if !isEpic(depEpic) {
+			continue
+		}
+		if !isEpicComplete(depID, graph) {
+			return false
+		}
+	}
+	return true
+}
+
+// hasCycle returns true if adding a dependency from -> to would create a cycle.
+// Uses DFS to check if 'from' is reachable from 'to' (which would mean to -> ... -> from exists).
+func hasCycle(graph *Graph, from, to string) bool {
+	// If from == to, it's a self-loop
+	if from == to {
+		return true
+	}
+	// Check if 'from' is reachable from 'to' via existing deps
+	visited := make(map[string]bool)
+	return isReachable(graph, to, from, visited)
+}
+
+// isReachable returns true if 'target' is reachable from 'start' via deps.
+func isReachable(graph *Graph, start, target string, visited map[string]bool) bool {
+	if start == target {
+		return true
+	}
+	if visited[start] {
+		return false
+	}
+	visited[start] = true
+	for dep := range graph.Deps[start] {
+		if isReachable(graph, dep, target, visited) {
 			return true
 		}
 	}

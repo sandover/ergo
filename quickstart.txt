@@ -70,7 +70,21 @@
 {{CMD}}ergo list --ready --as agent{{RESET}}
 {{CMD}}ergo next --as agent{{RESET}}
 
-{{HEADER}}7. AGENT INTEGRATION{{RESET}}
+{{HEADER}}7. EPIC HIERARCHIES{{RESET}}
+
+{{COMMENT}}epics can depend on other epics (nested work):{{RESET}}
+{{CMD}}ergo new epic "Design phase"{{RESET}}
+{{CMD}}ergo new epic "Build phase"{{RESET}}
+{{CMD}}ergo new epic "Deploy phase"{{RESET}}
+
+{{COMMENT}}Build depends on Design, Deploy depends on Build:{{RESET}}
+{{CMD}}ergo dep E-build E-design{{RESET}}
+{{CMD}}ergo dep E-deploy E-build{{RESET}}
+
+{{COMMENT}}tasks in Build are blocked until Design's tasks are done{{RESET}}
+{{COMMENT}}an epic is "complete" when all its tasks are done|canceled{{RESET}}
+
+{{HEADER}}8. AGENT INTEGRATION{{RESET}}
 
 {{COMMENT}}agents should use --json for structured output:{{RESET}}
 {{CMD}}ergo --json list --ready --as agent{{RESET}}
