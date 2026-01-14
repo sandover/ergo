@@ -45,6 +45,11 @@
 {{CMD}}echo '{}' | ergo new task --json{{RESET}}
 {{COMMENT}}→ {"error":"validation_failed","message":"invalid input","missing":["title","body"]}{{RESET}}
 
+{{COMMENT}}multi-line body (use heredoc for readability):{{RESET}}
+{{CMD}}ergo new task <<'EOF'
+{"title":"Refactor auth","body":"1. Extract token validation\n2. Add refresh flow\n3. Update tests"}
+EOF{{RESET}}
+
 {{HEADER}}5. ADD DEPENDENCIES{{RESET}}
 
 {{COMMENT}}'dep A B' means A depends on B (B blocks A){{RESET}}

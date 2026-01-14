@@ -62,6 +62,13 @@ ergo next
 
 Tasks depend on tasks; epics depend on epics. Use `--as agent` so agents skip `--worker human` tasks.
 
+**Multi-line bodies** use heredocs:
+```bash
+ergo new task <<'EOF'
+{"title":"Refactor auth","body":"1. Extract token validation\n2. Add refresh flow\n3. Update tests"}
+EOF
+```
+
 ## 📦 Installation
 
 - **Homebrew:** `brew install sandover/tap/ergo`
