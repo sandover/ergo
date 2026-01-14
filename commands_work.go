@@ -321,6 +321,7 @@ func runList(args []string, opts GlobalOptions) error {
 	readyOnly := hasFlag(args, "--ready")
 	blockedOnly := hasFlag(args, "--blocked")
 	showEpics := hasFlag(args, "--epics")
+	treeView := hasFlag(args, "--tree")
 
 	if readyOnly && blockedOnly {
 		return errors.New("cannot use both --ready and --blocked")
@@ -374,7 +375,14 @@ func runList(args []string, opts GlobalOptions) error {
 		return writeJSON(os.Stdout, result)
 	}
 
-	// Text output
+	// Tree view (human-friendly hierarchical output)
+	if treeView {
+		useColor := isTerminal()
+		renderTreeView(os.Stdout, graph, repoDir, useColor)
+		return nil
+	}
+
+	// Text output (legacy flat format)
 	for _, task := range tasks {
 		epic := task.EpicID
 		if epic == "" {

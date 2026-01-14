@@ -9,8 +9,9 @@
   new epic <title>                        create epic (prints ID) [title required]
   new task <title> [--epic <id>]          create task (prints ID) [title required]
 
-  list [--epic <id>] [--ready|--blocked] [--epics]
+  list [--epic <id>] [--ready|--blocked] [--epics] [--tree]
                                           list tasks (default: all)
+                                          --tree: hierarchical view with status icons and deps
                                           --epics shows epic summaries too
                                           --as applies only with --ready/--blocked. use --json for agents.
   show <id>                               show epic or task details. respects --json.

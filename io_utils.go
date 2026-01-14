@@ -29,6 +29,15 @@ func stdinIsPiped() bool {
 	return (info.Mode() & os.ModeCharDevice) == 0
 }
 
+// isTerminal returns true if stdout is a terminal (supports color).
+func isTerminal() bool {
+	info, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return (info.Mode() & os.ModeCharDevice) != 0
+}
+
 func stdoutIsTTY() bool {
 	info, err := os.Stdout.Stat()
 	if err != nil {
