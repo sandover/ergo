@@ -70,18 +70,3 @@
 
   Epic-only:
     (epics ignore state/worker/claim — use epic-deps instead)
-
-{{HEADER}}STATE MACHINE{{RESET}}
-  todo     → doing, done, blocked, canceled
-  doing    → todo, done, blocked, canceled, error
-  blocked  → todo, doing, done, canceled
-  done     → todo (reopen only)
-  canceled → todo (reopen only)
-  error    → todo, doing, canceled (retry, reassign, or give up)
-
-{{HEADER}}DEPENDENCY RULES{{RESET}}
-  task → task: allowed
-  epic → epic: allowed
-  task ↔ epic: forbidden (no mixing)
-  self-dep:    forbidden (A cannot depend on A)
-  cycles:      forbidden (A→B→...→A rejected)

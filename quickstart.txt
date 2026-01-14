@@ -136,3 +136,21 @@
 
 {{COMMENT}}find results from other tasks:{{RESET}}
 {{CMD}}ergo show <id> --json | jq '.results[] | {path, summary, sha256_at_attach}'{{RESET}}
+
+{{HEADER}}REFERENCE: STATE MACHINE{{RESET}}
+
+{{COMMENT}}valid state transitions:{{RESET}}
+{{COMMENT}}  todo     → doing, done, blocked, canceled{{RESET}}
+{{COMMENT}}  doing    → todo, done, blocked, canceled, error{{RESET}}
+{{COMMENT}}  blocked  → todo, doing, done, canceled{{RESET}}
+{{COMMENT}}  done     → todo (reopen only){{RESET}}
+{{COMMENT}}  canceled → todo (reopen only){{RESET}}
+{{COMMENT}}  error    → todo, doing, canceled (retry, reassign, or give up){{RESET}}
+
+{{HEADER}}REFERENCE: DEPENDENCY RULES{{RESET}}
+
+{{COMMENT}}  task → task: allowed{{RESET}}
+{{COMMENT}}  epic → epic: allowed{{RESET}}
+{{COMMENT}}  task ↔ epic: forbidden (no mixing){{RESET}}
+{{COMMENT}}  self-dep:    forbidden (A cannot depend on A){{RESET}}
+{{COMMENT}}  cycles:      forbidden (A→B→...→A rejected){{RESET}}
