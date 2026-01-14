@@ -24,6 +24,7 @@ One implementation of this idea is [beads](https://github.com/steveyegge/beads).
 - **Concurrency-safe:** file lock serializes writes; `next` is race-safe.
 - **For humans + agents:** mark tasks `worker: human`; filter with `--as agent`.
 - **Unix:** Plain text for pipes, `--json` for scripts.
+- **Fast:** 5-15x faster than beads, especially for large projects
 
 ## Quick Start
 
