@@ -38,8 +38,8 @@
 {{HEADER}}JSON INPUT (stdin only){{RESET}}
   All mutations (new, set) read JSON from stdin:
 
-    echo '{"title":"Build auth","body":"Build authentication system"}' | ergo new epic
-    echo '{"title":"Do X","body":"Do X now","epic":"OFKSTE","worker":"agent"}' | ergo new task
+    echo '{"title":"Build auth","body":"Implement login, signup, and token refresh"}' | ergo new epic
+    echo '{"title":"Hash passwords","body":"Use bcrypt with cost=12","epic":"OFKSTE","worker":"agent"}' | ergo new task
     echo '{"state":"done"}' | ergo set ABCDEF
 
   Schema (same for new and set):

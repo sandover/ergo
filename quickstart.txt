@@ -15,15 +15,15 @@
 
 {{HEADER}}2. CREATE AN EPIC{{RESET}}
 
-{{CMD}}echo '{"title":"Build auth system"}' | ergo new epic{{RESET}}
+{{CMD}}echo '{"title":"Build auth system","body":"Implement login, signup, and token refresh"}' | ergo new epic{{RESET}}
 {{COMMENT}}prints epic ID, e.g. OFKSTE (6-char base32){{RESET}}
 
 {{HEADER}}3. CREATE TASKS{{RESET}}
 
 {{COMMENT}}tasks are created by piping JSON to stdin:{{RESET}}
-{{CMD}}echo '{"title":"Design token format","body":"Design token format","epic":"OFKSTE"}' | ergo new task{{RESET}}
-{{CMD}}echo '{"title":"Implement JWT signing","body":"Implement JWT signing","epic":"OFKSTE"}' | ergo new task{{RESET}}
-{{CMD}}echo '{"title":"Add refresh tokens","body":"Add refresh tokens","epic":"OFKSTE"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Design token format","body":"Define JWT claims: sub, exp, iat, roles","epic":"OFKSTE"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Implement JWT signing","body":"Use HS256 with rotatable secrets","epic":"OFKSTE"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Add refresh tokens","body":"7-day refresh, 15-min access tokens","epic":"OFKSTE"}' | ergo new task{{RESET}}
 
 {{COMMENT}}each prints a task ID, e.g. FUM56H (6-char base32){{RESET}}
 {{CMD}}ergo list{{RESET}}
@@ -45,9 +45,12 @@
 {{CMD}}echo '{}' | ergo new task --json{{RESET}}
 {{COMMENT}}→ {"error":"validation_failed","message":"invalid input","missing":["title","body"]}{{RESET}}
 
-{{COMMENT}}multi-line body (use heredoc for readability):{{RESET}}
+{{COMMENT}}multi-line JSON (use heredoc for readability):{{RESET}}
 {{CMD}}ergo new task <<'EOF'
-{"title":"Refactor auth","body":"1. Extract token validation\n2. Add refresh flow\n3. Update tests"}
+{
+  "title": "Refactor auth",
+  "body": "1. Extract token validation\n2. Add refresh flow\n3. Update tests"
+}
 EOF{{RESET}}
 
 {{HEADER}}5. ADD DEPENDENCIES{{RESET}}
@@ -125,15 +128,15 @@ EOF{{RESET}}
 {{HEADER}}10. CREATE-AND-CLAIM (atomic){{RESET}}
 
 {{COMMENT}}create a task already claimed and in-progress:{{RESET}}
-{{CMD}}echo '{"title":"Urgent fix","body":"Urgent fix","state":"doing","claim":"my-agent"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Urgent fix","body":"Patch CVE-2026-1234 in auth module","state":"doing","claim":"my-agent"}' | ergo new task{{RESET}}
 
 {{COMMENT}}create a task that's already done with results:{{RESET}}
-{{CMD}}echo '{"title":"Prior analysis","body":"Prior analysis","state":"done","result_path":"docs/prior.md","result_summary":"Previous work"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Prior analysis","body":"Security audit from last quarter","state":"done","result_path":"docs/prior.md","result_summary":"Previous work"}' | ergo new task{{RESET}}
 
 {{HEADER}}11. HUMAN VS AGENT TASKS{{RESET}}
 
 {{COMMENT}}some tasks need human judgment:{{RESET}}
-{{CMD}}echo '{"title":"Choose token expiry policy","body":"Choose token expiry policy","epic":"OFKSTE","worker":"human"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Choose token expiry policy","body":"Decide between 1h and 24h access tokens","epic":"OFKSTE","worker":"human"}' | ergo new task{{RESET}}
 {{CMD}}ergo list --ready --as human{{RESET}}
 
 {{COMMENT}}agents filter for their work:{{RESET}}
@@ -143,9 +146,9 @@ EOF{{RESET}}
 {{HEADER}}12. EPIC HIERARCHIES{{RESET}}
 
 {{COMMENT}}epics can depend on other epics (nested work):{{RESET}}
-{{CMD}}echo '{"title":"Design phase","body":"Design phase"}' | ergo new epic{{RESET}}
-{{CMD}}echo '{"title":"Build phase","body":"Build phase"}' | ergo new epic{{RESET}}
-{{CMD}}echo '{"title":"Deploy phase","body":"Deploy phase"}' | ergo new epic{{RESET}}
+{{CMD}}echo '{"title":"Design phase","body":"Architecture docs and API specs"}' | ergo new epic{{RESET}}
+{{CMD}}echo '{"title":"Build phase","body":"Implement all endpoints and tests"}' | ergo new epic{{RESET}}
+{{CMD}}echo '{"title":"Deploy phase","body":"CI/CD pipeline and production rollout"}' | ergo new epic{{RESET}}
 
 {{COMMENT}}Build depends on Design, Deploy depends on Build:{{RESET}}
 {{CMD}}ergo dep STUVWX YZABCD{{RESET}}
