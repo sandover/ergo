@@ -39,9 +39,13 @@ echo '{"title":"User login","body":"Let users sign in with email and password"}'
 # Add a task to the epic
 echo '{"title":"Password hashing","body":"Use bcrypt with cost=12","epic":"OFKSTE"}' | ergo new task
 
-# Multi-line body with heredoc
+# Multi-line JSON with heredoc
 ergo new task <<'EOF'
-{"title":"Login endpoint","body":"POST /login:\n1. Validate email format\n2. Check password hash\n3. Return JWT","epic":"OFKSTE"}
+{
+  "title": "Login endpoint",
+  "body": "POST /login:\n1. Validate email\n2. Check password\n3. Return JWT",
+  "epic": "OFKSTE"
+}
 EOF
 
 # Human-only task (agents skip these)
