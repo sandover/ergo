@@ -137,6 +137,20 @@
 {{COMMENT}}find results from other tasks:{{RESET}}
 {{CMD}}ergo show <id> --json | jq '.results[] | {path, summary, sha256_at_attach}'{{RESET}}
 
+{{HEADER}}REFERENCE: READY / BLOCKED / EPIC COMPLETION{{RESET}}
+
+{{COMMENT}}READY (tasks only):{{RESET}}
+{{COMMENT}}  state=todo, unclaimed, worker matches --as, all task deps done|canceled,{{RESET}}
+{{COMMENT}}  and all epic-deps of the task's epic are complete.{{RESET}}
+
+{{COMMENT}}BLOCKED (tasks only):{{RESET}}
+{{COMMENT}}  state=blocked, OR (state=todo AND unmet task deps), OR task's epic has{{RESET}}
+{{COMMENT}}  incomplete epic-deps.{{RESET}}
+
+{{COMMENT}}EPIC COMPLETION:{{RESET}}
+{{COMMENT}}  An epic is complete when all its tasks are done or canceled.{{RESET}}
+{{COMMENT}}  Epic-to-epic deps: tasks in epic A are blocked until epic B is complete.{{RESET}}
+
 {{HEADER}}REFERENCE: STATE MACHINE{{RESET}}
 
 {{COMMENT}}valid state transitions:{{RESET}}

@@ -38,18 +38,6 @@
   -h, --help                              show help
   -V, --version                           print version
 
-{{HEADER}}READY DEFINITION (tasks only){{RESET}}
-  state=todo, unclaimed, worker matches --as, all task deps done|canceled,
-  and all epic-deps of the task's epic are complete.
-
-{{HEADER}}BLOCKED DEFINITION (tasks only){{RESET}}
-  state=blocked, OR (state=todo AND unmet task deps), OR task's epic has
-  incomplete epic-deps.
-
-{{HEADER}}EPIC COMPLETION{{RESET}}
-  An epic is complete when all its tasks are done or canceled.
-  Epic-to-epic deps: tasks in epic A are blocked until epic B is complete.
-
 {{HEADER}}KEYS (for 'set'){{RESET}}
   Common:
     title=<text>                          required; cannot be cleared
