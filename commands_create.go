@@ -1,13 +1,17 @@
-// Init/task creation commands and create-arg parsing.
+// Init/task creation commands.
+//
+// Task and epic creation uses stdin-only JSON input:
+//   echo '{"title":"Do X"}' | ergo new task
+//   echo '{"title":"Auth system"}' | ergo new epic
+//
+// See json_input.go for the unified TaskInput schema.
 package main
 
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 func runInit(args []string, opts GlobalOptions) error {
@@ -59,8 +63,8 @@ func runNew(args []string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "new"); err != nil {
 		return err
 	}
-	if len(args) < 2 {
-		return errors.New("usage: ergo new epic <title> | ergo new task <title> [--epic <id>]")
+	if len(args) < 1 {
+		return errors.New("usage: echo '{\"title\":\"...\"}' | ergo new task|epic")
 	}
 
 	subcommand := args[0]
@@ -75,45 +79,26 @@ func runNew(args []string, opts GlobalOptions) error {
 }
 
 func runNewEpic(args []string, opts GlobalOptions) error {
-	if len(args) < 1 {
-		return errors.New("usage: ergo new epic <title>")
-	}
-
-	format, remaining, err := parseOutputFormatAndArgs(args, outputFormatText)
+	format, _, err := parseOutputFormatAndArgs(args, outputFormatText)
 	if err != nil {
 		return err
 	}
 
-	// Parse title as first positional arg, rest can be flags
-	var title string
-	var bodyFile string
-	var positional []string
-
-	for i := 0; i < len(remaining); i++ {
-		arg := remaining[i]
-		if strings.HasPrefix(arg, "-") {
-			if arg == "--body-file" {
-				if i+1 >= len(remaining) {
-					return fmt.Errorf("missing value for %s", arg)
-				}
-				bodyFile = remaining[i+1]
-				i++
-			} else {
-				return fmt.Errorf("unknown flag %s", arg)
-			}
-		} else {
-			positional = append(positional, arg)
+	// Parse JSON from stdin
+	input, verr := ParseTaskInput()
+	if verr != nil {
+		if format == outputFormatJSON {
+			verr.WriteJSON(os.Stdout)
 		}
+		return verr.GoError()
 	}
 
-	if len(positional) == 0 {
-		return errors.New("title required")
-	}
-	title = strings.TrimSpace(strings.Join(positional, " "))
-
-	body, err := resolveBodyFromFile(bodyFile, title)
-	if err != nil {
-		return err
+	// Validate for epic creation
+	if verr := input.ValidateForNewEpic(); verr != nil {
+		if format == outputFormatJSON {
+			verr.WriteJSON(os.Stdout)
+		}
+		return verr.GoError()
 	}
 
 	dir, err := ergoDir(opts)
@@ -121,7 +106,7 @@ func runNewEpic(args []string, opts GlobalOptions) error {
 		return err
 	}
 
-	created, err := createTask(dir, opts, "", true, body, workerAny)
+	created, err := createTask(dir, opts, "", true, input.GetBody(), workerAny)
 	if err != nil {
 		return err
 	}
@@ -134,64 +119,26 @@ func runNewEpic(args []string, opts GlobalOptions) error {
 }
 
 func runNewTask(args []string, opts GlobalOptions) error {
-	if len(args) < 1 {
-		return errors.New("usage: ergo new task <title> [--epic <id>]")
-	}
-
-	format, remaining, err := parseOutputFormatAndArgs(args, outputFormatText)
+	format, _, err := parseOutputFormatAndArgs(args, outputFormatText)
 	if err != nil {
 		return err
 	}
 
-	// Parse title as first positional arg, rest can be flags
-	var title string
-	var epicID string
-	var bodyFile string
-	var worker Worker = workerAny
-	var positional []string
-
-	for i := 0; i < len(remaining); i++ {
-		arg := remaining[i]
-		if strings.HasPrefix(arg, "-") {
-			switch arg {
-			case "--epic":
-				if i+1 >= len(remaining) {
-					return fmt.Errorf("missing value for %s", arg)
-				}
-				epicID = remaining[i+1]
-				i++
-			case "--body-file":
-				if i+1 >= len(remaining) {
-					return fmt.Errorf("missing value for %s", arg)
-				}
-				bodyFile = remaining[i+1]
-				i++
-			case "--worker":
-				if i+1 >= len(remaining) {
-					return fmt.Errorf("missing value for %s", arg)
-				}
-				w, err := parseWorker(remaining[i+1])
-				if err != nil {
-					return err
-				}
-				worker = w
-				i++
-			default:
-				return fmt.Errorf("unknown flag %s", arg)
-			}
-		} else {
-			positional = append(positional, arg)
+	// Parse JSON from stdin
+	input, verr := ParseTaskInput()
+	if verr != nil {
+		if format == outputFormatJSON {
+			verr.WriteJSON(os.Stdout)
 		}
+		return verr.GoError()
 	}
 
-	if len(positional) == 0 {
-		return errors.New("title required")
-	}
-	title = strings.TrimSpace(strings.Join(positional, " "))
-
-	body, err := resolveBodyFromFile(bodyFile, title)
-	if err != nil {
-		return err
+	// Validate for task creation
+	if verr := input.ValidateForNewTask(); verr != nil {
+		if format == outputFormatJSON {
+			verr.WriteJSON(os.Stdout)
+		}
+		return verr.GoError()
 	}
 
 	dir, err := ergoDir(opts)
@@ -199,9 +146,26 @@ func runNewTask(args []string, opts GlobalOptions) error {
 		return err
 	}
 
-	created, err := createTask(dir, opts, epicID, false, body, worker)
+	// Create the task
+	created, err := createTask(dir, opts, input.GetEpic(), false, input.GetBody(), input.GetWorker())
 	if err != nil {
 		return err
+	}
+
+	// If state/claim were provided, apply them via set logic
+	if input.State != nil || input.Claim != nil || input.ResultPath != nil {
+		updates := input.ToKeyValueMap()
+		// Remove fields already handled by createTask
+		delete(updates, "title")
+		delete(updates, "body")
+		delete(updates, "epic")
+		delete(updates, "worker")
+
+		if len(updates) > 0 {
+			if err := applySetUpdates(dir, opts, created.ID, updates); err != nil {
+				return err
+			}
+		}
 	}
 
 	if format == outputFormatJSON {
@@ -209,18 +173,4 @@ func runNewTask(args []string, opts GlobalOptions) error {
 	}
 	fmt.Println(created.ID)
 	return nil
-}
-
-func resolveBodyFromFile(bodyFile, defaultBody string) (string, error) {
-	if bodyFile != "" {
-		return readBodyFile(bodyFile)
-	}
-	if stdinIsPiped() {
-		body, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return "", err
-		}
-		return string(body), nil
-	}
-	return defaultBody, nil
 }

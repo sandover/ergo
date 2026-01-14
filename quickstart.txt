@@ -1,5 +1,6 @@
 {{BOLD}}ergo quickstart{{RESET}}
-{{CYAN}}A 5-minute walkthrough. Run these commands as you read.{{RESET}}
+{{CYAN}}Complete reference manual. Run these commands as you read.{{RESET}}
+{{CYAN}}For quick syntax lookup, use: ergo --help{{RESET}}
 
 {{HEADER}}1. INITIALIZE{{RESET}}
 
@@ -12,18 +13,39 @@
 {{CMD}}ergo where{{RESET}}
 {{COMMENT}}prints the active .ergo path{{RESET}}
 
-{{HEADER}}2. CREATE AN EPIC AND TASKS{{RESET}}
+{{HEADER}}2. CREATE AN EPIC{{RESET}}
 
-{{CMD}}ergo new epic "Build auth system"{{RESET}}
+{{CMD}}echo '{"title":"Build auth system"}' | ergo new epic{{RESET}}
 {{COMMENT}}prints epic ID, e.g. E-a1b2c3{{RESET}}
-{{CMD}}ergo new task "Design token format" --epic E-a1b2c3{{RESET}}
-{{CMD}}ergo new task "Implement JWT signing" --epic E-a1b2c3{{RESET}}
-{{CMD}}ergo new task "Add refresh tokens" --epic E-a1b2c3{{RESET}}
+
+{{HEADER}}3. CREATE TASKS{{RESET}}
+
+{{COMMENT}}tasks are created by piping JSON to stdin:{{RESET}}
+{{CMD}}echo '{"title":"Design token format","epic":"E-a1b2c3"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Implement JWT signing","epic":"E-a1b2c3"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Add refresh tokens","epic":"E-a1b2c3"}' | ergo new task{{RESET}}
 
 {{COMMENT}}each prints a task ID, e.g. T-d4e5f6{{RESET}}
 {{CMD}}ergo list{{RESET}}
 
-{{HEADER}}3. ADD DEPENDENCIES{{RESET}}
+{{HEADER}}4. JSON INPUT SCHEMA{{RESET}}
+
+{{COMMENT}}all mutations use the same JSON schema:{{RESET}}
+
+{{COMMENT}}  title           (required for new; optional for set){{RESET}}
+{{COMMENT}}  body            (optional; defaults to title){{RESET}}
+{{COMMENT}}  epic            (optional; epic ID or "" to unassign){{RESET}}
+{{COMMENT}}  worker          (optional; any|agent|human){{RESET}}
+{{COMMENT}}  state           (optional; todo|doing|done|blocked|canceled|error){{RESET}}
+{{COMMENT}}  claim           (optional; agent ID or "" to unclaim){{RESET}}
+{{COMMENT}}  result_path     (optional; requires result_summary){{RESET}}
+{{COMMENT}}  result_summary  (optional; requires result_path){{RESET}}
+
+{{COMMENT}}validation errors return structured JSON:{{RESET}}
+{{CMD}}echo '{}' | ergo new task --json{{RESET}}
+{{COMMENT}}→ {"error":"validation_failed","message":"invalid input","missing":["title"]}{{RESET}}
+
+{{HEADER}}5. ADD DEPENDENCIES{{RESET}}
 
 {{COMMENT}}'dep A B' means A depends on B (B blocks A){{RESET}}
 {{COMMENT}}JWT signing depends on token format design:{{RESET}}
@@ -38,7 +60,7 @@
 {{CMD}}ergo dep rm T-refresh T-impl{{RESET}}
 {{COMMENT}}removes the dependency if needed{{RESET}}
 
-{{HEADER}}4. WORK ON TASKS{{RESET}}
+{{HEADER}}6. WORK ON TASKS{{RESET}}
 
 {{CMD}}ergo next{{RESET}}
 {{COMMENT}}claims oldest ready task, sets state=doing, prints it{{RESET}}
@@ -47,36 +69,39 @@
 {{COMMENT}}see what's next without claiming{{RESET}}
 
 {{COMMENT}}mark your work done:{{RESET}}
-{{CMD}}ergo set T-design state=done{{RESET}}
+{{CMD}}echo '{"state":"done"}' | ergo set T-design{{RESET}}
 {{CMD}}ergo list --ready{{RESET}}
 
-{{HEADER}}5. UPDATE TASKS{{RESET}}
+{{HEADER}}7. UPDATE TASKS{{RESET}}
 
-{{CMD}}ergo set T-impl title="Implement JWT signing (HS256)"{{RESET}}
-{{CMD}}ergo set T-impl state=blocked{{RESET}}
+{{CMD}}echo '{"title":"Implement JWT signing (HS256)"}' | ergo set T-impl{{RESET}}
+{{CMD}}echo '{"state":"blocked"}' | ergo set T-impl{{RESET}}
 {{COMMENT}}explicit block (waiting on external input){{RESET}}
 
-{{CMD}}ergo set T-impl state=todo{{RESET}}
+{{CMD}}echo '{"state":"todo"}' | ergo set T-impl{{RESET}}
 {{COMMENT}}unblock when ready to resume{{RESET}}
 
-{{HEADER}}6. HANDLE FAILURES{{RESET}}
+{{COMMENT}}multiple fields in one update:{{RESET}}
+{{CMD}}echo '{"state":"doing","claim":"my-agent"}' | ergo set T-impl{{RESET}}
+
+{{HEADER}}8. HANDLE FAILURES{{RESET}}
 
 {{COMMENT}}if a task fails, mark it as error (preserves who failed):{{RESET}}
-{{CMD}}ergo set T-impl state=error{{RESET}}
-{{COMMENT}}dependents are blocked until error is resolved{{RESET}}
+{{CMD}}echo '{"state":"error"}' | ergo set T-impl{{RESET}}
+{{COMMENT}}note: state=error requires a claim to show who failed{{RESET}}
 
 {{COMMENT}}retry the failed task:{{RESET}}
-{{CMD}}ergo set T-impl claim=$AGENT_ID{{RESET}}
+{{CMD}}echo '{"state":"doing","claim":"my-agent"}' | ergo set T-impl{{RESET}}
 {{COMMENT}}or reassign to someone else:{{RESET}}
-{{CMD}}ergo set T-impl state=todo{{RESET}}
+{{CMD}}echo '{"state":"todo"}' | ergo set T-impl{{RESET}}
 {{COMMENT}}or give up:{{RESET}}
-{{CMD}}ergo set T-impl state=canceled{{RESET}}
+{{CMD}}echo '{"state":"canceled"}' | ergo set T-impl{{RESET}}
 
-{{HEADER}}7. ATTACH RESULTS{{RESET}}
+{{HEADER}}9. ATTACH RESULTS{{RESET}}
 
 {{COMMENT}}tasks can have result files — visible in normal tools (editor, finder):{{RESET}}
 {{CMD}}echo "# Analysis Report" > docs/analysis.md{{RESET}}
-{{CMD}}ergo set T-design result.path=docs/analysis.md result.summary="Token format analysis"{{RESET}}
+{{CMD}}echo '{"result_path":"docs/analysis.md","result_summary":"Token format analysis"}' | ergo set T-design{{RESET}}
 
 {{COMMENT}}results are attached, not moved:{{RESET}}
 {{COMMENT}}  - file stays in your project (not in .ergo/){{RESET}}
@@ -90,30 +115,32 @@
 {{COMMENT}}structured: path, file_url, sha256_at_attach, etc.{{RESET}}
 
 {{COMMENT}}attach multiple results by repeating set:{{RESET}}
-{{CMD}}ergo set T-design result.path=docs/spec.md result.summary="Final spec document"{{RESET}}
+{{CMD}}echo '{"result_path":"docs/spec.md","result_summary":"Final spec document"}' | ergo set T-design{{RESET}}
 
-{{COMMENT}}verify drift (agent pattern):{{RESET}}
-{{COMMENT}}  1. get sha256_at_attach from show --json{{RESET}}
-{{COMMENT}}  2. compute sha256 of current file{{RESET}}
-{{COMMENT}}  3. if different, file was edited since attach{{RESET}}
+{{HEADER}}10. CREATE-AND-CLAIM (atomic){{RESET}}
 
-{{HEADER}}8. HUMAN VS AGENT TASKS{{RESET}}
+{{COMMENT}}create a task already claimed and in-progress:{{RESET}}
+{{CMD}}echo '{"title":"Urgent fix","state":"doing","claim":"my-agent"}' | ergo new task{{RESET}}
+
+{{COMMENT}}create a task that's already done with results:{{RESET}}
+{{CMD}}echo '{"title":"Prior analysis","state":"done","result_path":"docs/prior.md","result_summary":"Previous work"}' | ergo new task{{RESET}}
+
+{{HEADER}}11. HUMAN VS AGENT TASKS{{RESET}}
 
 {{COMMENT}}some tasks need human judgment:{{RESET}}
-{{CMD}}ergo new task "Choose token expiry policy" --epic E-a1b2c3{{RESET}}
-{{CMD}}ergo set T-policy worker=human{{RESET}}
+{{CMD}}echo '{"title":"Choose token expiry policy","epic":"E-a1b2c3","worker":"human"}' | ergo new task{{RESET}}
 {{CMD}}ergo list --ready --as human{{RESET}}
 
 {{COMMENT}}agents filter for their work:{{RESET}}
 {{CMD}}ergo list --ready --as agent{{RESET}}
 {{CMD}}ergo next --as agent{{RESET}}
 
-{{HEADER}}9. EPIC HIERARCHIES{{RESET}}
+{{HEADER}}12. EPIC HIERARCHIES{{RESET}}
 
 {{COMMENT}}epics can depend on other epics (nested work):{{RESET}}
-{{CMD}}ergo new epic "Design phase"{{RESET}}
-{{CMD}}ergo new epic "Build phase"{{RESET}}
-{{CMD}}ergo new epic "Deploy phase"{{RESET}}
+{{CMD}}echo '{"title":"Design phase"}' | ergo new epic{{RESET}}
+{{CMD}}echo '{"title":"Build phase"}' | ergo new epic{{RESET}}
+{{CMD}}echo '{"title":"Deploy phase"}' | ergo new epic{{RESET}}
 
 {{COMMENT}}Build depends on Design, Deploy depends on Build:{{RESET}}
 {{CMD}}ergo dep E-build E-design{{RESET}}
@@ -122,17 +149,18 @@
 {{COMMENT}}tasks in Build are blocked until Design's tasks are done{{RESET}}
 {{COMMENT}}an epic is "complete" when all its tasks are done|canceled{{RESET}}
 
-{{HEADER}}10. AGENT INTEGRATION{{RESET}}
+{{HEADER}}13. AGENT INTEGRATION{{RESET}}
 
 {{COMMENT}}agents should use --json for structured output:{{RESET}}
 {{CMD}}ergo --json list --ready --as agent{{RESET}}
 {{CMD}}ergo --json next --as agent{{RESET}}
+
 {{COMMENT}}recommended agent loop:{{RESET}}
-{{COMMENT}}  1. ergo next --as agent  (claim work){{RESET}}
+{{COMMENT}}  1. ergo --json next --as agent  (claim work){{RESET}}
 {{COMMENT}}  2. do the work{{RESET}}
 {{COMMENT}}  3. write results to project files (e.g., docs/, reports/){{RESET}}
-{{COMMENT}}  4. ergo set <id> result.path=<path> result.summary="<summary>"{{RESET}}
-{{COMMENT}}  5. ergo set <id> state=done  (or state=error if failed){{RESET}}
+{{COMMENT}}  4. echo '{"result_path":"...","result_summary":"..."}' | ergo set <id>{{RESET}}
+{{COMMENT}}  5. echo '{"state":"done"}' | ergo set <id>  (or state=error if failed){{RESET}}
 
 {{COMMENT}}find results from other tasks:{{RESET}}
 {{CMD}}ergo show <id> --json | jq '.results[] | {path, summary, sha256_at_attach}'{{RESET}}
@@ -160,6 +188,11 @@
 {{COMMENT}}  done     → todo (reopen only){{RESET}}
 {{COMMENT}}  canceled → todo (reopen only){{RESET}}
 {{COMMENT}}  error    → todo, doing, canceled (retry, reassign, or give up){{RESET}}
+
+{{COMMENT}}claim invariants:{{RESET}}
+{{COMMENT}}  state=doing requires claim{{RESET}}
+{{COMMENT}}  state=error requires claim (shows who failed){{RESET}}
+{{COMMENT}}  state=todo/done/canceled clears claim{{RESET}}
 
 {{HEADER}}REFERENCE: DEPENDENCY RULES{{RESET}}
 

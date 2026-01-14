@@ -1,26 +1,11 @@
-// Body IO helpers and stdin/tty detection.
+// Stdin/stdout detection helpers for CLI behavior.
 package main
 
 import (
-	"io"
 	"os"
 )
 
-func readBodyFile(path string) (string, error) {
-	if path == "-" {
-		body, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return "", err
-		}
-		return string(body), nil
-	}
-	body, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return string(body), nil
-}
-
+// stdinIsPiped returns true if stdin has piped input (not a terminal).
 func stdinIsPiped() bool {
 	info, err := os.Stdin.Stat()
 	if err != nil {
@@ -29,19 +14,11 @@ func stdinIsPiped() bool {
 	return (info.Mode() & os.ModeCharDevice) == 0
 }
 
-// isTerminal returns true if stdout is a terminal (supports color).
-func isTerminal() bool {
-	info, err := os.Stdout.Stat()
-	if err != nil {
-		return false
-	}
-	return (info.Mode() & os.ModeCharDevice) != 0
-}
-
+// stdoutIsTTY returns true if stdout is a terminal (supports color, interactive).
 func stdoutIsTTY() bool {
 	info, err := os.Stdout.Stat()
 	if err != nil {
 		return false
 	}
-	return (info.Mode() & os.ModeCharDevice) == 0
+	return (info.Mode() & os.ModeCharDevice) != 0
 }

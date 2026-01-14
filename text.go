@@ -1,4 +1,31 @@
 // Text formatting: ANSI codes and marker substitution for embedded help/quickstart.
+//
+// DOCUMENTATION PHILOSOPHY:
+//
+// ergo has two documentation surfaces, each with a distinct purpose:
+//
+//   --help (help.txt):
+//     The QUICK REFERENCE. A one-screen overview for users who already know ergo
+//     or need a command reminder. Think: cheat sheet, not tutorial.
+//     - Lists all commands with one-line descriptions
+//     - Shows flag syntax without extended explanation
+//     - Fits in a terminal without scrolling
+//     - Agents use this for command syntax lookup
+//
+//   quickstart (quickstart.txt):
+//     The COMPLETE REFERENCE MANUAL. A runnable tutorial that teaches by example.
+//     Like a man page, but interactive—users run commands as they read.
+//     - Walks through every feature with copy-paste examples
+//     - Explains WHY things work the way they do
+//     - Covers edge cases, state machines, and rules
+//     - Agents consult this when learning ergo or debugging behavior
+//
+// When editing these files:
+//   - help.txt: Brevity is paramount. One line per command. No prose.
+//   - quickstart.txt: Completeness is paramount. If it's not here, it's undocumented.
+//
+// Together, --help + quickstart must provide 100% of what any user or agent needs.
+// There is no separate man page, wiki, or external docs to maintain.
 package main
 
 import (

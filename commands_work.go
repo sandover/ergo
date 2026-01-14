@@ -1,10 +1,14 @@
 // Work commands: dep/list/next/set/show/compact/where.
+//
+// The set command uses stdin-only JSON input:
+//   echo '{"state":"done"}' | ergo set T-xyz
+//
+// See json_input.go for the unified TaskInput schema.
 package main
 
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,17 +20,38 @@ func runSet(args []string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "set"); err != nil {
 		return err
 	}
-	if len(args) < 2 {
-		return errors.New("usage: ergo set <id> key=value [key=value ...]")
-	}
 
-	id := args[0]
-	pairs := args[1:]
-
-	// Parse all key=value pairs
-	updates, err := parseKeyValuePairs(pairs)
+	format, remaining, err := parseOutputFormatAndArgs(args, outputFormatText)
 	if err != nil {
 		return err
+	}
+
+	// First arg is the task/epic ID
+	if len(remaining) < 1 {
+		return errors.New("usage: echo '{\"state\":\"done\"}' | ergo set <id>")
+	}
+	id := remaining[0]
+
+	// Parse JSON from stdin
+	input, verr := ParseTaskInput()
+	if verr != nil {
+		if format == outputFormatJSON {
+			verr.WriteJSON(os.Stdout)
+		}
+		return verr.GoError()
+	}
+
+	// Validate for set (all fields optional)
+	if verr := input.ValidateForSet(); verr != nil {
+		if format == outputFormatJSON {
+			verr.WriteJSON(os.Stdout)
+		}
+		return verr.GoError()
+	}
+
+	updates := input.ToKeyValueMap()
+	if len(updates) == 0 {
+		return errors.New("no fields to update")
 	}
 
 	dir, err := ergoDir(opts)
@@ -76,7 +101,7 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 		now := time.Now().UTC()
 
 		// Build events using pure function, passing I/O-dependent body resolver
-		events, remainingUpdates, err := buildSetEvents(id, task, updates, now, resolveSetBody)
+		events, remainingUpdates, err := buildSetEvents(id, task, updates, now, identityBodyResolver)
 		if err != nil {
 			return err
 		}
@@ -263,21 +288,10 @@ func buildSetEvents(id string, task *Task, updates map[string]string, now time.T
 	return events, remainingUpdates, nil
 }
 
-func resolveSetBody(value string) (string, error) {
-	switch value {
-	case "@-":
-		// Read from stdin
-		body, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return "", err
-		}
-		return string(body), nil
-	case "@editor":
-		// TODO: implement editor support
-		return "", errors.New("@editor not yet implemented")
-	default:
-		return value, nil
-	}
+// identityBodyResolver is a no-op body resolver (body comes from JSON as-is).
+// With JSON-only input, we no longer support @- or @editor syntax.
+func identityBodyResolver(value string) (string, error) {
+	return value, nil
 }
 
 func runDep(args []string, opts GlobalOptions) error {
@@ -375,7 +389,7 @@ func runList(args []string, opts GlobalOptions) error {
 	}
 
 	// Tree view (human-friendly hierarchical output)
-	useColor := isTerminal()
+	useColor := stdoutIsTTY()
 	renderTreeView(os.Stdout, graph, repoDir, useColor)
 
 	return nil

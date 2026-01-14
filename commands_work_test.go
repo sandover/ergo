@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"testing"
 	"time"
 )
@@ -117,46 +116,6 @@ func TestBuildSetEvents_ClaimHandling(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestBuildSetEvents_BodyResolution(t *testing.T) {
-	now := time.Now().UTC()
-	task := &Task{ID: "T1", State: stateTodo}
-
-	t.Run("body resolver called", func(t *testing.T) {
-		called := false
-		bodyResolver := func(s string) (string, error) {
-			called = true
-			return "resolved: " + s, nil
-		}
-
-		updates := map[string]string{"body": "test"}
-		events, _, err := buildSetEvents("T1", task, updates, now, bodyResolver)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-
-		if !called {
-			t.Error("Body resolver was not called")
-		}
-
-		if len(events) != 1 {
-			t.Fatalf("Expected 1 event, got %d", len(events))
-		}
-	})
-
-	t.Run("body resolver error propagates", func(t *testing.T) {
-		bodyResolver := func(s string) (string, error) {
-			return "", errors.New("resolver error")
-		}
-
-		updates := map[string]string{"body": "test"}
-		_, _, err := buildSetEvents("T1", task, updates, now, bodyResolver)
-
-		if err == nil {
-			t.Error("Expected error from body resolver")
-		}
-	})
 }
 
 func TestBuildSetEvents_UnknownKeys(t *testing.T) {

@@ -201,19 +201,3 @@ func stripOutputFlags(args []string) ([]string, error) {
 	}
 	return stripped, nil
 }
-
-// parseKeyValuePairs parses key=value pairs into a map.
-// Pure function with no side effects.
-func parseKeyValuePairs(pairs []string) (map[string]string, error) {
-	updates := make(map[string]string)
-	for _, pair := range pairs {
-		parts := strings.SplitN(pair, "=", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid key=value pair: %s", pair)
-		}
-		key := strings.TrimSpace(parts[0])
-		value := parts[1] // don't trim value - it might be intentionally empty
-		updates[key] = value
-	}
-	return updates, nil
-}
