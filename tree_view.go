@@ -4,9 +4,21 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
+
+	"golang.org/x/term"
 )
+
+// getTerminalWidth returns the terminal width, or a default if unavailable.
+func getTerminalWidth() int {
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || width <= 0 {
+		return 80 // default fallback
+	}
+	return width
+}
 
 // ANSI color codes
 const (
@@ -33,9 +45,10 @@ const (
 
 // treeNode represents a task or epic in the tree structure.
 type treeNode struct {
-	task     *Task
-	children []*treeNode
-	isReady  bool
+	task           *Task
+	children       []*treeNode
+	isReady        bool
+	parentBlockers map[string]bool // blockers inherited from parent epic
 }
 
 // renderTreeView outputs tasks in a hierarchical tree format.
@@ -43,15 +56,102 @@ func renderTreeView(w io.Writer, graph *Graph, repoDir string, useColor bool) {
 	// Build tree structure: epics contain their tasks, and epics nest by dependency
 	roots := buildTree(graph)
 
+	termWidth := getTerminalWidth()
+
 	for i, root := range roots {
-		renderNode(w, root, "", i == len(roots)-1, graph, repoDir, useColor)
+		renderNode(w, root, "", i == len(roots)-1, graph, repoDir, useColor, nil, termWidth)
 	}
+
+	// Summary line
+	stats := computeStats(graph)
+	renderSummary(w, stats, useColor)
+}
+
+// taskStats holds aggregate counts for the summary line.
+type taskStats struct {
+	ready      int
+	inProgress int
+	blocked    int
+	done       int
+	canceled   int
+	total      int
+}
+
+func computeStats(graph *Graph) taskStats {
+	var stats taskStats
+	for _, task := range graph.Tasks {
+		if task.IsEpic {
+			continue
+		}
+		stats.total++
+		switch task.State {
+		case stateDone:
+			stats.done++
+		case stateCanceled:
+			stats.canceled++
+		case stateDoing:
+			stats.inProgress++
+		case stateTodo:
+			if isReady(task, graph) {
+				stats.ready++
+			} else {
+				stats.blocked++
+			}
+		default:
+			stats.blocked++
+		}
+	}
+	return stats
+}
+
+func renderSummary(w io.Writer, stats taskStats, useColor bool) {
+	if stats.total == 0 {
+		return
+	}
+	fmt.Fprintln(w)
+
+	var parts []string
+
+	if stats.ready > 0 {
+		part := fmt.Sprintf("%d ready", stats.ready)
+		if useColor {
+			part = colorYellow + part + colorReset
+		}
+		parts = append(parts, part)
+	}
+
+	if stats.inProgress > 0 {
+		part := fmt.Sprintf("%d in progress", stats.inProgress)
+		if useColor {
+			part = colorCyan + part + colorReset
+		}
+		parts = append(parts, part)
+	}
+
+	if stats.blocked > 0 {
+		part := fmt.Sprintf("%d blocked", stats.blocked)
+		if useColor {
+			part = colorDim + part + colorReset
+		}
+		parts = append(parts, part)
+	}
+
+	if stats.done > 0 {
+		part := fmt.Sprintf("%d done", stats.done)
+		if useColor {
+			part = colorGreen + part + colorReset
+		}
+		parts = append(parts, part)
+	}
+
+	fmt.Fprintln(w, strings.Join(parts, " · "))
 }
 
 // buildTree constructs a forest of tree nodes from the graph.
-// Epics that depend on other epics are nested under their dependencies.
-// Tasks are nested under their epic.
+// All epics appear as siblings at root level (flat structure).
+// Tasks are nested under their owning epic.
 // Orphan tasks (no epic) appear at root level.
+// Dependencies between epics are shown via ⧗ annotations, not nesting.
 func buildTree(graph *Graph) []*treeNode {
 	// Separate epics and tasks
 	var epics, orphanTasks []*Task
@@ -67,15 +167,14 @@ func buildTree(graph *Graph) []*treeNode {
 		}
 	}
 
-	// Sort epics by topological order (dependencies first)
+	// Sort epics by topo order: dependencies first (what you do first appears first)
 	epics = topoSortTasks(epics, graph)
 
-	// Build epic nodes with their tasks
-	epicNodes := make(map[string]*treeNode)
+	// Build epic nodes with their tasks (flat - all epics at root level)
 	var rootEpics []*treeNode
 
 	for _, epic := range epics {
-		node := &treeNode{task: epic}
+		node := &treeNode{task: epic, isReady: isReady(epic, graph)}
 
 		// Add tasks under this epic, sorted by dependency order
 		tasks := epicTasks[epic.ID]
@@ -88,33 +187,7 @@ func buildTree(graph *Graph) []*treeNode {
 			node.children = append(node.children, childNode)
 		}
 
-		epicNodes[epic.ID] = node
-
-		// Check if this epic depends on another epic
-		hasEpicParent := false
-		for depID := range graph.Deps[epic.ID] {
-			if depTask, ok := graph.Tasks[depID]; ok && depTask.IsEpic {
-				// This epic depends on another epic - it will be nested
-				hasEpicParent = true
-				break
-			}
-		}
-		if !hasEpicParent {
-			rootEpics = append(rootEpics, node)
-		}
-	}
-
-	// Nest epics under their dependency epics
-	for _, epic := range epics {
-		node := epicNodes[epic.ID]
-		for depID := range graph.Deps[epic.ID] {
-			if depTask, ok := graph.Tasks[depID]; ok && depTask.IsEpic {
-				parentNode := epicNodes[depID]
-				if parentNode != nil {
-					parentNode.children = append(parentNode.children, node)
-				}
-			}
-		}
+		rootEpics = append(rootEpics, node)
 	}
 
 	// Build orphan task nodes
@@ -212,7 +285,8 @@ func topoSortTasks(tasks []*Task, graph *Graph) []*Task {
 }
 
 // renderNode renders a single node and its children.
-func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *Graph, repoDir string, useColor bool) {
+// parentBlockers tracks blockers already shown at a parent level to avoid repetition.
+func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *Graph, repoDir string, useColor bool, parentBlockers map[string]bool, termWidth int) {
 	task := node.task
 
 	// Determine connector
@@ -223,32 +297,51 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 
 	// Build the line
 	icon := stateIcon(task, node.isReady)
-	id := task.ID
 	title := firstLine(task.Body)
 
-	// Annotations
-	var annotations []string
-
-	// Worker type (only show if human)
-	if task.Worker == workerHuman {
-		annotations = append(annotations, "[human]")
+	// Worker indicator - compact, shown before title
+	workerIndicator := ""
+	if task.Worker == workerHuman && !task.IsEpic {
+		workerIndicator = "[h]"
 	}
 
-	// Claimed by
+	// Annotations - keep minimal to reduce noise
+	var annotations []string
+
+	// Claimed by (always show - this is actionable info)
 	if task.ClaimedBy != "" {
 		annotations = append(annotations, "@"+task.ClaimedBy)
 	}
 
-	// Blocking info for blocked tasks
-	if !node.isReady && !task.IsEpic && task.State == stateTodo {
-		blockers := getBlockers(task, graph)
-		if len(blockers) > 0 {
-			annotations = append(annotations, "⧗ "+strings.Join(blockers, ", "))
+	// Blocking info - only show blockers that aren't already shown by parent
+	var thisBlockers map[string]bool
+	var blockerAnnotation string
+	if !node.isReady && task.State == stateTodo {
+		allBlockers := getBlockers(task, graph)
+		var newBlockers []string
+		thisBlockers = make(map[string]bool)
+		for _, bid := range allBlockers {
+			thisBlockers[bid] = true
+			if parentBlockers == nil || !parentBlockers[bid] {
+				// Show by name, not ID
+				if blocker := graph.Tasks[bid]; blocker != nil {
+					name := abbreviate(firstLine(blocker.Body), 20)
+					newBlockers = append(newBlockers, name)
+				} else {
+					newBlockers = append(newBlockers, bid)
+				}
+			}
+		}
+		if len(newBlockers) > 2 {
+			// Too many blockers - show count instead of list
+			blockerAnnotation = fmt.Sprintf("⧗ %d blockers", len(newBlockers))
+		} else if len(newBlockers) > 0 {
+			blockerAnnotation = "⧗ " + strings.Join(newBlockers, ", ")
 		}
 	}
 
 	// Format with optional color
-	line := formatTreeLine(prefix, connector, icon, id, title, annotations, task, useColor)
+	line := formatTreeLine(prefix, connector, icon, task.ID, title, workerIndicator, annotations, blockerAnnotation, task, node.isReady, useColor, termWidth)
 	fmt.Fprintln(w, line)
 
 	// Show result file URL on separate line for done tasks
@@ -261,11 +354,11 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 		} else {
 			resultPrefix += "│ "
 		}
-		resultLine := formatResultLine(resultPrefix, latest.Summary, fileURL, useColor)
+		resultLine := formatResultLine(resultPrefix, fileURL, useColor)
 		fmt.Fprintln(w, resultLine)
 	}
 
-	// Render children
+	// Render children, passing down our blockers so they don't repeat
 	childPrefix := prefix
 	if isLast {
 		childPrefix += "  "
@@ -273,9 +366,29 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 		childPrefix += "│ "
 	}
 
-	for i, child := range node.children {
-		renderNode(w, child, childPrefix, i == len(node.children)-1, graph, repoDir, useColor)
+	// Merge parent blockers with this node's blockers for children
+	childBlockers := make(map[string]bool)
+	for k := range parentBlockers {
+		childBlockers[k] = true
 	}
+	for k := range thisBlockers {
+		childBlockers[k] = true
+	}
+
+	for i, child := range node.children {
+		renderNode(w, child, childPrefix, i == len(node.children)-1, graph, repoDir, useColor, childBlockers, termWidth)
+	}
+}
+
+// abbreviate truncates a string to maxLen, adding "…" if truncated.
+func abbreviate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 1 {
+		return "…"
+	}
+	return s[:maxLen-1] + "…"
 }
 
 // stateIcon returns the appropriate icon for a task's state.
@@ -330,10 +443,32 @@ func getBlockers(task *Task, graph *Graph) []string {
 	return blockers
 }
 
+// visibleLen returns the visible length of a string, excluding ANSI escape codes.
+func visibleLen(s string) int {
+	length := 0
+	inEscape := false
+	for _, r := range s {
+		if r == '\033' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if r == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		length++
+	}
+	return length
+}
+
 // formatTreeLine formats a tree line with optional color.
-func formatTreeLine(prefix, connector, icon, id, title string, annotations []string, task *Task, useColor bool) string {
+// Visual hierarchy: icon → [h] → title → @claimer → [blocker column] → ID (right-aligned)
+func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, annotations []string, blockerAnnotation string, task *Task, isReady bool, useColor bool, termWidth int) string {
 	var sb strings.Builder
 
+	// Tree structure (dim)
 	if useColor {
 		sb.WriteString(colorDim)
 	}
@@ -356,29 +491,33 @@ func formatTreeLine(prefix, connector, icon, id, title string, annotations []str
 		}
 	}
 
-	// ID
-	if useColor {
-		sb.WriteString(colorBlue)
+	// Worker indicator (e.g., [h] for human) - before title, dim
+	if workerIndicator != "" {
+		if useColor {
+			sb.WriteString(colorDim)
+		}
+		sb.WriteString(workerIndicator)
+		sb.WriteString(" ")
+		if useColor {
+			sb.WriteString(colorReset)
+		}
 	}
-	sb.WriteString(id)
-	if useColor {
-		sb.WriteString(colorReset)
-	}
-	sb.WriteString("  ")
 
-	// Title
-	if useColor && (task.State == stateTodo && !isTaskReady(task)) {
-		sb.WriteString(colorDim)
-	}
-	if useColor && task.IsEpic {
-		sb.WriteString(colorBold)
+	// Title (prominent for ready/epics, dim for blocked)
+	isBlocked := task.State == stateTodo && !isReady && !task.IsEpic
+	if useColor {
+		if isBlocked {
+			sb.WriteString(colorDim)
+		} else if task.IsEpic {
+			sb.WriteString(colorBold)
+		}
 	}
 	sb.WriteString(title)
 	if useColor {
 		sb.WriteString(colorReset)
 	}
 
-	// Annotations
+	// Annotations (dim) - like @claimer - immediately after title
 	if len(annotations) > 0 {
 		sb.WriteString("  ")
 		if useColor {
@@ -390,6 +529,59 @@ func formatTreeLine(prefix, connector, icon, id, title string, annotations []str
 		}
 	}
 
+	// Blocker annotation at a fixed column (about 60% of terminal width)
+	// This creates a visual column for ⧗ to align
+	blockerCol := termWidth * 55 / 100 // blocker column at ~55% of width
+	idCol := termWidth - len(id) - 2   // ID ends 2 chars from right edge
+
+	if blockerAnnotation != "" {
+		// Pad to blocker column
+		currentLen := visibleLen(sb.String())
+		paddingToBlocker := blockerCol - currentLen
+		if paddingToBlocker > 1 {
+			sb.WriteString(strings.Repeat(" ", paddingToBlocker))
+		} else {
+			sb.WriteString("  ")
+		}
+
+		// Truncate blocker text if it would collide with ID
+		maxBlockerLen := idCol - blockerCol - 2
+		if useColor {
+			sb.WriteString(colorDim)
+		}
+		if len(blockerAnnotation) > maxBlockerLen && maxBlockerLen > 3 {
+			sb.WriteString(blockerAnnotation[:maxBlockerLen-1])
+			sb.WriteString("…")
+		} else {
+			sb.WriteString(blockerAnnotation)
+		}
+		if useColor {
+			sb.WriteString(colorReset)
+		}
+	}
+
+	// ID (right-aligned; white for epics, dim for tasks)
+	currentLen := visibleLen(sb.String())
+	padding := idCol - currentLen
+
+	if padding > 0 {
+		sb.WriteString(strings.Repeat(" ", padding))
+	} else {
+		sb.WriteString("  ") // minimum spacing if line is too long
+	}
+	if useColor {
+		if task.IsEpic {
+			// White/normal for epic IDs - they stand out more
+			sb.WriteString(colorReset)
+		} else {
+			sb.WriteString(colorDim)
+		}
+	}
+	sb.WriteString(id)
+	if useColor {
+		sb.WriteString(colorReset)
+	}
+
 	return sb.String()
 }
 
@@ -398,21 +590,11 @@ func isTaskReady(task *Task) bool {
 	return task.State == stateTodo && task.ClaimedBy == ""
 }
 
-// formatResultLine formats the result file line.
-func formatResultLine(prefix, summary, fileURL string, useColor bool) string {
+// formatResultLine formats the result file line - just arrow and file link.
+func formatResultLine(prefix, fileURL string, useColor bool) string {
 	var sb strings.Builder
 	sb.WriteString(prefix)
 	sb.WriteString("  → ")
-	if useColor {
-		sb.WriteString(colorGreen)
-	}
-	sb.WriteString(summary)
-	if useColor {
-		sb.WriteString(colorReset)
-	}
-	sb.WriteString("\n")
-	sb.WriteString(prefix)
-	sb.WriteString("    ")
 	if useColor {
 		sb.WriteString(colorCyan)
 	}

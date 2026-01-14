@@ -321,7 +321,6 @@ func runList(args []string, opts GlobalOptions) error {
 	readyOnly := hasFlag(args, "--ready")
 	blockedOnly := hasFlag(args, "--blocked")
 	showEpics := hasFlag(args, "--epics")
-	treeView := hasFlag(args, "--tree")
 
 	if readyOnly && blockedOnly {
 		return errors.New("cannot use both --ready and --blocked")
@@ -376,48 +375,8 @@ func runList(args []string, opts GlobalOptions) error {
 	}
 
 	// Tree view (human-friendly hierarchical output)
-	if treeView {
-		useColor := isTerminal()
-		renderTreeView(os.Stdout, graph, repoDir, useColor)
-		return nil
-	}
-
-	// Text output (legacy flat format)
-	for _, task := range tasks {
-		epic := task.EpicID
-		if epic == "" {
-			epic = "-"
-		}
-		claimed := task.ClaimedBy
-		if claimed == "" {
-			claimed = "-"
-		}
-		marker := ""
-		if len(task.Results) > 0 {
-			marker = "[R] "
-		}
-		fmt.Printf("%s\t%s\t%s\t%s\t%s%s\n", task.ID, task.State, epic, claimed, marker, firstLine(task.Body))
-
-		// For done/canceled tasks with results, show latest result on second line
-		if (task.State == stateDone || task.State == stateCanceled) && len(task.Results) > 0 {
-			latest := task.Results[0]
-			fileURL := deriveFileURL(latest.Path, repoDir)
-			fmt.Printf("\t→ %s\n\t  %s\n", latest.Summary, fileURL)
-		}
-	}
-
-	if showEpics && len(epics) > 0 {
-		if len(tasks) > 0 {
-			fmt.Println() // separator
-		}
-		for _, epic := range epics {
-			claimed := epic.ClaimedBy
-			if claimed == "" {
-				claimed = "-"
-			}
-			fmt.Printf("%s\t%s\t%s\t%s\t%s\n", epic.ID, epic.State, "-", claimed, firstLine(epic.Body))
-		}
-	}
+	useColor := isTerminal()
+	renderTreeView(os.Stdout, graph, repoDir, useColor)
 
 	return nil
 }
