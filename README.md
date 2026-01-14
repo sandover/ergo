@@ -18,13 +18,13 @@ brew install sandover/tap/ergo
 # Initialize (run once per repo)
 ergo init
 
-# Create an epic and tasks
-ergo new epic "Improve Linux support"          # prints ID like E-abc123
-ergo new task "Add unix lock abstraction" --epic E-abc123
-ergo new task "Add Linux docs" --epic E-abc123
+# Create an epic and tasks (JSON stdin)
+echo '{"title":"Improve Linux support"}' | ergo new epic          # prints ID like OFKSTE
+echo '{"title":"Add unix lock abstraction","epic":"OFKSTE"}' | ergo new task
+echo '{"title":"Add Linux docs","epic":"OFKSTE"}' | ergo new task
 
 # Add a dependency (A depends on B => A waits for B)
-ergo dep T-task1 T-task2
+ergo dep ABCDEF GHIJKL
 
 # See what's ready, then claim one
 ergo list --ready
@@ -44,15 +44,15 @@ ergo next
 | Command | Action |
 | --- | --- |
 | `ergo init` | Create `.ergo/` in the repo. |
-| `ergo new epic <title>` | Create an epic (prints id). |
-| `ergo new task <title> [--epic <id>]` | Create a task (prints id). |
+| `echo '{"title":"..."}' \| ergo new epic` | Create an epic (prints id). |
+| `echo '{"title":"...","epic":"ID"}' \| ergo new task` | Create a task (prints id). |
 | `ergo list [--ready\|--blocked]` | List tasks (filter by status). |
 | `ergo next [--peek]` | Claim oldest READY task, set to `doing`. |
-| `ergo set <id> state=<state>` | Set state: `todo\|doing\|done\|blocked\|canceled\|error`. |
+| `echo '{"state":"done"}' \| ergo set <id>` | Update task fields (state, claim, etc). |
 | `ergo dep <A> <B>` | A depends on B. |
 | `ergo show <id>` | Show task details. |
 
-Run `ergo help` for full usage.
+**All mutations use JSON stdin.** Run `ergo --help` for syntax or `ergo quickstart` for complete examples.
 
 ## 🔗 Workflow
 

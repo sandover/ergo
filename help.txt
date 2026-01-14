@@ -39,8 +39,8 @@
   All mutations (new, set) read JSON from stdin:
 
     echo '{"title":"Build auth"}' | ergo new epic
-    echo '{"title":"Do X","epic":"E-abc","worker":"agent"}' | ergo new task
-    echo '{"state":"done"}' | ergo set T-xyz
+    echo '{"title":"Do X","epic":"OFKSTE","worker":"agent"}' | ergo new task
+    echo '{"state":"done"}' | ergo set ABCDEF
 
   Schema (same for new and set):
     title           string    required for new; optional for set (non-empty)

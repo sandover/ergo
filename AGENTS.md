@@ -10,3 +10,4 @@
 
 # Other Guidance
 - don't use /tmp, it prompts me for permissions.  Prefer tmp/ or .scratch/ in the repo
+- When the code changes, the docs (such as README, code comments, --help, and "ergo quickstart") must also change to reflect. There must be total internal coherence in the project at all times.

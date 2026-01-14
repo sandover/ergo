@@ -16,16 +16,16 @@
 {{HEADER}}2. CREATE AN EPIC{{RESET}}
 
 {{CMD}}echo '{"title":"Build auth system"}' | ergo new epic{{RESET}}
-{{COMMENT}}prints epic ID, e.g. E-a1b2c3{{RESET}}
+{{COMMENT}}prints epic ID, e.g. OFKSTE (6-char base32){{RESET}}
 
 {{HEADER}}3. CREATE TASKS{{RESET}}
 
 {{COMMENT}}tasks are created by piping JSON to stdin:{{RESET}}
-{{CMD}}echo '{"title":"Design token format","epic":"E-a1b2c3"}' | ergo new task{{RESET}}
-{{CMD}}echo '{"title":"Implement JWT signing","epic":"E-a1b2c3"}' | ergo new task{{RESET}}
-{{CMD}}echo '{"title":"Add refresh tokens","epic":"E-a1b2c3"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Design token format","epic":"OFKSTE"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Implement JWT signing","epic":"OFKSTE"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Add refresh tokens","epic":"OFKSTE"}' | ergo new task{{RESET}}
 
-{{COMMENT}}each prints a task ID, e.g. T-d4e5f6{{RESET}}
+{{COMMENT}}each prints a task ID, e.g. FUM56H (6-char base32){{RESET}}
 {{CMD}}ergo list{{RESET}}
 
 {{HEADER}}4. JSON INPUT SCHEMA{{RESET}}
@@ -49,15 +49,15 @@
 
 {{COMMENT}}'dep A B' means A depends on B (B blocks A){{RESET}}
 {{COMMENT}}JWT signing depends on token format design:{{RESET}}
-{{CMD}}ergo dep T-impl T-design{{RESET}}
+{{CMD}}ergo dep ABCDEF GHIJKL{{RESET}}
 {{COMMENT}}refresh tokens depend on JWT signing:{{RESET}}
-{{CMD}}ergo dep T-refresh T-impl{{RESET}}
+{{CMD}}ergo dep MNOPQR ABCDEF{{RESET}}
 {{CMD}}ergo list --blocked{{RESET}}
-{{COMMENT}}shows T-impl and T-refresh (waiting on deps){{RESET}}
+{{COMMENT}}shows ABCDEF and MNOPQR (waiting on deps){{RESET}}
 
 {{CMD}}ergo list --ready{{RESET}}
-{{COMMENT}}only T-design is ready (no unmet deps){{RESET}}
-{{CMD}}ergo dep rm T-refresh T-impl{{RESET}}
+{{COMMENT}}only GHIJKL is ready (no unmet deps){{RESET}}
+{{CMD}}ergo dep rm MNOPQR ABCDEF{{RESET}}
 {{COMMENT}}removes the dependency if needed{{RESET}}
 
 {{HEADER}}6. WORK ON TASKS{{RESET}}
@@ -69,53 +69,53 @@
 {{COMMENT}}see what's next without claiming{{RESET}}
 
 {{COMMENT}}mark your work done:{{RESET}}
-{{CMD}}echo '{"state":"done"}' | ergo set T-design{{RESET}}
+{{CMD}}echo '{"state":"done"}' | ergo set GHIJKL{{RESET}}
 {{CMD}}ergo list --ready{{RESET}}
 
 {{HEADER}}7. UPDATE TASKS{{RESET}}
 
-{{CMD}}echo '{"title":"Implement JWT signing (HS256)"}' | ergo set T-impl{{RESET}}
-{{CMD}}echo '{"state":"blocked"}' | ergo set T-impl{{RESET}}
+{{CMD}}echo '{"title":"Implement JWT signing (HS256)"}' | ergo set ABCDEF{{RESET}}
+{{CMD}}echo '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
 {{COMMENT}}explicit block (waiting on external input){{RESET}}
 
-{{CMD}}echo '{"state":"todo"}' | ergo set T-impl{{RESET}}
+{{CMD}}echo '{"state":"todo"}' | ergo set ABCDEF{{RESET}}
 {{COMMENT}}unblock when ready to resume{{RESET}}
 
 {{COMMENT}}multiple fields in one update:{{RESET}}
-{{CMD}}echo '{"state":"doing","claim":"my-agent"}' | ergo set T-impl{{RESET}}
+{{CMD}}echo '{"state":"doing","claim":"my-agent"}' | ergo set ABCDEF{{RESET}}
 
 {{HEADER}}8. HANDLE FAILURES{{RESET}}
 
 {{COMMENT}}if a task fails, mark it as error (preserves who failed):{{RESET}}
-{{CMD}}echo '{"state":"error"}' | ergo set T-impl{{RESET}}
+{{CMD}}echo '{"state":"error"}' | ergo set ABCDEF{{RESET}}
 {{COMMENT}}note: state=error requires a claim to show who failed{{RESET}}
 
 {{COMMENT}}retry the failed task:{{RESET}}
-{{CMD}}echo '{"state":"doing","claim":"my-agent"}' | ergo set T-impl{{RESET}}
+{{CMD}}echo '{"state":"doing","claim":"my-agent"}' | ergo set ABCDEF{{RESET}}
 {{COMMENT}}or reassign to someone else:{{RESET}}
-{{CMD}}echo '{"state":"todo"}' | ergo set T-impl{{RESET}}
+{{CMD}}echo '{"state":"todo"}' | ergo set ABCDEF{{RESET}}
 {{COMMENT}}or give up:{{RESET}}
-{{CMD}}echo '{"state":"canceled"}' | ergo set T-impl{{RESET}}
+{{CMD}}echo '{"state":"canceled"}' | ergo set ABCDEF{{RESET}}
 
 {{HEADER}}9. ATTACH RESULTS{{RESET}}
 
 {{COMMENT}}tasks can have result files — visible in normal tools (editor, finder):{{RESET}}
 {{CMD}}echo "# Analysis Report" > docs/analysis.md{{RESET}}
-{{CMD}}echo '{"result_path":"docs/analysis.md","result_summary":"Token format analysis"}' | ergo set T-design{{RESET}}
+{{CMD}}echo '{"result_path":"docs/analysis.md","result_summary":"Token format analysis"}' | ergo set GHIJKL{{RESET}}
 
 {{COMMENT}}results are attached, not moved:{{RESET}}
 {{COMMENT}}  - file stays in your project (not in .ergo/){{RESET}}
 {{COMMENT}}  - ergo stores: path, sha256, mtime, git commit (at attach time){{RESET}}
 {{COMMENT}}  - humans open docs/analysis.md directly; agents use show --json{{RESET}}
 
-{{CMD}}ergo show T-design{{RESET}}
+{{CMD}}ergo show GHIJKL{{RESET}}
 {{COMMENT}}shows result summary, path, and file:// URL{{RESET}}
 
-{{CMD}}ergo show T-design --json | jq '.results'{{RESET}}
+{{CMD}}ergo show GHIJKL --json | jq '.results'{{RESET}}
 {{COMMENT}}structured: path, file_url, sha256_at_attach, etc.{{RESET}}
 
 {{COMMENT}}attach multiple results by repeating set:{{RESET}}
-{{CMD}}echo '{"result_path":"docs/spec.md","result_summary":"Final spec document"}' | ergo set T-design{{RESET}}
+{{CMD}}echo '{"result_path":"docs/spec.md","result_summary":"Final spec document"}' | ergo set GHIJKL{{RESET}}
 
 {{HEADER}}10. CREATE-AND-CLAIM (atomic){{RESET}}
 
@@ -128,7 +128,7 @@
 {{HEADER}}11. HUMAN VS AGENT TASKS{{RESET}}
 
 {{COMMENT}}some tasks need human judgment:{{RESET}}
-{{CMD}}echo '{"title":"Choose token expiry policy","epic":"E-a1b2c3","worker":"human"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Choose token expiry policy","epic":"OFKSTE","worker":"human"}' | ergo new task{{RESET}}
 {{CMD}}ergo list --ready --as human{{RESET}}
 
 {{COMMENT}}agents filter for their work:{{RESET}}
@@ -143,8 +143,8 @@
 {{CMD}}echo '{"title":"Deploy phase"}' | ergo new epic{{RESET}}
 
 {{COMMENT}}Build depends on Design, Deploy depends on Build:{{RESET}}
-{{CMD}}ergo dep E-build E-design{{RESET}}
-{{CMD}}ergo dep E-deploy E-build{{RESET}}
+{{CMD}}ergo dep STUVWX YZABCD{{RESET}}
+{{CMD}}ergo dep EFGHIJ STUVWX{{RESET}}
 
 {{COMMENT}}tasks in Build are blocked until Design's tasks are done{{RESET}}
 {{COMMENT}}an epic is "complete" when all its tasks are done|canceled{{RESET}}
