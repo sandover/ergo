@@ -87,7 +87,7 @@ func setupErgo(t *testing.T) string {
 
 func TestNewTask_HappyPath(t *testing.T) {
 	dir := setupErgo(t)
-	stdout, _, code := runErgo(t, dir, `{"title":"Test task"}`, "new", "task")
+	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
@@ -117,8 +117,8 @@ func TestNewTask_ValidationError(t *testing.T) {
 	}
 
 	missing, ok := result["missing"].([]interface{})
-	if !ok || len(missing) != 1 || missing[0] != "title" {
-		t.Errorf("expected missing=[title], got %v", result["missing"])
+	if !ok || len(missing) != 2 {
+		t.Errorf("expected missing=[title, body], got %v", result["missing"])
 	}
 }
 
@@ -126,7 +126,7 @@ func TestSet_StateTransition(t *testing.T) {
 	dir := setupErgo(t)
 
 	// Create task
-	stdout, _, code := runErgo(t, dir, `{"title":"Test task"}`, "new", "task")
+	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
 	if code != 0 {
 		t.Fatalf("new task failed: exit %d", code)
 	}
@@ -158,7 +158,7 @@ func TestSet_InvalidTransition(t *testing.T) {
 	dir := setupErgo(t)
 
 	// Create task
-	stdout, _, code := runErgo(t, dir, `{"title":"Test task"}`, "new", "task")
+	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
 	if code != 0 {
 		t.Fatalf("new task failed: exit %d", code)
 	}
@@ -185,7 +185,7 @@ func TestCreateAndClaim_Atomic(t *testing.T) {
 
 	// Create task with state=doing and claim in one operation
 	stdout, _, code := runErgo(t, dir,
-		`{"title":"Urgent task","state":"doing","claim":"agent-1"}`,
+		`{"title":"Urgent task","body":"Urgent task","state":"doing","claim":"agent-1"}`,
 		"new", "task", "--json")
 
 	if code != 0 {
@@ -224,7 +224,7 @@ func TestCreateAndClaim_Atomic(t *testing.T) {
 
 func TestNewEpic_HappyPath(t *testing.T) {
 	dir := setupErgo(t)
-	stdout, _, code := runErgo(t, dir, `{"title":"Test Epic"}`, "new", "epic")
+	stdout, _, code := runErgo(t, dir, `{"title":"Test Epic","body":"Test Epic"}`, "new", "epic")
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
@@ -239,7 +239,7 @@ func TestSet_MultipleFields(t *testing.T) {
 	dir := setupErgo(t)
 
 	// Create task
-	stdout, _, code := runErgo(t, dir, `{"title":"Test task"}`, "new", "task")
+	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
 	if code != 0 {
 		t.Fatalf("new task failed: exit %d", code)
 	}

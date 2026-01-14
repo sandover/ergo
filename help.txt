@@ -38,13 +38,13 @@
 {{HEADER}}JSON INPUT (stdin only){{RESET}}
   All mutations (new, set) read JSON from stdin:
 
-    echo '{"title":"Build auth"}' | ergo new epic
-    echo '{"title":"Do X","epic":"OFKSTE","worker":"agent"}' | ergo new task
+    echo '{"title":"Build auth","body":"Build authentication system"}' | ergo new epic
+    echo '{"title":"Do X","body":"Do X now","epic":"OFKSTE","worker":"agent"}' | ergo new task
     echo '{"state":"done"}' | ergo set ABCDEF
 
   Schema (same for new and set):
     title           string    required for new; optional for set (non-empty)
-    body            string    optional; defaults to title
+    body            string    required for new; optional for set (non-empty)
     epic            string    optional; epic ID or "" to unassign
     worker          string    optional; any|agent|human
     state           string    optional; todo|doing|done|blocked|canceled|error
@@ -53,4 +53,4 @@
     result_summary  string    optional; one-line summary (requires result_path)
 
   Validation errors return structured JSON:
-    {"error":"validation_failed","message":"...","missing":["title"],"invalid":{...}}
+    {"error":"validation_failed","message":"...","missing":["title","body"],"invalid":{...}}

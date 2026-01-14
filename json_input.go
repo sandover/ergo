@@ -21,17 +21,18 @@ import (
 
 // TaskInput is the unified JSON schema for creating and updating tasks/epics.
 //
-// For `new task` / `new epic`: title is required.
+// For `new task` / `new epic`: title and body are required.
 // For `set`: all fields are optional; provided fields override existing values.
 //
 // Validation rules (apply to both new and set):
 //   - title: cannot be empty if provided
+//   - body: cannot be empty if provided
 //   - state=doing requires claim
 //   - state=error requires claim
 //   - result_path and result_summary must be provided together
 type TaskInput struct {
 	Title  *string `json:"title,omitempty"`  // required for new; optional for set
-	Body   *string `json:"body,omitempty"`   // if omitted on new, body = title
+	Body   *string `json:"body,omitempty"`   // required for new; optional for set
 	Epic   *string `json:"epic,omitempty"`   // epic ID or "" to unassign
 	Worker *string `json:"worker,omitempty"` // any|agent|human
 	State  *string `json:"state,omitempty"`  // todo|doing|done|blocked|canceled|error
@@ -123,6 +124,15 @@ func (t *TaskInput) validate(requireTitle bool, isEpic bool) *ValidationError {
 		}
 	} else if t.Title != nil && strings.TrimSpace(*t.Title) == "" {
 		invalid["title"] = "cannot be empty"
+	}
+
+	// Body validation
+	if requireTitle {
+		if t.Body == nil || strings.TrimSpace(*t.Body) == "" {
+			missing = append(missing, "body")
+		}
+	} else if t.Body != nil && strings.TrimSpace(*t.Body) == "" {
+		invalid["body"] = "cannot be empty"
 	}
 
 	// Worker validation
@@ -226,12 +236,12 @@ func (t *TaskInput) GetTitle() string {
 	return ""
 }
 
-// GetBody returns body if set, otherwise title.
+// GetBody returns body or empty string if not set.
 func (t *TaskInput) GetBody() string {
 	if t.Body != nil {
 		return *t.Body
 	}
-	return t.GetTitle()
+	return ""
 }
 
 // GetEpic returns epic ID or empty string.

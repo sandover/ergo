@@ -19,9 +19,9 @@ brew install sandover/tap/ergo
 ergo init
 
 # Create an epic and tasks (JSON stdin)
-echo '{"title":"Improve Linux support"}' | ergo new epic          # prints ID like OFKSTE
-echo '{"title":"Add unix lock abstraction","epic":"OFKSTE"}' | ergo new task
-echo '{"title":"Add Linux docs","epic":"OFKSTE"}' | ergo new task
+echo '{"title":"Improve Linux support","body":"Improve Linux support"}' | ergo new epic          # prints ID like OFKSTE
+echo '{"title":"Add unix lock abstraction","body":"Add unix lock abstraction","epic":"OFKSTE"}' | ergo new task
+echo '{"title":"Add Linux docs","body":"Add Linux docs","epic":"OFKSTE"}' | ergo new task
 
 # Add a dependency (A depends on B => A waits for B)
 ergo dep ABCDEF GHIJKL
@@ -44,8 +44,8 @@ ergo next
 | Command | Action |
 | --- | --- |
 | `ergo init` | Create `.ergo/` in the repo. |
-| `echo '{"title":"..."}' \| ergo new epic` | Create an epic (prints id). |
-| `echo '{"title":"...","epic":"ID"}' \| ergo new task` | Create a task (prints id). |
+| `echo '{"title":"...","body":"..."}' \| ergo new epic` | Create an epic (prints id). |
+| `echo '{"title":"...","body":"...","epic":"ID"}' \| ergo new task` | Create a task (prints id). |
 | `ergo list [--ready\|--blocked]` | List tasks (filter by status). |
 | `ergo next [--peek]` | Claim oldest READY task, set to `doing`. |
 | `echo '{"state":"done"}' \| ergo set <id>` | Update task fields (state, claim, etc). |

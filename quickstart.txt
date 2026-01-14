@@ -21,9 +21,9 @@
 {{HEADER}}3. CREATE TASKS{{RESET}}
 
 {{COMMENT}}tasks are created by piping JSON to stdin:{{RESET}}
-{{CMD}}echo '{"title":"Design token format","epic":"OFKSTE"}' | ergo new task{{RESET}}
-{{CMD}}echo '{"title":"Implement JWT signing","epic":"OFKSTE"}' | ergo new task{{RESET}}
-{{CMD}}echo '{"title":"Add refresh tokens","epic":"OFKSTE"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Design token format","body":"Design token format","epic":"OFKSTE"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Implement JWT signing","body":"Implement JWT signing","epic":"OFKSTE"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Add refresh tokens","body":"Add refresh tokens","epic":"OFKSTE"}' | ergo new task{{RESET}}
 
 {{COMMENT}}each prints a task ID, e.g. FUM56H (6-char base32){{RESET}}
 {{CMD}}ergo list{{RESET}}
@@ -33,7 +33,7 @@
 {{COMMENT}}all mutations use the same JSON schema:{{RESET}}
 
 {{COMMENT}}  title           (required for new; optional for set){{RESET}}
-{{COMMENT}}  body            (optional; defaults to title){{RESET}}
+{{COMMENT}}  body            (required for new; optional for set){{RESET}}
 {{COMMENT}}  epic            (optional; epic ID or "" to unassign){{RESET}}
 {{COMMENT}}  worker          (optional; any|agent|human){{RESET}}
 {{COMMENT}}  state           (optional; todo|doing|done|blocked|canceled|error){{RESET}}
@@ -43,7 +43,7 @@
 
 {{COMMENT}}validation errors return structured JSON:{{RESET}}
 {{CMD}}echo '{}' | ergo new task --json{{RESET}}
-{{COMMENT}}→ {"error":"validation_failed","message":"invalid input","missing":["title"]}{{RESET}}
+{{COMMENT}}→ {"error":"validation_failed","message":"invalid input","missing":["title","body"]}{{RESET}}
 
 {{HEADER}}5. ADD DEPENDENCIES{{RESET}}
 
@@ -120,15 +120,15 @@
 {{HEADER}}10. CREATE-AND-CLAIM (atomic){{RESET}}
 
 {{COMMENT}}create a task already claimed and in-progress:{{RESET}}
-{{CMD}}echo '{"title":"Urgent fix","state":"doing","claim":"my-agent"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Urgent fix","body":"Urgent fix","state":"doing","claim":"my-agent"}' | ergo new task{{RESET}}
 
 {{COMMENT}}create a task that's already done with results:{{RESET}}
-{{CMD}}echo '{"title":"Prior analysis","state":"done","result_path":"docs/prior.md","result_summary":"Previous work"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Prior analysis","body":"Prior analysis","state":"done","result_path":"docs/prior.md","result_summary":"Previous work"}' | ergo new task{{RESET}}
 
 {{HEADER}}11. HUMAN VS AGENT TASKS{{RESET}}
 
 {{COMMENT}}some tasks need human judgment:{{RESET}}
-{{CMD}}echo '{"title":"Choose token expiry policy","epic":"OFKSTE","worker":"human"}' | ergo new task{{RESET}}
+{{CMD}}echo '{"title":"Choose token expiry policy","body":"Choose token expiry policy","epic":"OFKSTE","worker":"human"}' | ergo new task{{RESET}}
 {{CMD}}ergo list --ready --as human{{RESET}}
 
 {{COMMENT}}agents filter for their work:{{RESET}}
@@ -138,9 +138,9 @@
 {{HEADER}}12. EPIC HIERARCHIES{{RESET}}
 
 {{COMMENT}}epics can depend on other epics (nested work):{{RESET}}
-{{CMD}}echo '{"title":"Design phase"}' | ergo new epic{{RESET}}
-{{CMD}}echo '{"title":"Build phase"}' | ergo new epic{{RESET}}
-{{CMD}}echo '{"title":"Deploy phase"}' | ergo new epic{{RESET}}
+{{CMD}}echo '{"title":"Design phase","body":"Design phase"}' | ergo new epic{{RESET}}
+{{CMD}}echo '{"title":"Build phase","body":"Build phase"}' | ergo new epic{{RESET}}
+{{CMD}}echo '{"title":"Deploy phase","body":"Deploy phase"}' | ergo new epic{{RESET}}
 
 {{COMMENT}}Build depends on Design, Deploy depends on Build:{{RESET}}
 {{CMD}}ergo dep STUVWX YZABCD{{RESET}}
