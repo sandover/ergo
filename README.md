@@ -4,6 +4,8 @@
 
 [![License](https://img.shields.io/github/license/sandover/ergo)](LICENSE)
 [![CI](https://github.com/sandover/ergo/actions/workflows/ci.yml/badge.svg)](https://github.com/sandover/ergo/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo)](https://goreportcard.com/report/github.com/sandover/ergo)
+[![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo.svg)](https://pkg.go.dev/github.com/sandover/ergo)
 
 `ergo` is a small CLI that stores tasks and dependencies in an append-only log under `.ergo/`.  Claude Code or Codex use it to write out their plans in a form that's persistent and inspectable by humans or other agents. 
 
