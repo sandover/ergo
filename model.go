@@ -115,8 +115,8 @@ var validTransitions = map[string]map[string]struct{}{
 	stateTodo:     {stateDoing: {}, stateDone: {}, stateBlocked: {}, stateCanceled: {}},
 	stateDoing:    {stateTodo: {}, stateDone: {}, stateBlocked: {}, stateCanceled: {}, stateError: {}},
 	stateBlocked:  {stateTodo: {}, stateDoing: {}, stateDone: {}, stateCanceled: {}},
-	stateDone:     {stateTodo: {}}, // reopen only
-	stateCanceled: {stateTodo: {}}, // reopen only
+	stateDone:     {stateTodo: {}},                                    // reopen only
+	stateCanceled: {stateTodo: {}},                                    // reopen only
 	stateError:    {stateTodo: {}, stateDoing: {}, stateCanceled: {}}, // retry, reassign, or give up
 }
 
@@ -186,6 +186,7 @@ func validateDepSelf(from, to string) error {
 	}
 	return nil
 }
+
 type GlobalOptions struct {
 	StartDir    string
 	ReadOnly    bool
@@ -290,22 +291,22 @@ type UnclaimEvent struct {
 
 // ResultEvent records a result attachment in the event log.
 type ResultEvent struct {
-	TaskID           string `json:"task_id"`
-	Summary          string `json:"summary"`
-	Path             string `json:"path"`                         // relative to project root
-	Sha256AtAttach   string `json:"sha256_at_attach"`             // required
-	MtimeAtAttach    string `json:"mtime_at_attach,omitempty"`    // optional
+	TaskID            string `json:"task_id"`
+	Summary           string `json:"summary"`
+	Path              string `json:"path"`                           // relative to project root
+	Sha256AtAttach    string `json:"sha256_at_attach"`               // required
+	MtimeAtAttach     string `json:"mtime_at_attach,omitempty"`      // optional
 	GitCommitAtAttach string `json:"git_commit_at_attach,omitempty"` // optional
-	TS               string `json:"ts"`
+	TS                string `json:"ts"`
 }
 
 // Result represents an attached result/artifact for a task.
 // Path is relative to the project root; file_url is derived at read time.
 type Result struct {
 	Summary           string    `json:"summary"`
-	Path              string    `json:"path"`                          // relative to project root
-	Sha256AtAttach    string    `json:"sha256_at_attach"`              // hash when attached
-	MtimeAtAttach     string    `json:"mtime_at_attach,omitempty"`     // optional
+	Path              string    `json:"path"`                           // relative to project root
+	Sha256AtAttach    string    `json:"sha256_at_attach"`               // hash when attached
+	MtimeAtAttach     string    `json:"mtime_at_attach,omitempty"`      // optional
 	GitCommitAtAttach string    `json:"git_commit_at_attach,omitempty"` // optional
 	CreatedAt         time.Time `json:"created_at"`
 }

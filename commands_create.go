@@ -1,8 +1,9 @@
 // Init/task creation commands.
 //
 // Task and epic creation uses stdin-only JSON input:
-//   echo '{"title":"Do X"}' | ergo new task
-//   echo '{"title":"Auth system"}' | ergo new epic
+//
+//	echo '{"title":"Do X"}' | ergo new task
+//	echo '{"title":"Auth system"}' | ergo new epic
 //
 // See json_input.go for the unified TaskInput schema.
 package main

@@ -2,8 +2,8 @@
 //
 // Agents pipe JSON to stdin for all mutations:
 //
-//   echo '{"title":"Do X"}' | ergo new task
-//   echo '{"state":"done"}' | ergo set T-xyz
+//	echo '{"title":"Do X"}' | ergo new task
+//	echo '{"state":"done"}' | ergo set T-xyz
 //
 // This design:
 //   - Eliminates shell escaping issues (no inline JSON in args)

@@ -13,8 +13,8 @@ func TestValidTransitions(t *testing.T) {
 		stateTodo:     {stateDoing: true, stateDone: true, stateBlocked: true, stateCanceled: true},
 		stateDoing:    {stateTodo: true, stateDone: true, stateBlocked: true, stateCanceled: true, stateError: true},
 		stateBlocked:  {stateTodo: true, stateDoing: true, stateDone: true, stateCanceled: true},
-		stateDone:     {stateTodo: true}, // reopen only
-		stateCanceled: {stateTodo: true}, // reopen only
+		stateDone:     {stateTodo: true},                                        // reopen only
+		stateCanceled: {stateTodo: true},                                        // reopen only
 		stateError:    {stateTodo: true, stateDoing: true, stateCanceled: true}, // retry, reassign, or give up
 	}
 

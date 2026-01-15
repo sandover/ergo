@@ -1,7 +1,8 @@
 // Work commands: dep/list/next/set/show/compact/where.
 //
 // The set command uses stdin-only JSON input:
-//   echo '{"state":"done"}' | ergo set T-xyz
+//
+//	echo '{"state":"done"}' | ergo set T-xyz
 //
 // See json_input.go for the unified TaskInput schema.
 package main

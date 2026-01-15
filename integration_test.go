@@ -23,7 +23,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	ergoBinary = filepath.Join(cwd, "ergo-test")
-	
+
 	cmd := exec.Command("go", "build", "-o", ergoBinary, ".")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 // runErgo executes the ergo binary with given stdin and args.
 func runErgo(t *testing.T, dir string, stdin string, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
-	
+
 	// Use bash -c to properly pipe stdin (Go's exec doesn't set pipe mode)
 	if stdin != "" {
 		cmdStr := ergoBinary
@@ -59,7 +59,7 @@ func runErgo(t *testing.T, dir string, stdin string, args ...string) (stdout, st
 		}
 		return outBuf.String(), errBuf.String(), exitCode
 	}
-	
+
 	// No stdin
 	cmd := exec.Command(ergoBinary, args...)
 	cmd.Dir = dir
