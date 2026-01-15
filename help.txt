@@ -46,11 +46,14 @@
     echo '{"title":"Hash passwords","body":"Use bcrypt with cost=12","epic":"OFKSTE","worker":"agent"}' | ergo new task
     echo '{"state":"done"}' | ergo set ABCDEF
 
-  {{BOLD}}Multi-line bodies:{{RESET}} Use a heredoc. Do NOT use echo with \n (shell corrupts it):
+  {{BOLD}}Multi-line bodies:{{RESET}} echo interprets \n as newlines, creating invalid JSON.
+  Use heredoc or printf instead:
 
     ergo new task <<'EOF'
     {"title":"My task","body":"Line 1\nLine 2\nLine 3","worker":"agent"}
     EOF
+
+    printf '%s' '{"title":"X","body":"Line 1\nLine 2"}' | ergo new task
 
   Schema (same for new and set):
     title           string    required for new; optional for set (non-empty)

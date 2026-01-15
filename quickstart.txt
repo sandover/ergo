@@ -30,7 +30,8 @@
 
 {{COMMENT}}for full JSON input schema, see: ergo --help{{RESET}}
 
-{{COMMENT}}⚠ multi-line bodies: ALWAYS use heredoc. echo with \n corrupts JSON:{{RESET}}
+{{COMMENT}}⚠ multi-line bodies: echo interprets \n as newlines, creating invalid JSON.{{RESET}}
+{{COMMENT}}use heredoc (shown below) or: printf '%s' '{...}' | ergo new task{{RESET}}
 {{CMD}}ergo new task <<'EOF'
 {
   "title": "Refactor auth",
