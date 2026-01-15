@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -349,6 +350,51 @@ func TestTaskInput_GetFullBody(t *testing.T) {
 			result := tt.input.GetFullBody()
 			if result != tt.expected {
 				t.Errorf("expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestValidationError_GoError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      ValidationError
+		contains []string
+	}{
+		{
+			name: "missing fields included",
+			err: ValidationError{
+				Message: "invalid input",
+				Missing: []string{"body"},
+			},
+			contains: []string{"invalid input", "missing required: body"},
+		},
+		{
+			name: "invalid fields included",
+			err: ValidationError{
+				Message: "invalid input",
+				Invalid: map[string]string{"state": "invalid value"},
+			},
+			contains: []string{"invalid input", "state: invalid value"},
+		},
+		{
+			name: "both missing and invalid",
+			err: ValidationError{
+				Message: "invalid input",
+				Missing: []string{"title"},
+				Invalid: map[string]string{"worker": "bad value"},
+			},
+			contains: []string{"missing required: title", "worker: bad value"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errMsg := tt.err.GoError().Error()
+			for _, s := range tt.contains {
+				if !strings.Contains(errMsg, s) {
+					t.Errorf("expected error to contain %q, got %q", s, errMsg)
+				}
 			}
 		})
 	}

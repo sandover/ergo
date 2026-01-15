@@ -15,7 +15,7 @@
                                           list tasks; --epics shows only epics
   show <id>                               show epic or task details
 
-  next [--epic <id>] [--peek]             claim oldest READY task, set doing, print it
+  next [--epic <id>] [--peek]             claim oldest READY task, set doing, print ID + body
                                           --peek shows without claiming; exit 3 if none
 
   dep <A> <B>                             add dependency: A depends on B (B blocks A)

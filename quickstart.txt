@@ -57,7 +57,7 @@ EOF{{RESET}}
 {{HEADER}}5. WORK ON TASKS{{RESET}}
 
 {{CMD}}ergo next{{RESET}}
-{{COMMENT}}claims oldest ready task, sets state=doing, prints it{{RESET}}
+{{COMMENT}}claims oldest ready task, sets state=doing, prints ID then body{{RESET}}
 {{COMMENT}}if no ready tasks, exits with code 3{{RESET}}
 {{CMD}}ergo next --peek{{RESET}}
 {{COMMENT}}see what's next without claiming{{RESET}}

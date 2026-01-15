@@ -53,7 +53,18 @@ type ValidationError struct {
 }
 
 func (e *ValidationError) GoError() error {
-	return fmt.Errorf("%s", e.Message)
+	// Build a detailed error message that includes missing/invalid field info
+	parts := []string{e.Message}
+
+	if len(e.Missing) > 0 {
+		parts = append(parts, fmt.Sprintf("missing required: %s", strings.Join(e.Missing, ", ")))
+	}
+
+	for field, reason := range e.Invalid {
+		parts = append(parts, fmt.Sprintf("%s: %s", field, reason))
+	}
+
+	return fmt.Errorf("%s", strings.Join(parts, "; "))
 }
 
 // WriteJSON writes the validation error as JSON to the given writer.

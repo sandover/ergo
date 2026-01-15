@@ -467,7 +467,8 @@ func runNext(args []string, opts GlobalOptions) error {
 			})
 		}
 
-		// Print title+body
+		// Print ID on first line, then title+body
+		fmt.Println(chosen.ID)
 		fmt.Println(chosen.Body)
 		return nil
 	}
@@ -541,7 +542,8 @@ func runNext(args []string, opts GlobalOptions) error {
 		})
 	}
 
-	// Print title+body
+	// Print ID on first line, then title+body
+	fmt.Println(chosen.ID)
 	fmt.Println(body)
 	return nil
 }
