@@ -31,13 +31,9 @@
 {{COMMENT}}for full JSON input schema, see: ergo --help{{RESET}}
 
 {{COMMENT}}⚠ multi-line bodies: echo interprets \n as newlines, creating invalid JSON.{{RESET}}
-{{COMMENT}}use heredoc (shown below) or: printf '%s' '{...}' | ergo new task{{RESET}}
-{{CMD}}ergo new task <<'EOF'
-{
-  "title": "Refactor auth",
-  "body": "1. Extract token validation\n2. Add refresh flow\n3. Update tests"
-}
-EOF{{RESET}}
+{{COMMENT}}For agents/scripts (reliable): printf '%s' '{...}' | ergo new task{{RESET}}
+{{COMMENT}}Heredocs work interactively but FAIL in programmatic terminals (VS Code API, etc.){{RESET}}
+{{CMD}}printf '%s' '{"title":"Refactor auth","body":"1. Extract\n2. Add\n3. Update"}' | ergo new task{{RESET}}
 
 {{HEADER}}4. ADD DEPENDENCIES{{RESET}}
 

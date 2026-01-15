@@ -37,6 +37,10 @@
 
 {{HEADER}}FOR AGENTS{{RESET}}
   Always use --json for structured output (e.g., ergo --json list --ready --as agent).
+  For multi-line JSON input, use printf (not heredoc - heredocs fail in programmatic terminals):
+
+    printf '%s' '{"title":"X","body":"Line 1\nLine 2"}' | ergo new task
+
   Run `ergo quickstart` for the complete reference including the recommended agent loop.
 
 {{HEADER}}JSON INPUT (stdin only){{RESET}}
@@ -47,13 +51,15 @@
     echo '{"state":"done"}' | ergo set ABCDEF
 
   {{BOLD}}Multi-line bodies:{{RESET}} echo interprets \n as newlines, creating invalid JSON.
-  Use heredoc or printf instead:
+  Use printf (for agents/scripts) or heredoc (interactive only):
 
+    # For agents and programmatic use (reliable):
+    printf '%s' '{"title":"X","body":"Line 1\nLine 2"}' | ergo new task
+
+    # Interactive shell only (heredocs fail in programmatic terminals):
     ergo new task <<'EOF'
     {"title":"My task","body":"Line 1\nLine 2\nLine 3","worker":"agent"}
     EOF
-
-    printf '%s' '{"title":"X","body":"Line 1\nLine 2"}' | ergo new task
 
   Schema (same for new and set):
     title           string    required for new; optional for set (non-empty)
