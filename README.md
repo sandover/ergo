@@ -44,33 +44,28 @@ echo '{"title":"User login","body":"Let users sign in with email and password"}'
 # Add a task to the epic
 echo '{"title":"Password hashing","body":"Use bcrypt with cost=12","epic":"OFKSTE"}' | ergo new task
 
-# Multi-line JSON with heredoc
+# Heredoc for complex JSON (here: a human-only task with multi-line body)
 ergo new task <<'EOF'
 {
-  "title": "Login endpoint",
-  "body": "POST /login:\n1. Validate email\n2. Check password\n3. Return JWT",
-  "epic": "OFKSTE"
+  "title": "Choose session duration",
+  "body": "Decide between 1h and 24h access tokens.\nWeigh security vs UX tradeoffs.",
+  "epic": "OFKSTE",
+  "worker": "human"
 }
 EOF
-
-# Human-only task (agents skip these)
-echo '{"title":"Choose session duration","body":"Decide 1h vs 24h tokens","epic":"OFKSTE","worker":"human"}' | ergo new task
 
 # Add dependencies (A depends on B)
 ergo dep ABCDEF GHIJKL
 
-# List & inspect tasks
+# List, inspect, & claim tasks
 ergo list              # tree view; filter with --ready or --blocked
 ergo show ABCDEF       # task details for humans, --json for agents
-
-# Claim and work
 ergo next              # claim oldest READY task, set to doing, print body
-ergo next --as agent   # skip human-only tasks
 
 # Update task state
 echo '{"state":"done"}' | ergo set ABCDEF            # mark complete
 ```
-All mutations use JSON stdin. Run `ergo --help` for syntax or `ergo quickstart` for the complete reference.
+All mutations to tasks use JSON stdin style. Run `ergo --help` for syntax or `ergo quickstart` for the complete reference.
 
 ## Data Representation
 
@@ -101,3 +96,7 @@ On each command, ergo replays `events.jsonl` to build current state in memory qu
 SQLite is great, but binary files don't diff well in git, and concurrent writers from multiple processes need careful handling. JSONL is trivially inspectable (`cat | jq`), merges via normal git workflows, and append-only writes with `flock` are dead simple. For a task graph of a few thousand items, replay is instant; you don't need a query engine.
 
 Add `/.ergo/` to `.gitignore` for local-only use, or commit it for shared state across machines.
+
+## Is it any good?
+
+Yes.
