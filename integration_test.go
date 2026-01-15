@@ -116,9 +116,10 @@ func TestNewTask_ValidationError(t *testing.T) {
 		t.Errorf("expected error=validation_failed, got %v", result["error"])
 	}
 
+	// Only title is required now (body is optional)
 	missing, ok := result["missing"].([]interface{})
-	if !ok || len(missing) != 2 {
-		t.Errorf("expected missing=[title, body], got %v", result["missing"])
+	if !ok || len(missing) != 1 || missing[0] != "title" {
+		t.Errorf("expected missing=[title], got %v", result["missing"])
 	}
 }
 

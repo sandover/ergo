@@ -23,6 +23,11 @@ func TestTaskInput_ValidateForNewTask(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name:        "valid title only",
+			input:       TaskInput{Title: ptr("Quick task")},
+			expectError: false,
+		},
+		{
 			name:        "valid with all fields",
 			input:       TaskInput{Title: ptr("Do X"), Body: ptr("Do X now"), Epic: ptr("E1"), Worker: ptr("agent")},
 			expectError: false,
@@ -34,16 +39,10 @@ func TestTaskInput_ValidateForNewTask(t *testing.T) {
 			missing:     []string{"title"},
 		},
 		{
-			name:        "missing body",
-			input:       TaskInput{Title: ptr("Has title")},
-			expectError: true,
-			missing:     []string{"body"},
-		},
-		{
 			name:        "missing both",
 			input:       TaskInput{},
 			expectError: true,
-			missing:     []string{"title", "body"},
+			missing:     []string{"title"},
 		},
 		{
 			name:        "empty title",
@@ -55,7 +54,7 @@ func TestTaskInput_ValidateForNewTask(t *testing.T) {
 			name:        "empty body",
 			input:       TaskInput{Title: ptr("title"), Body: ptr("")},
 			expectError: true,
-			missing:     []string{"body"},
+			invalidKeys: []string{"body"},
 		},
 		{
 			name:        "whitespace title",
@@ -67,7 +66,7 @@ func TestTaskInput_ValidateForNewTask(t *testing.T) {
 			name:        "whitespace body",
 			input:       TaskInput{Title: ptr("title"), Body: ptr("   ")},
 			expectError: true,
-			missing:     []string{"body"},
+			invalidKeys: []string{"body"},
 		},
 		{
 			name:        "invalid worker",

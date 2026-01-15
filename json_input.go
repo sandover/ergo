@@ -128,21 +128,18 @@ func (t *TaskInput) validate(requireTitle bool, isEpic bool) *ValidationError {
 	var missing []string
 	invalid := make(map[string]string)
 
-	// Title validation
+	// Title validation - required for new tasks/epics
+	hasTitle := t.Title != nil && strings.TrimSpace(*t.Title) != ""
 	if requireTitle {
-		if t.Title == nil || strings.TrimSpace(*t.Title) == "" {
+		if !hasTitle {
 			missing = append(missing, "title")
 		}
 	} else if t.Title != nil && strings.TrimSpace(*t.Title) == "" {
 		invalid["title"] = "cannot be empty"
 	}
 
-	// Body validation
-	if requireTitle {
-		if t.Body == nil || strings.TrimSpace(*t.Body) == "" {
-			missing = append(missing, "body")
-		}
-	} else if t.Body != nil && strings.TrimSpace(*t.Body) == "" {
+	// Body validation - optional if title provided (title becomes the body)
+	if t.Body != nil && strings.TrimSpace(*t.Body) == "" {
 		invalid["body"] = "cannot be empty"
 	}
 

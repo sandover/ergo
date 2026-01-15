@@ -63,7 +63,7 @@
 
   Schema (same for new and set):
     title           string    required for new; optional for set (non-empty)
-    body            string    required for new; optional for set (non-empty)
+    body            string    optional; if omitted, title is used as body
     epic            string    optional; epic ID or "" to unassign
     worker          string    optional; any|agent|human
     state           string    optional; todo|doing|done|blocked|canceled|error
@@ -72,4 +72,4 @@
     result_summary  string    optional; one-line summary (requires result_path)
 
   Validation errors return structured JSON:
-    {"error":"validation_failed","message":"...","missing":["title","body"],"invalid":{...}}
+    {"error":"validation_failed","message":"...","missing":["title"],"invalid":{...}}
