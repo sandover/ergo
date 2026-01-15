@@ -1,30 +1,26 @@
 # ergo
 
-**A tiny, repo-local task graph for humans + agents.**
+**A task graph for coding agents. Human-readable.**
 
 [![License](https://img.shields.io/github/license/sandover/ergo)](LICENSE)
 [![CI](https://github.com/sandover/ergo/actions/workflows/ci.yml/badge.svg)](https://github.com/sandover/ergo/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo)](https://goreportcard.com/report/github.com/sandover/ergo)
 [![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo.svg)](https://pkg.go.dev/github.com/sandover/ergo)
 
-`ergo` is a small CLI that stores tasks and dependencies in an append-only log under `.ergo/`.  Claude Code or Codex use it to write out their plans in a form that's persistent and inspectable by humans or other agents. 
+`ergo` gives your AI agents a better place to plan. Tasks and dependencies persist across sessions, stay visible to humans, and are safe for concurrent agents. Data lives in the repo as plain text.
 
-### Problem to solve
-Coding agents make plans, but they are either internal to the agent's own "plan" tool (ephemeral and not inspectable), or sprawl into markdown files which have to be managed ad hoc over time, which gets messy.
+### Why?
+Coding agents' plans are ephemeral and not inspectable, or they are sprawling markdown files. `ergo` gives agents a structured place to plan -- with a dependency graph and epics -- while keeping everything visible to humans.
 
-### Solution
-A fast CLI tool for planning inside the repo, with support for dependencies and epics -- like a micro-Jira. Agents write plans into it and claim tasks from it. Plans persists over time so various agents can use it (even in parallel). 
-
-One implementation of this idea is [beads](https://github.com/steveyegge/beads). **ergo** is inspired by **bd**, but seeks to be simpler and faster.
+Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler and faster.
 
 ## Features
 
 - **Repo-local:** state lives in `.ergo/` as append-only JSONL -- inspectable and diffable.
-- **Simple:** no daemon, no git hooks, few opinions, easy to reason about.
+- **Simple:** no daemons, no git hooks, few opinions, easy to reason about.
 - **Concurrency-safe:** file lock serializes writes; `next` is race-safe.
-- **For humans + agents:** mark tasks `worker: human`; filter with `--as agent`.
 - **Unix:** Plain text for pipes, `--json` for scripts.
-- **Fast:** 5-15x faster than beads, especially for large projects
+- **Fast:** 5-15x faster than beads, especially for large projects.
 
 ## Quick Start
 
@@ -35,6 +31,12 @@ brew install sandover/tap/ergo   # or: go install github.com/sandover/ergo@lates
 # Initialize (run once per repo)
 ergo init
 
+# Tell your agent
+echo "Use 'ergo' for task tracking" >> AGENTS.md
+```
+
+## Usage
+```bash
 # Create an epic (JSON stdin, title + body required)
 echo '{"title":"User login","body":"Let users sign in with email and password"}' | ergo new epic
 # => created OFKSTE
@@ -58,8 +60,8 @@ echo '{"title":"Choose session duration","body":"Decide 1h vs 24h tokens","epic"
 ergo dep ABCDEF GHIJKL
 
 # List & inspect tasks
-ergo list                # tree view of all tasks, --ready tasks, --blocked tasks
-ergo show ABCDEF         # human-readable details, --json for agents
+ergo list              # tree view; filter with --ready or --blocked
+ergo show ABCDEF       # task details for humans, --json for agents
 
 # Claim and work
 ergo next              # claim oldest READY task, set to doing, print body
@@ -93,7 +95,7 @@ All state lives in `.ergo/` at your repo root:
 - Lock timeout is configurable (`--lock-timeout 5s`); default 30s, `0` = fail fast.
 
 **State reconstruction:**
-On each command, ergo replays `events.jsonl` to build current state in memory. This is fast (100 tasks: ~3ms, 1000 tasks: ~15ms) and guarantees consistency. Run `ergo compact` to collapse history if the log grows large. Verify: `go test -bench=. -benchmem`
+On each command, ergo replays `events.jsonl` to build current state in memory quickly (100 tasks: ~3ms, 1000 tasks: ~15ms) and guarantees consistency. Run `ergo compact` to collapse history if the log grows large. Verify: `go test -bench=. -benchmem`
 
 **Why not SQLite?**
 SQLite is great, but binary files don't diff well in git, and concurrent writers from multiple processes need careful handling. JSONL is trivially inspectable (`cat | jq`), merges via normal git workflows, and append-only writes with `flock` are dead simple. For a task graph of a few thousand items, replay is instant; you don't need a query engine.

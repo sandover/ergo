@@ -23,7 +23,7 @@
 
   where                                   print active .ergo directory path
   compact                                 rewrite log to current state (drops history)
-  quickstart                              complete reference manual (run it!)
+  quickstart                              complete reference manual (agents: run this)
 
 {{HEADER}}GLOBAL FLAGS{{RESET}}
   --dir <path>                            discovery start dir (or explicit .ergo dir)

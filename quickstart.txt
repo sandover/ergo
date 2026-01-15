@@ -28,22 +28,7 @@
 {{COMMENT}}each prints a task ID, e.g. FUM56H (6-char base32){{RESET}}
 {{CMD}}ergo list{{RESET}}
 
-{{HEADER}}4. JSON INPUT SCHEMA{{RESET}}
-
-{{COMMENT}}all mutations use the same JSON schema:{{RESET}}
-
-{{COMMENT}}  title           (required for new; optional for set){{RESET}}
-{{COMMENT}}  body            (required for new; optional for set){{RESET}}
-{{COMMENT}}  epic            (optional; epic ID or "" to unassign){{RESET}}
-{{COMMENT}}  worker          (optional; any|agent|human){{RESET}}
-{{COMMENT}}  state           (optional; todo|doing|done|blocked|canceled|error){{RESET}}
-{{COMMENT}}  claim           (optional; agent ID or "" to unclaim){{RESET}}
-{{COMMENT}}  result_path     (optional; requires result_summary){{RESET}}
-{{COMMENT}}  result_summary  (optional; requires result_path){{RESET}}
-
-{{COMMENT}}validation errors return structured JSON:{{RESET}}
-{{CMD}}echo '{}' | ergo new task --json{{RESET}}
-{{COMMENT}}→ {"error":"validation_failed","message":"invalid input","missing":["title","body"]}{{RESET}}
+{{COMMENT}}for full JSON input schema, see: ergo --help{{RESET}}
 
 {{COMMENT}}multi-line JSON (use heredoc for readability):{{RESET}}
 {{CMD}}ergo new task <<'EOF'
@@ -53,7 +38,7 @@
 }
 EOF{{RESET}}
 
-{{HEADER}}5. ADD DEPENDENCIES{{RESET}}
+{{HEADER}}4. ADD DEPENDENCIES{{RESET}}
 
 {{COMMENT}}'dep A B' means A depends on B (B blocks A){{RESET}}
 {{COMMENT}}JWT signing depends on token format design:{{RESET}}
@@ -68,7 +53,7 @@ EOF{{RESET}}
 {{CMD}}ergo dep rm MNOPQR ABCDEF{{RESET}}
 {{COMMENT}}removes the dependency if needed{{RESET}}
 
-{{HEADER}}6. WORK ON TASKS{{RESET}}
+{{HEADER}}5. WORK ON TASKS{{RESET}}
 
 {{CMD}}ergo next{{RESET}}
 {{COMMENT}}claims oldest ready task, sets state=doing, prints it{{RESET}}
@@ -80,7 +65,7 @@ EOF{{RESET}}
 {{CMD}}echo '{"state":"done"}' | ergo set GHIJKL{{RESET}}
 {{CMD}}ergo list --ready{{RESET}}
 
-{{HEADER}}7. UPDATE TASKS{{RESET}}
+{{HEADER}}6. UPDATE TASKS{{RESET}}
 
 {{CMD}}echo '{"title":"Implement JWT signing (HS256)"}' | ergo set ABCDEF{{RESET}}
 {{CMD}}echo '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
@@ -92,7 +77,7 @@ EOF{{RESET}}
 {{COMMENT}}multiple fields in one update:{{RESET}}
 {{CMD}}echo '{"state":"doing","claim":"my-agent"}' | ergo set ABCDEF{{RESET}}
 
-{{HEADER}}8. HANDLE FAILURES{{RESET}}
+{{HEADER}}7. HANDLE FAILURES{{RESET}}
 
 {{COMMENT}}if a task fails, mark it as error (preserves who failed):{{RESET}}
 {{CMD}}echo '{"state":"error"}' | ergo set ABCDEF{{RESET}}
@@ -105,7 +90,7 @@ EOF{{RESET}}
 {{COMMENT}}or give up:{{RESET}}
 {{CMD}}echo '{"state":"canceled"}' | ergo set ABCDEF{{RESET}}
 
-{{HEADER}}9. ATTACH RESULTS{{RESET}}
+{{HEADER}}8. ATTACH RESULTS{{RESET}}
 
 {{COMMENT}}tasks can have result files — visible in normal tools (editor, finder):{{RESET}}
 {{CMD}}echo "# Analysis Report" > docs/analysis.md{{RESET}}
@@ -125,7 +110,7 @@ EOF{{RESET}}
 {{COMMENT}}attach multiple results by repeating set:{{RESET}}
 {{CMD}}echo '{"result_path":"docs/spec.md","result_summary":"Final spec document"}' | ergo set GHIJKL{{RESET}}
 
-{{HEADER}}10. CREATE-AND-CLAIM (atomic){{RESET}}
+{{HEADER}}9. CREATE-AND-CLAIM (atomic){{RESET}}
 
 {{COMMENT}}create a task already claimed and in-progress:{{RESET}}
 {{CMD}}echo '{"title":"Urgent fix","body":"Patch CVE-2026-1234 in auth module","state":"doing","claim":"my-agent"}' | ergo new task{{RESET}}
@@ -133,7 +118,7 @@ EOF{{RESET}}
 {{COMMENT}}create a task that's already done with results:{{RESET}}
 {{CMD}}echo '{"title":"Prior analysis","body":"Security audit from last quarter","state":"done","result_path":"docs/prior.md","result_summary":"Previous work"}' | ergo new task{{RESET}}
 
-{{HEADER}}11. HUMAN VS AGENT TASKS{{RESET}}
+{{HEADER}}10. HUMAN VS AGENT TASKS{{RESET}}
 
 {{COMMENT}}some tasks need human judgment:{{RESET}}
 {{CMD}}echo '{"title":"Choose token expiry policy","body":"Decide between 1h and 24h access tokens","epic":"OFKSTE","worker":"human"}' | ergo new task{{RESET}}
@@ -143,7 +128,7 @@ EOF{{RESET}}
 {{CMD}}ergo list --ready --as agent{{RESET}}
 {{CMD}}ergo next --as agent{{RESET}}
 
-{{HEADER}}12. EPIC HIERARCHIES{{RESET}}
+{{HEADER}}11. EPIC HIERARCHIES{{RESET}}
 
 {{COMMENT}}epics can depend on other epics (nested work):{{RESET}}
 {{CMD}}echo '{"title":"Design phase","body":"Architecture docs and API specs"}' | ergo new epic{{RESET}}
@@ -157,7 +142,7 @@ EOF{{RESET}}
 {{COMMENT}}tasks in Build are blocked until Design's tasks are done{{RESET}}
 {{COMMENT}}an epic is "complete" when all its tasks are done|canceled{{RESET}}
 
-{{HEADER}}13. AGENT INTEGRATION{{RESET}}
+{{HEADER}}12. AGENT INTEGRATION{{RESET}}
 
 {{COMMENT}}agents should use --json for structured output:{{RESET}}
 {{CMD}}ergo --json list --ready --as agent{{RESET}}
