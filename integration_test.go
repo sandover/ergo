@@ -277,3 +277,68 @@ func TestSet_MultipleFields(t *testing.T) {
 		t.Errorf("expected claimed_by=agent-1, got %v", task["claimed_by"])
 	}
 }
+
+// TestTitleAndBodyStoredCorrectly verifies that title and body are combined
+// and stored correctly, with title appearing as the first line.
+// This prevents regression of the "list shows body instead of title" bug.
+func TestTitleAndBodyStoredCorrectly(t *testing.T) {
+	dir := setupErgo(t)
+
+	// Create task with distinct title and body
+	stdout, _, code := runErgo(t, dir,
+		`{"title":"My Important Task","body":"This is the detailed body text"}`,
+		"new", "task")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+
+	// Verify via show --json that body contains title as first line
+	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+
+	var task map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
+		t.Fatalf("failed to parse show output: %v", err)
+	}
+
+	body, ok := task["body"].(string)
+	if !ok {
+		t.Fatalf("expected body string, got %T", task["body"])
+	}
+
+	// Body should start with title
+	if !strings.HasPrefix(body, "My Important Task\n") {
+		t.Errorf("body should start with title, got: %q", body)
+	}
+
+	// Body should contain the body text
+	if !strings.Contains(body, "This is the detailed body text") {
+		t.Errorf("body should contain body text, got: %q", body)
+	}
+}
+
+// TestSetOutputsTaskID verifies that 'ergo set' prints the task ID on success.
+func TestSetOutputsTaskID(t *testing.T) {
+	dir := setupErgo(t)
+
+	// Create a task
+	stdout, _, code := runErgo(t, dir, `{"title":"Test","body":"Test body"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+
+	// Set state and verify output
+	stdout, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskID)
+	if code != 0 {
+		t.Fatalf("set failed: exit %d", code)
+	}
+
+	output := strings.TrimSpace(stdout)
+	if output != taskID {
+		t.Errorf("expected set to output %q, got %q", taskID, output)
+	}
+}

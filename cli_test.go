@@ -4,8 +4,8 @@ import (
 	"testing"
 )
 
-// Test extractTitle - pure function for parsing task bodies
-func TestExtractTitle(t *testing.T) {
+// Test firstLine - pure function for extracting title from body
+func TestFirstLine(t *testing.T) {
 	tests := []struct {
 		name     string
 		body     string
@@ -36,11 +36,16 @@ func TestExtractTitle(t *testing.T) {
 			body:     "Title\n\n\n",
 			expected: "Title",
 		},
+		{
+			name:     "whitespace trimmed",
+			body:     "  Title with spaces  \nBody",
+			expected: "Title with spaces",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractTitle(tt.body)
+			result := firstLine(tt.body)
 			if result != tt.expected {
 				t.Errorf("Expected %q, got %q", tt.expected, result)
 			}

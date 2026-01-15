@@ -430,6 +430,12 @@ func sortedTasks(tasks map[string]*Task) []*Task {
 	return values
 }
 
+func sortByCreatedAt(tasks []*Task) {
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+	})
+}
+
 func isReady(task *Task, graph *Graph) bool {
 	if task == nil {
 		return false

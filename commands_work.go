@@ -60,10 +60,10 @@ func runSet(args []string, opts GlobalOptions) error {
 		return err
 	}
 
-	return applySetUpdates(dir, opts, id, updates)
+	return applySetUpdates(dir, opts, id, updates, false)
 }
 
-func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string) error {
+func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, quiet bool) error {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := filepath.Join(dir, "events.jsonl")
 
@@ -84,6 +84,9 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 		delete(updates, "result.summary")
 		// If no other updates, we're done
 		if len(updates) == 0 {
+			if !quiet {
+				fmt.Println(id)
+			}
 			return nil
 		}
 	}
@@ -116,7 +119,13 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 			return fmt.Errorf("unknown keys: %s", strings.Join(unknown, ", "))
 		}
 
-		return appendEvents(eventsPath, events)
+		if err := appendEvents(eventsPath, events); err != nil {
+			return err
+		}
+		if !quiet {
+			fmt.Println(id)
+		}
+		return nil
 	})
 }
 
@@ -377,6 +386,8 @@ func runList(args []string, opts GlobalOptions) error {
 				epics = append(epics, task)
 			}
 		}
+		// Sort epics by creation time
+		sortByCreatedAt(epics)
 	}
 
 	if format == outputFormatJSON {
@@ -387,6 +398,17 @@ func runList(args []string, opts GlobalOptions) error {
 			result["epics"] = buildTaskListItems(epics, graph, repoDir)
 		}
 		return writeJSON(os.Stdout, result)
+	}
+
+	// If --epics only, show simple epic list instead of tree
+	if showEpics && epicID == "" && !readyOnly && !blockedOnly {
+		for _, epic := range epics {
+			fmt.Printf("%s  %s\n", epic.ID, firstLine(epic.Body))
+		}
+		if len(epics) == 0 {
+			fmt.Println("no epics")
+		}
+		return nil
 	}
 
 	// Tree view (human-friendly hierarchical output)
@@ -440,7 +462,7 @@ func runNext(args []string, opts GlobalOptions) error {
 				"epic":   chosen.EpicID,
 				"worker": string(chosen.Worker),
 				"state":  chosen.State,
-				"title":  extractTitle(chosen.Body),
+				"title":  firstLine(chosen.Body),
 				"body":   chosen.Body,
 			})
 		}
@@ -512,7 +534,7 @@ func runNext(args []string, opts GlobalOptions) error {
 			"epic":       chosen.EpicID,
 			"worker":     string(chosen.Worker),
 			"state":      stateDoing,
-			"title":      extractTitle(body),
+			"title":      firstLine(body),
 			"body":       body,
 			"agent_id":   agentID,
 			"claimed_at": formatTime(now),
@@ -522,14 +544,6 @@ func runNext(args []string, opts GlobalOptions) error {
 	// Print title+body
 	fmt.Println(body)
 	return nil
-}
-
-func extractTitle(body string) string {
-	lines := strings.Split(body, "\n")
-	if len(lines) > 0 {
-		return lines[0]
-	}
-	return body
 }
 
 func runShow(args []string, opts GlobalOptions) error {

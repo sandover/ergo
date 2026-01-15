@@ -260,3 +260,14 @@ func (t *TaskInput) GetWorker() Worker {
 	}
 	return workerAny
 }
+
+// GetFullBody returns the combined title + body for storage.
+// The internal model stores everything in Body, with title as first line.
+func (t *TaskInput) GetFullBody() string {
+	title := t.GetTitle()
+	body := t.GetBody()
+	if body == "" {
+		return title
+	}
+	return title + "\n" + body
+}

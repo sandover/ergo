@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-01-15
+
+### Fixed
+- **Title not stored:** Tasks/epics now correctly store title as first line of body (was storing body only, losing title)
+- **`ergo set` silent:** Now prints task ID on success for agent confirmation
+
+### Changed
+- `ergo list --epics` now shows only epics (simple list format) instead of full tree
+- Consolidated duplicate `extractTitle`/`firstLine` functions
+
+### Added
+- "FOR AGENTS" section in `--help` with explicit `--json` guidance
+- Heredoc warning in `--help` for multi-line JSON bodies (prevents shell corruption)
+- Test coverage for title+body storage and set output
+
 ## [0.4.1] - 2026-01-14
 
 ### Added

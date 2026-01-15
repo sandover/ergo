@@ -12,7 +12,7 @@
   set <id>                                update task/epic from JSON stdin
 
   list [--epic <id>] [--ready|--blocked] [--epics]
-                                          list tasks as a hierarchical tree
+                                          list tasks; --epics shows only epics
   show <id>                               show epic or task details
 
   next [--epic <id>] [--peek]             claim oldest READY task, set doing, print it
@@ -35,12 +35,22 @@
   -h, --help                              show help
   -V, --version                           print version
 
+{{HEADER}}FOR AGENTS{{RESET}}
+  Always use --json for structured output (e.g., ergo --json list --ready --as agent).
+  Run `ergo quickstart` for the complete reference including the recommended agent loop.
+
 {{HEADER}}JSON INPUT (stdin only){{RESET}}
   All mutations (new, set) read JSON from stdin:
 
     echo '{"title":"Build auth","body":"Implement login, signup, and token refresh"}' | ergo new epic
     echo '{"title":"Hash passwords","body":"Use bcrypt with cost=12","epic":"OFKSTE","worker":"agent"}' | ergo new task
     echo '{"state":"done"}' | ergo set ABCDEF
+
+  {{BOLD}}Multi-line bodies:{{RESET}} Use a heredoc. Do NOT use echo with \n (shell corrupts it):
+
+    ergo new task <<'EOF'
+    {"title":"My task","body":"Line 1\nLine 2\nLine 3","worker":"agent"}
+    EOF
 
   Schema (same for new and set):
     title           string    required for new; optional for set (non-empty)

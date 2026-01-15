@@ -107,7 +107,7 @@ func runNewEpic(args []string, opts GlobalOptions) error {
 		return err
 	}
 
-	created, err := createTask(dir, opts, "", true, input.GetBody(), workerAny)
+	created, err := createTask(dir, opts, "", true, input.GetFullBody(), workerAny)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func runNewTask(args []string, opts GlobalOptions) error {
 	}
 
 	// Create the task
-	created, err := createTask(dir, opts, input.GetEpic(), false, input.GetBody(), input.GetWorker())
+	created, err := createTask(dir, opts, input.GetEpic(), false, input.GetFullBody(), input.GetWorker())
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func runNewTask(args []string, opts GlobalOptions) error {
 		delete(updates, "worker")
 
 		if len(updates) > 0 {
-			if err := applySetUpdates(dir, opts, created.ID, updates); err != nil {
+			if err := applySetUpdates(dir, opts, created.ID, updates, true); err != nil {
 				return err
 			}
 		}
