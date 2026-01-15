@@ -102,6 +102,19 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 			return fmt.Errorf("unknown task id %s", id)
 		}
 
+		// Epics cannot have state, worker, or claim
+		if isEpic(task) {
+			if _, hasState := updates["state"]; hasState {
+				return errors.New("epics do not have state")
+			}
+			if _, hasWorker := updates["worker"]; hasWorker {
+				return errors.New("epics do not have workers")
+			}
+			if _, hasClaim := updates["claim"]; hasClaim {
+				return errors.New("epics cannot be claimed")
+			}
+		}
+
 		now := time.Now().UTC()
 
 		// Build events using pure function, passing I/O-dependent body resolver
@@ -345,6 +358,7 @@ func runList(args []string, opts GlobalOptions) error {
 	readyOnly := hasFlag(args, "--ready")
 	blockedOnly := hasFlag(args, "--blocked")
 	showEpics := hasFlag(args, "--epics")
+	showAll := hasFlag(args, "--all")
 
 	if readyOnly && blockedOnly {
 		return errors.New("cannot use both --ready and --blocked")
@@ -361,21 +375,21 @@ func runList(args []string, opts GlobalOptions) error {
 		return err
 	}
 
-	// Get tasks (default: all tasks)
-	tasks := listTasks(graph, epicID, readyOnly, blockedOnly, false)
+	// Get tasks - includeAll=true so we get everything, then filter
+	// We need all tasks for tree view hierarchy and JSON output
+	tasks := listTasks(graph, epicID, readyOnly, blockedOnly, true)
 
 	// Filter out epics from tasks list (tasks should only be tasks, not epics)
-	var filteredTasks []*Task
+	var tasksOnly []*Task
 	for _, task := range tasks {
 		if !isEpic(task) {
-			filteredTasks = append(filteredTasks, task)
+			tasksOnly = append(tasksOnly, task)
 		}
 	}
-	tasks = filteredTasks
 
 	// Filter by worker only if --ready or --blocked is set
 	if opts.As != workerAny && (readyOnly || blockedOnly) {
-		tasks = filterTasksByWorker(tasks, opts.As)
+		tasksOnly = filterTasksByWorker(tasksOnly, opts.As)
 	}
 
 	// Handle epics if --epics flag is set
@@ -391,8 +405,9 @@ func runList(args []string, opts GlobalOptions) error {
 	}
 
 	if format == outputFormatJSON {
+		// JSON output includes all tasks (agents filter themselves)
 		result := map[string]interface{}{
-			"tasks": buildTaskListItems(tasks, graph, repoDir),
+			"tasks": buildTaskListItems(tasksOnly, graph, repoDir),
 		}
 		if showEpics {
 			result["epics"] = buildTaskListItems(epics, graph, repoDir)
@@ -413,7 +428,7 @@ func runList(args []string, opts GlobalOptions) error {
 
 	// Tree view (human-friendly hierarchical output)
 	useColor := stdoutIsTTY()
-	renderTreeView(os.Stdout, graph, repoDir, useColor)
+	renderTreeView(os.Stdout, graph, repoDir, useColor, showAll)
 
 	return nil
 }

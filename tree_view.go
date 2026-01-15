@@ -49,12 +49,19 @@ type treeNode struct {
 	children       []*treeNode
 	isReady        bool
 	parentBlockers map[string]bool // blockers inherited from parent epic
+	collapsed      bool            // for done epics: show summary instead of children
+	collapsedCount int             // number of tasks in collapsed epic
 }
 
 // renderTreeView outputs tasks in a hierarchical tree format.
-func renderTreeView(w io.Writer, graph *Graph, repoDir string, useColor bool) {
+func renderTreeView(w io.Writer, graph *Graph, repoDir string, useColor bool, showAll bool) {
 	// Build tree structure: epics contain their tasks, and epics nest by dependency
 	roots := buildTree(graph)
+
+	// Compute derived state for epics and filter/collapse unless --all
+	if !showAll {
+		roots = filterAndCollapseNodes(roots)
+	}
 
 	termWidth := getTerminalWidth()
 
@@ -65,6 +72,87 @@ func renderTreeView(w io.Writer, graph *Graph, repoDir string, useColor bool) {
 	// Summary line
 	stats := computeStats(graph)
 	renderSummary(w, stats, useColor)
+}
+
+// derivedEpicState computes an epic's state from its child tasks.
+// Returns: "done" (all done/canceled), "canceled" (all canceled), "active" (has open work), "empty" (no tasks)
+func derivedEpicState(children []*treeNode) string {
+	if len(children) == 0 {
+		return "empty"
+	}
+	allDone := true
+	allCanceled := true
+	for _, child := range children {
+		if child.task == nil {
+			continue
+		}
+		if child.task.State != stateDone && child.task.State != stateCanceled {
+			allDone = false
+			allCanceled = false
+		}
+		if child.task.State != stateCanceled {
+			allCanceled = false
+		}
+	}
+	if allCanceled {
+		return "canceled"
+	}
+	if allDone {
+		return "done"
+	}
+	return "active"
+}
+
+// filterAndCollapseNodes filters canceled tasks, hides fully-canceled epics,
+// and collapses fully-done epics to a summary line.
+func filterAndCollapseNodes(nodes []*treeNode) []*treeNode {
+	var filtered []*treeNode
+	for _, node := range nodes {
+		// For epics, check derived state BEFORE filtering children
+		if node.task != nil && node.task.IsEpic {
+			state := derivedEpicState(node.children)
+			switch state {
+			case "canceled":
+				// Hide fully-canceled epics
+				continue
+			case "done":
+				// Collapse: mark as collapsed, count tasks, then clear children
+				node.collapsed = true
+				node.collapsedCount = countTasks(node.children)
+				node.children = nil
+				filtered = append(filtered, node)
+				continue
+			case "empty":
+				// Empty epics are shown as-is
+				filtered = append(filtered, node)
+				continue
+			}
+			// "active" epics: filter children and continue
+		}
+
+		// Recursively process children
+		node.children = filterAndCollapseNodes(node.children)
+
+		// Skip canceled tasks
+		if node.task != nil && !node.task.IsEpic && node.task.State == stateCanceled {
+			continue
+		}
+
+		filtered = append(filtered, node)
+	}
+	return filtered
+}
+
+// countTasks counts non-epic tasks in a node tree.
+func countTasks(nodes []*treeNode) int {
+	count := 0
+	for _, node := range nodes {
+		if node.task != nil && !node.task.IsEpic {
+			count++
+		}
+		count += countTasks(node.children)
+	}
+	return count
 }
 
 // taskStats holds aggregate counts for the summary line.
@@ -295,6 +383,15 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 		connector = "└"
 	}
 
+	// Handle collapsed (done) epics
+	if node.collapsed && task.IsEpic {
+		title := firstLine(task.Body)
+		countStr := fmt.Sprintf("[%d tasks]", node.collapsedCount)
+		line := formatCollapsedEpicLine(prefix, connector, task.ID, title, countStr, useColor, termWidth)
+		fmt.Fprintln(w, line)
+		return
+	}
+
 	// Build the line
 	icon := stateIcon(task, node.isReady)
 	title := firstLine(task.Body)
@@ -463,6 +560,63 @@ func visibleLen(s string) int {
 	return length
 }
 
+// formatCollapsedEpicLine formats a done epic as a single collapsed line.
+// Format: ├ ✓ Epic title [3 tasks]                                    EPICID
+func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useColor bool, termWidth int) string {
+	var sb strings.Builder
+
+	// Tree structure (dim)
+	if useColor {
+		sb.WriteString(colorDim)
+	}
+	sb.WriteString(prefix)
+	sb.WriteString(connector)
+	sb.WriteString(" ")
+	if useColor {
+		sb.WriteString(colorReset)
+	}
+
+	// Done icon
+	if useColor {
+		sb.WriteString(colorGreen)
+	}
+	sb.WriteString("✓")
+	sb.WriteString(" ")
+	if useColor {
+		sb.WriteString(colorReset)
+	}
+
+	// Title (dim for done epic)
+	if useColor {
+		sb.WriteString(colorDim)
+	}
+	sb.WriteString(title)
+	sb.WriteString(" ")
+	sb.WriteString(countStr)
+	if useColor {
+		sb.WriteString(colorReset)
+	}
+
+	// Calculate padding for right-aligned ID
+	leftLen := len(prefix) + len(connector) + 1 + 2 + len(title) + 1 + len(countStr)
+	padding := termWidth - leftLen - len(id) - 2
+	if padding < 2 {
+		padding = 2
+	}
+	sb.WriteString(strings.Repeat(" ", padding))
+
+	// ID (dim, right-aligned)
+	if useColor {
+		sb.WriteString(colorDim)
+	}
+	sb.WriteString(id)
+	if useColor {
+		sb.WriteString(colorReset)
+	}
+
+	return sb.String()
+}
+
 // formatTreeLine formats a tree line with optional color.
 // Visual hierarchy: icon → [h] → title → @claimer → [blocker column] → ID (right-aligned)
 func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, annotations []string, blockerAnnotation string, task *Task, isReady bool, useColor bool, termWidth int) string {
@@ -583,11 +737,6 @@ func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, 
 	}
 
 	return sb.String()
-}
-
-// isTaskReady is a simple helper that doesn't need graph (used for color only).
-func isTaskReady(task *Task) bool {
-	return task.State == stateTodo && task.ClaimedBy == ""
 }
 
 // formatResultLine formats the result file line - just arrow and file link.

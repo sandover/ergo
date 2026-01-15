@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -341,5 +342,94 @@ func TestSetOutputsTaskID(t *testing.T) {
 	output := strings.TrimSpace(stdout)
 	if output != taskID {
 		t.Errorf("expected set to output %q, got %q", taskID, output)
+	}
+}
+
+// TestSetRejectsEpicState verifies that epics cannot have state/worker/claim set.
+func TestSetRejectsEpicState(t *testing.T) {
+	dir := setupErgo(t)
+
+	// Create an epic
+	stdout, _, code := runErgo(t, dir, `{"title":"Test Epic"}`, "new", "epic")
+	if code != 0 {
+		t.Fatalf("new epic failed: exit %d", code)
+	}
+	epicID := strings.TrimSpace(stdout)
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+	}{
+		{"state rejected", `{"state":"done"}`, "epics do not have state"},
+		{"worker rejected", `{"worker":"agent"}`, "epics do not have workers"},
+		{"claim rejected", `{"claim":"agent-1"}`, "epics cannot be claimed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, stderr, code := runErgo(t, dir, tt.input, "set", epicID)
+			if code == 0 {
+				t.Errorf("expected error, got success")
+			}
+			if !strings.Contains(stderr, tt.wantErr) {
+				t.Errorf("expected error containing %q, got: %s", tt.wantErr, stderr)
+			}
+		})
+	}
+}
+
+// TestListJSONIncludesAllTasks verifies JSON output includes all tasks (no filtering).
+func TestListJSONIncludesAllTasks(t *testing.T) {
+	dir := setupErgo(t)
+
+	// Create an epic with tasks in various states
+	stdout, _, _ := runErgo(t, dir, `{"title":"Test Epic"}`, "new", "epic")
+	epicID := strings.TrimSpace(stdout)
+
+	// Create tasks: one done, one canceled, one todo
+	stdout, _, _ = runErgo(t, dir, fmt.Sprintf(`{"title":"Done task","epic":"%s"}`, epicID), "new", "task")
+	doneID := strings.TrimSpace(stdout)
+	runErgo(t, dir, `{"state":"done"}`, "set", doneID)
+
+	stdout, _, _ = runErgo(t, dir, fmt.Sprintf(`{"title":"Canceled task","epic":"%s"}`, epicID), "new", "task")
+	canceledID := strings.TrimSpace(stdout)
+	runErgo(t, dir, `{"state":"canceled"}`, "set", canceledID)
+
+	stdout, _, _ = runErgo(t, dir, fmt.Sprintf(`{"title":"Todo task","epic":"%s"}`, epicID), "new", "task")
+	todoID := strings.TrimSpace(stdout)
+
+	// List with JSON format - should include ALL tasks
+	stdout, _, code := runErgo(t, dir, "", "list", "--json")
+	if code != 0 {
+		t.Fatalf("list --json failed: exit %d", code)
+	}
+
+	var result struct {
+		Tasks []map[string]interface{} `json:"tasks"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	// Should have 3 tasks
+	if len(result.Tasks) != 3 {
+		t.Errorf("expected 3 tasks in JSON, got %d", len(result.Tasks))
+	}
+
+	// Verify all task IDs present
+	ids := make(map[string]bool)
+	for _, task := range result.Tasks {
+		ids[task["id"].(string)] = true
+	}
+
+	if !ids[doneID] {
+		t.Error("done task missing from JSON output")
+	}
+	if !ids[canceledID] {
+		t.Error("canceled task missing from JSON output")
+	}
+	if !ids[todoID] {
+		t.Error("todo task missing from JSON output")
 	}
 }
