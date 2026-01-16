@@ -6,7 +6,7 @@ before:
 
 builds:
   - id: ergo
-    main: .
+    main: ./cmd/ergo
     binary: ergo
     env:
       - CGO_ENABLED=0
