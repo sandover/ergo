@@ -156,8 +156,8 @@ func TestFilterAndCollapseNodes(t *testing.T) {
 				task: &Task{ID: "E1", IsEpic: true},
 				children: []*treeNode{
 					{task: &Task{ID: "T1", State: stateDone}},
-					{task: &Task{ID: "T2", State: stateTodo}},      // active
-					{task: &Task{ID: "T3", State: stateCanceled}},  // should be hidden
+					{task: &Task{ID: "T2", State: stateTodo}},     // active
+					{task: &Task{ID: "T3", State: stateCanceled}}, // should be hidden
 				},
 			},
 		}
@@ -238,18 +238,18 @@ func TestFormatTreeLineTruncation(t *testing.T) {
 	// With a narrow terminal width, the annotation should be truncated
 	termWidth := 60
 	line := formatTreeLine(
-		"",                                        // prefix
-		"├",                                       // connector
-		"◐",                                       // icon
-		task.ID,                                   // id
-		"Test task",                               // title
-		"",                                        // workerIndicator
-		[]string{"@" + task.ClaimedBy},            // annotations
-		"",                                        // blockerAnnotation
-		task,                                      // task
-		true,                                      // isReady
-		false,                                     // useColor
-		termWidth,                                 // termWidth
+		"",                             // prefix
+		"├",                            // connector
+		"◐",                            // icon
+		task.ID,                        // id
+		"Test task",                    // title
+		"",                             // workerIndicator
+		[]string{"@" + task.ClaimedBy}, // annotations
+		"",                             // blockerAnnotation
+		task,                           // task
+		true,                           // isReady
+		false,                          // useColor
+		termWidth,                      // termWidth
 	)
 
 	// Line visible length should not exceed terminal width

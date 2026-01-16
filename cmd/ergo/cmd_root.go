@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/spf13/cobra"
 	"github.com/sandover/ergo/internal/ergo"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -26,11 +26,11 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&globalOpts.StartDir, "dir", "", "Run in a specific directory")
 	rootCmd.PersistentFlags().BoolVar(&globalOpts.ReadOnly, "readonly", false, "Run in read-only mode")
 	rootCmd.PersistentFlags().DurationVar(&globalOpts.LockTimeout, "lock-timeout", ergo.DefaultLockTimeout, "Lock wait timeout")
-	
+
 	// --as flag needs custom parsing for validation, but for now we can bind to string and validate in PreRun
 	var asStr string
 	rootCmd.PersistentFlags().StringVar(&asStr, "as", "any", "Filter/act as worker type (any|agent|human)")
-	
+
 	// We need to hook into PreRun to parse 'as' into globalOpts.As
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		w, err := ergo.ParseWorker(asStr)

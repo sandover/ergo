@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/spf13/cobra"
 	"github.com/sandover/ergo/internal/ergo"
+	"github.com/spf13/cobra"
 )
 
 // Wrapper functions to adapt Cobra commands to existing RunX functions
