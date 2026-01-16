@@ -405,21 +405,19 @@ func TestListJSONIncludesAllTasks(t *testing.T) {
 		t.Fatalf("list --json failed: exit %d", code)
 	}
 
-	var result struct {
-		Tasks []map[string]interface{} `json:"tasks"`
-	}
-	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+	var tasks []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &tasks); err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
 
 	// Should have 3 tasks
-	if len(result.Tasks) != 3 {
-		t.Errorf("expected 3 tasks in JSON, got %d", len(result.Tasks))
+	if len(tasks) != 3 {
+		t.Errorf("expected 3 tasks in JSON, got %d", len(tasks))
 	}
 
 	// Verify all task IDs present
 	ids := make(map[string]bool)
-	for _, task := range result.Tasks {
+	for _, task := range tasks {
 		ids[task["id"].(string)] = true
 	}
 

@@ -406,13 +406,13 @@ func runList(args []string, opts GlobalOptions) error {
 
 	if format == outputFormatJSON {
 		// JSON output includes all tasks (agents filter themselves)
-		result := map[string]interface{}{
-			"tasks": buildTaskListItems(tasksOnly, graph, repoDir),
-		}
+		// Return bare array for simplicity and consistency with show --json
 		if showEpics {
-			result["epics"] = buildTaskListItems(epics, graph, repoDir)
+			// When filtering to epics only, return just the epics array
+			return writeJSON(os.Stdout, buildTaskListItems(epics, graph, repoDir))
 		}
-		return writeJSON(os.Stdout, result)
+		// Default: return array of tasks
+		return writeJSON(os.Stdout, buildTaskListItems(tasksOnly, graph, repoDir))
 	}
 
 	// If --epics only, show simple epic list instead of tree
