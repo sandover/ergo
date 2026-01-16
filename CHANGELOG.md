@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-01-15
+
 ### Changed
 - **BREAKING:** `list --json` now returns bare array `[...]` instead of `{"tasks":[...]}`
   - Consistent with `show --json` which returns bare object
   - Simpler pattern: list returns array, show returns object
   - Update your scripts: `jq '.tasks[]'` → `jq '.[]'`
+- Help text now includes JSON OUTPUT section showing list and show response structures
+- Help text compressed for better information density (consolidated examples, compacted schema)
 
 ## [0.4.5] - 2026-01-15
 
