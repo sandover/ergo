@@ -1,0 +1,27 @@
+version: '3'
+
+vars:
+  # Dynamic variable that runs every time the task is called
+  VERSION:
+    sh: git describe --tags --always --dirty
+
+tasks:
+  default:
+    cmds:
+      - task: install
+
+  install:
+    desc: Install ergo globally to $GOPATH/bin with version injection
+    cmds:
+      - go install -ldflags "-X main.version={{.VERSION}}" ./cmd/ergo
+      - echo "Installed ergo {{.VERSION}}"
+
+  build:
+    desc: Build binary locally to ./bin/ergo
+    cmds:
+      - go build -ldflags "-X main.version={{.VERSION}}" -o bin/ergo ./cmd/ergo
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test ./...
