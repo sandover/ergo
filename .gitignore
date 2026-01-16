@@ -1,10 +1,32 @@
+# Local ergo state
 /.ergo/
-/.gocache/
 /.scratch/
+
+# Go build/test artifacts
 /ergo
-*.exe
+/bin/
+ergo-bench
+ergo-test
 *.test
 *.out
+*.prof
+coverage.out
+coverage.html
+
+# Dependencies
+/.gocache/
+/vendor/
+
+# Release artifacts
 /dist/
 /build/
+
+# Temporary files
 /tmp/
+
+# OS/Editor files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.bak
