@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -221,6 +222,97 @@ func TestCreateAndClaim_Atomic(t *testing.T) {
 	}
 	if task["claimed_by"] != "agent-1" {
 		t.Errorf("expected claimed_by=agent-1, got %v", task["claimed_by"])
+	}
+}
+
+func TestCompact_PreservesShowJSON(t *testing.T) {
+	dir := setupErgo(t)
+
+	// Create an epic
+	stdout, _, code := runErgo(t, dir, `{"title":"Epic","body":"Epic"}`, "new", "epic")
+	if code != 0 {
+		t.Fatalf("new epic failed: exit %d", code)
+	}
+	epicID := strings.TrimSpace(stdout)
+
+	// Create two tasks in the epic
+	stdout, _, code = runErgo(t, dir, `{"title":"T1","body":"T1","epic":"`+epicID+`"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task T1 failed: exit %d", code)
+	}
+	t1 := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, `{"title":"T2","body":"T2","epic":"`+epicID+`"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task T2 failed: exit %d", code)
+	}
+	t2 := strings.TrimSpace(stdout)
+
+	// Add dependency T2 depends on T1.
+	_, _, code = runErgo(t, dir, "", "dep", t2, t1)
+	if code != 0 {
+		t.Fatalf("dep %s %s failed: exit %d", t2, t1, code)
+	}
+
+	// Mutate T1 across multiple dimensions.
+	_, stderr, code := runErgo(t, dir, `{"claim":"agent-1","state":"doing","worker":"human","body":"T1\\n\\n## v2\\nmore"}`, "set", t1)
+	if code != 0 {
+		t.Fatalf("set %s failed: exit %d stderr=%q", t1, code, stderr)
+	}
+	_, stderr, code = runErgo(t, dir, `{"state":"error","claim":"agent-1"}`, "set", t1)
+	if code != 0 {
+		t.Fatalf("set %s state=error failed: exit %d stderr=%q", t1, code, stderr)
+	}
+	_, stderr, code = runErgo(t, dir, `{"state":"doing","claim":"agent-1"}`, "set", t1)
+	if code != 0 {
+		t.Fatalf("set %s state=doing failed: exit %d stderr=%q", t1, code, stderr)
+	}
+	_, stderr, code = runErgo(t, dir, `{"state":"done"}`, "set", t1)
+	if code != 0 {
+		t.Fatalf("set %s state=done failed: exit %d stderr=%q", t1, code, stderr)
+	}
+
+	// Attach a result to T1 (ensures evidence fields survive compaction).
+	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0755); err != nil {
+		t.Fatalf("mkdir docs failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "r1.md"), []byte("hello"), 0644); err != nil {
+		t.Fatalf("write result file failed: %v", err)
+	}
+	_, _, code = runErgo(t, dir, `{"result_path":"docs/r1.md","result_summary":"first result"}`, "set", t1)
+	if code != 0 {
+		t.Fatalf("attach result failed: exit %d", code)
+	}
+
+	show := func(id string) map[string]interface{} {
+		t.Helper()
+		stdout, _, code := runErgo(t, dir, "", "show", id, "--json")
+		if code != 0 {
+			t.Fatalf("show %s failed: exit %d", id, code)
+		}
+		var out map[string]interface{}
+		if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+			t.Fatalf("parse show %s output failed: %v", id, err)
+		}
+		return out
+	}
+
+	beforeT1 := show(t1)
+	beforeT2 := show(t2)
+
+	_, _, code = runErgo(t, dir, "", "compact")
+	if code != 0 {
+		t.Fatalf("compact failed: exit %d", code)
+	}
+
+	afterT1 := show(t1)
+	afterT2 := show(t2)
+
+	if !reflect.DeepEqual(beforeT1, afterT1) {
+		t.Fatalf("show --json changed for %s after compact", t1)
+	}
+	if !reflect.DeepEqual(beforeT2, afterT2) {
+		t.Fatalf("show --json changed for %s after compact", t2)
 	}
 }
 

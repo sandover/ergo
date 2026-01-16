@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `compact` command now preserves body updates (previously only kept original body text)
+- `compact` now preserves `updated_at` even when the last event was a no-op (state/body/worker unchanged)
+- `compact` now preserves epic assignment changes (avoids treating the latest epic as the created epic)
 
 ## [0.5.0] - 2026-01-15
 

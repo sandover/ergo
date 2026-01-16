@@ -216,14 +216,17 @@ type Task struct {
 }
 
 type TaskMeta struct {
-	CreatedBody   string
-	CreatedState  string
-	CreatedWorker Worker
-	CreatedAt     time.Time
-	LastStateAt   time.Time
-	LastClaimAt   time.Time
-	LastWorkerAt  time.Time
-	LastBodyAt    time.Time
+	CreatedBody      string
+	CreatedState     string
+	CreatedWorker    Worker
+	CreatedEpicID    string
+	CreatedEpicIDSet bool
+	CreatedAt        time.Time
+	LastStateAt      time.Time
+	LastClaimAt      time.Time
+	LastWorkerAt     time.Time
+	LastBodyAt       time.Time
+	LastEpicAt       time.Time
 }
 
 type Graph struct {

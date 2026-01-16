@@ -47,10 +47,12 @@ func replayEvents(events []Event) (*Graph, error) {
 			}
 			graph.Tasks[data.ID] = task
 			graph.Meta[data.ID] = &TaskMeta{
-				CreatedBody:   data.Body,
-				CreatedState:  data.State,
-				CreatedWorker: taskWorker,
-				CreatedAt:     createdAt,
+				CreatedBody:      data.Body,
+				CreatedState:     data.State,
+				CreatedWorker:    taskWorker,
+				CreatedEpicID:    data.EpicID,
+				CreatedEpicIDSet: true,
+				CreatedAt:        createdAt,
 			}
 		case "state":
 			var data StateEvent
@@ -173,6 +175,10 @@ func replayEvents(events []Event) (*Graph, error) {
 			}
 			task.EpicID = data.EpicID
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
+			meta := graph.Meta[data.ID]
+			if meta != nil {
+				meta.LastEpicAt = ts
+			}
 		case "unclaim":
 			var data UnclaimEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
@@ -237,10 +243,12 @@ func compactEvents(graph *Graph) ([]Event, error) {
 		createdState := task.State
 		createdBody := task.Body
 		createdWorker := task.Worker
+		createdEpicID := task.EpicID
 		var lastStateAt time.Time
 		var lastClaimAt time.Time
 		var lastWorkerAt time.Time
 		var lastBodyAt time.Time
+		var lastEpicAt time.Time
 		if meta != nil {
 			if !meta.CreatedAt.IsZero() {
 				createdAt = meta.CreatedAt
@@ -254,16 +262,20 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			if meta.CreatedWorker != "" {
 				createdWorker = meta.CreatedWorker
 			}
+			if meta.CreatedEpicIDSet {
+				createdEpicID = meta.CreatedEpicID
+			}
 			lastStateAt = meta.LastStateAt
 			lastClaimAt = meta.LastClaimAt
 			lastWorkerAt = meta.LastWorkerAt
 			lastBodyAt = meta.LastBodyAt
+			lastEpicAt = meta.LastEpicAt
 		}
 
 		payload := NewTaskEvent{
 			ID:        task.ID,
 			UUID:      task.UUID,
-			EpicID:    task.EpicID,
+			EpicID:    createdEpicID,
 			State:     createdState,
 			Body:      createdBody,
 			Worker:    string(createdWorker),
@@ -279,7 +291,7 @@ func compactEvents(graph *Graph) ([]Event, error) {
 		}
 		events = append(events, event)
 
-		if task.Body != createdBody {
+		if task.Body != createdBody || (!lastBodyAt.IsZero() && lastBodyAt.After(createdAt)) {
 			ts := pickTime(lastBodyAt, task.UpdatedAt)
 			bodyEvent, err := newEvent("body", ts, BodyUpdateEvent{
 				ID:   task.ID,
@@ -292,17 +304,30 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			events = append(events, bodyEvent)
 		}
 
-		if task.State != createdState {
-			ts := pickTime(lastStateAt, task.UpdatedAt)
-			stateEvent, err := newEvent("state", ts, StateEvent{
-				ID:       task.ID,
-				NewState: task.State,
-				TS:       formatTime(ts),
+		if !task.IsEpic && (task.EpicID != createdEpicID || (!lastEpicAt.IsZero() && lastEpicAt.After(createdAt))) {
+			ts := pickTime(lastEpicAt, task.UpdatedAt)
+			epicEvent, err := newEvent("epic", ts, EpicAssignEvent{
+				ID:     task.ID,
+				EpicID: task.EpicID,
+				TS:     formatTime(ts),
 			})
 			if err != nil {
 				return nil, err
 			}
-			events = append(events, stateEvent)
+			events = append(events, epicEvent)
+		}
+
+		if (task.Worker != createdWorker || (!lastWorkerAt.IsZero() && lastWorkerAt.After(createdAt))) && task.Worker != "" {
+			ts := pickTime(lastWorkerAt, task.UpdatedAt)
+			workerEvent, err := newEvent("worker", ts, WorkerEvent{
+				ID:     task.ID,
+				Worker: string(task.Worker),
+				TS:     formatTime(ts),
+			})
+			if err != nil {
+				return nil, err
+			}
+			events = append(events, workerEvent)
 		}
 
 		if task.ClaimedBy != "" {
@@ -318,17 +343,17 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			events = append(events, claimEvent)
 		}
 
-		if task.Worker != createdWorker && task.Worker != "" {
-			ts := pickTime(lastWorkerAt, task.UpdatedAt)
-			workerEvent, err := newEvent("worker", ts, WorkerEvent{
-				ID:     task.ID,
-				Worker: string(task.Worker),
-				TS:     formatTime(ts),
+		if task.State != createdState || (!lastStateAt.IsZero() && lastStateAt.After(createdAt)) {
+			ts := pickTime(lastStateAt, task.UpdatedAt)
+			stateEvent, err := newEvent("state", ts, StateEvent{
+				ID:       task.ID,
+				NewState: task.State,
+				TS:       formatTime(ts),
 			})
 			if err != nil {
 				return nil, err
 			}
-			events = append(events, workerEvent)
+			events = append(events, stateEvent)
 		}
 
 		// Emit result events (in chronological order, oldest first)
