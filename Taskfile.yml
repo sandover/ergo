@@ -1,7 +1,6 @@
 version: '3'
 
 vars:
-  # Dynamic variable that runs every time the task is called
   VERSION:
     sh: git describe --tags --always --dirty
 
@@ -11,7 +10,7 @@ tasks:
       - task: install
 
   install:
-    desc: Install ergo globally to $GOPATH/bin with version injection
+    desc: Install ergo globally to $GOPATH/bin
     cmds:
       - go install -ldflags "-X main.version={{.VERSION}}" ./cmd/ergo
       - echo "Installed ergo {{.VERSION}}"
@@ -19,9 +18,46 @@ tasks:
   build:
     desc: Build binary locally to ./bin/ergo
     cmds:
+      - mkdir -p bin
       - go build -ldflags "-X main.version={{.VERSION}}" -o bin/ergo ./cmd/ergo
 
-  test:
-    desc: Run all tests
+  run:
+    desc: Run ergo from source (pass args like 'task run -- list')
     cmds:
-      - go test ./...
+      - go run ./cmd/ergo {{.CLI_ARGS}}
+
+  test:
+    desc: Run all tests with race detection
+    cmds:
+      - go test -race ./...
+
+  cover:
+    desc: Run tests with coverage report
+    cmds:
+      - go test -race -coverprofile=coverage.out ./...
+      - go tool cover -func=coverage.out
+
+  bench:
+    desc: Run performance benchmarks
+    cmds:
+      - go test -bench=. -benchmem ./...
+
+  fmt:
+    desc: Format all Go code
+    cmds:
+      - gofmt -w .
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  lint:
+    desc: Run golangci-lint (requires installation)
+    cmds:
+      - golangci-lint run
+
+  clean:
+    desc: Remove build artifacts and temporary files
+    cmds:
+      - rm -rf bin/ dist/ coverage.out
