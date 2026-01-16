@@ -62,22 +62,22 @@ func BenchmarkNextClaim(b *testing.B) {
 	}
 }
 
-// TestPerfRegression guards against performance regressions.
+// TestPerformance guards against performance regressions.
 // These are NOT benchmarks — they're tests that fail if operations exceed
 // generous upper bounds. Thresholds are 10x the expected time to allow for
 // slow CI machines while still catching major regressions.
 //
 // Expected: 100 tasks ~3ms, 1000 tasks ~15ms (per README claims)
 // Thresholds: 100 tasks <100ms, 1000 tasks <500ms
-func TestPerfRegression_List100Tasks(t *testing.T) {
+func TestPerformance_List100Tasks(t *testing.T) {
 	assertListUnder(t, 100, 100*time.Millisecond)
 }
 
-func TestPerfRegression_List1000Tasks(t *testing.T) {
+func TestPerformance_List1000Tasks(t *testing.T) {
 	assertListUnder(t, 1000, 500*time.Millisecond)
 }
 
-func TestPerfRegression_NextClaim(t *testing.T) {
+func TestPerformance_NextClaim(t *testing.T) {
 	dir := t.TempDir()
 	ergo := buildErgoBinaryForTest(t)
 

@@ -33,17 +33,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-
-      - name: Check formatting
-        run: |
-          if [ -n "$(gofmt -l .)" ]; then
-            echo "Code is not formatted. Run 'gofmt -w .'"
-            gofmt -d .
-            exit 1
-          fi
-
-      - name: Vet
-        run: go vet ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
 
   build:
     runs-on: ubuntu-latest
