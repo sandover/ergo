@@ -225,3 +225,46 @@ func TestRenderCollapsedEpic(t *testing.T) {
 		t.Errorf("expected '[5 tasks]' in output, got: %s", output)
 	}
 }
+
+// TestFormatTreeLineTruncation verifies that long lines are truncated to prevent wrapping.
+func TestFormatTreeLineTruncation(t *testing.T) {
+	task := &Task{
+		ID:        "ABC123",
+		Body:      "Test task",
+		State:     stateDoing,
+		ClaimedBy: "very-long-username@very-long-hostname.example.com",
+	}
+
+	// With a narrow terminal width, the annotation should be truncated
+	termWidth := 60
+	line := formatTreeLine(
+		"",                                        // prefix
+		"├",                                       // connector
+		"◐",                                       // icon
+		task.ID,                                   // id
+		"Test task",                               // title
+		"",                                        // workerIndicator
+		[]string{"@" + task.ClaimedBy},            // annotations
+		"",                                        // blockerAnnotation
+		task,                                      // task
+		true,                                      // isReady
+		false,                                     // useColor
+		termWidth,                                 // termWidth
+	)
+
+	// Line visible length should not exceed terminal width
+	lineVisLen := visibleLen(line)
+	if lineVisLen > termWidth {
+		t.Errorf("visible line length %d exceeds terminal width %d: %q", lineVisLen, termWidth, line)
+	}
+
+	// The line should contain the ID
+	if !strings.Contains(line, "ABC123") {
+		t.Errorf("line should contain task ID, got: %q", line)
+	}
+
+	// The annotation should be truncated (contains ellipsis)
+	if !strings.Contains(line, "…") {
+		t.Errorf("expected truncation ellipsis in line: %q", line)
+	}
+}

@@ -560,6 +560,43 @@ func visibleLen(s string) int {
 	return length
 }
 
+// truncateToWidth truncates a string to maxWidth visible characters, adding ellipsis if truncated.
+func truncateToWidth(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if maxWidth <= 1 {
+		return "…"
+	}
+	if visibleLen(s) <= maxWidth {
+		return s
+	}
+	// Build truncated string rune by rune
+	var result []rune
+	length := 0
+	inEscape := false
+	for _, r := range s {
+		if r == '\033' {
+			inEscape = true
+			result = append(result, r)
+			continue
+		}
+		if inEscape {
+			result = append(result, r)
+			if r == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		if length >= maxWidth-1 {
+			break
+		}
+		result = append(result, r)
+		length++
+	}
+	return string(result) + "…"
+}
+
 // formatCollapsedEpicLine formats a done epic as a single collapsed line.
 // Format: ├ ✓ Epic title [3 tasks]                                    EPICID
 func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useColor bool, termWidth int) string {
@@ -619,7 +656,52 @@ func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useC
 
 // formatTreeLine formats a tree line with optional color.
 // Visual hierarchy: icon → [h] → title → @claimer → [blocker column] → ID (right-aligned)
+// Ensures the line never exceeds termWidth by truncating content as needed.
 func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, annotations []string, blockerAnnotation string, task *Task, isReady bool, useColor bool, termWidth int) string {
+	// Calculate fixed overhead to determine available space for content
+	// Use visible lengths for Unicode characters (prefix/connector may have box-drawing chars)
+	prefixVisLen := visibleLen(prefix) + visibleLen(connector) + 1 // prefix + connector + space
+	iconLen := 0
+	if icon != "" {
+		iconLen = 2 // icon + space (icon is 1 visible char)
+	}
+	workerLen := 0
+	if workerIndicator != "" {
+		workerLen = len(workerIndicator) + 1 // indicator + space (ASCII)
+	}
+	idLen := len(id) + 2 // ID + minimum 2-space padding before it (ASCII)
+
+	// Available space for title + annotations + blocker
+	overhead := prefixVisLen + iconLen + workerLen + idLen
+	availableSpace := termWidth - overhead
+	if availableSpace < 10 {
+		availableSpace = 10 // minimum for readability
+	}
+
+	// Prepare annotation string
+	annotationStr := ""
+	if len(annotations) > 0 {
+		annotationStr = "  " + strings.Join(annotations, "  ")
+	}
+
+	// Calculate how much space title + annotations would take (visible length)
+	contentLen := visibleLen(title) + visibleLen(annotationStr)
+
+	// Truncate if needed, prioritizing title over annotations
+	if contentLen > availableSpace {
+		// First try to truncate annotations
+		maxAnnotation := availableSpace - visibleLen(title) - 2 // 2 for "  " separator
+		if maxAnnotation > 5 && len(annotationStr) > 0 {
+			// Truncate annotations to maxAnnotation visible chars
+			annotationStr = truncateToWidth(annotationStr, maxAnnotation)
+		} else if visibleLen(title) > availableSpace {
+			// Must truncate title too
+			annotationStr = "" // drop annotations entirely
+			title = truncateToWidth(title, availableSpace)
+		}
+	}
+
+	// Now build the string
 	var sb strings.Builder
 
 	// Tree structure (dim)
@@ -672,25 +754,23 @@ func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, 
 	}
 
 	// Annotations (dim) - like @claimer - immediately after title
-	if len(annotations) > 0 {
-		sb.WriteString("  ")
+	if annotationStr != "" {
 		if useColor {
 			sb.WriteString(colorDim)
 		}
-		sb.WriteString(strings.Join(annotations, "  "))
+		sb.WriteString(annotationStr)
 		if useColor {
 			sb.WriteString(colorReset)
 		}
 	}
 
-	// Blocker annotation at a fixed column (about 60% of terminal width)
-	// This creates a visual column for ⧗ to align
-	blockerCol := termWidth * 55 / 100 // blocker column at ~55% of width
-	idCol := termWidth - len(id) - 2   // ID ends 2 chars from right edge
+	// Blocker annotation - skip if no space
+	idCol := termWidth - len(id) - 2
+	currentLen := visibleLen(sb.String())
+	spaceForBlocker := idCol - currentLen - 4 // need some padding
 
-	if blockerAnnotation != "" {
-		// Pad to blocker column
-		currentLen := visibleLen(sb.String())
+	if blockerAnnotation != "" && spaceForBlocker > 5 {
+		blockerCol := termWidth * 55 / 100
 		paddingToBlocker := blockerCol - currentLen
 		if paddingToBlocker > 1 {
 			sb.WriteString(strings.Repeat(" ", paddingToBlocker))
@@ -698,15 +778,15 @@ func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, 
 			sb.WriteString("  ")
 		}
 
-		// Truncate blocker text if it would collide with ID
-		maxBlockerLen := idCol - blockerCol - 2
+		// Truncate blocker text if needed
+		maxBlockerLen := idCol - visibleLen(sb.String()) - 2
 		if useColor {
 			sb.WriteString(colorDim)
 		}
 		if len(blockerAnnotation) > maxBlockerLen && maxBlockerLen > 3 {
 			sb.WriteString(blockerAnnotation[:maxBlockerLen-1])
 			sb.WriteString("…")
-		} else {
+		} else if maxBlockerLen > 0 {
 			sb.WriteString(blockerAnnotation)
 		}
 		if useColor {
@@ -715,17 +795,16 @@ func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, 
 	}
 
 	// ID (right-aligned; white for epics, dim for tasks)
-	currentLen := visibleLen(sb.String())
+	currentLen = visibleLen(sb.String())
 	padding := idCol - currentLen
 
 	if padding > 0 {
 		sb.WriteString(strings.Repeat(" ", padding))
 	} else {
-		sb.WriteString("  ") // minimum spacing if line is too long
+		sb.WriteString("  ") // minimum spacing
 	}
 	if useColor {
 		if task.IsEpic {
-			// White/normal for epic IDs - they stand out more
 			sb.WriteString(colorReset)
 		} else {
 			sb.WriteString(colorDim)

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Tree view: Long annotations (e.g., `@claimer` with long hostname) no longer cause task IDs to wrap to next line
+
 ## [0.4.4] - 2026-01-15
 
 ### Changed
