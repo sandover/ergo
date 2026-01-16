@@ -263,3 +263,53 @@ func TestResultCompaction(t *testing.T) {
 		t.Errorf("second result should be 'First result', got %q", task.Results[1].Summary)
 	}
 }
+
+func TestCompactionPreservesBodyUpdates(t *testing.T) {
+	// Create graph with body updates
+	now := time.Now().UTC()
+	graph := &Graph{
+		Tasks: map[string]*Task{
+			"T1": {
+				ID:        "T1",
+				UUID:      "uuid-1",
+				State:     stateTodo,
+				Body:      "Fix npx caching - use @latest in docs\n\n## Problem\nThe docs show `npx superconnect` which uses cached versions...",
+				Worker:    workerAny,
+				CreatedAt: now,
+				UpdatedAt: now.Add(time.Minute),
+			},
+		},
+		Deps:  map[string]map[string]struct{}{},
+		RDeps: map[string]map[string]struct{}{},
+		Meta: map[string]*TaskMeta{
+			"T1": {
+				CreatedBody:  "Fix npx caching - use @latest in docs",
+				CreatedState: stateTodo,
+				CreatedAt:    now,
+				LastBodyAt:   now.Add(time.Minute),
+			},
+		},
+	}
+
+	// Compact and replay
+	events, err := compactEvents(graph)
+	if err != nil {
+		t.Fatalf("compactEvents failed: %v", err)
+	}
+
+	replayedGraph, err := replayEvents(events)
+	if err != nil {
+		t.Fatalf("replayEvents failed: %v", err)
+	}
+
+	task := replayedGraph.Tasks["T1"]
+	if task == nil {
+		t.Fatal("task T1 not found after replay")
+	}
+
+	// Should preserve the full body with markdown
+	expectedBody := "Fix npx caching - use @latest in docs\n\n## Problem\nThe docs show `npx superconnect` which uses cached versions..."
+	if task.Body != expectedBody {
+		t.Errorf("body not preserved after compaction.\nExpected: %q\nGot: %q", expectedBody, task.Body)
+	}
+}

@@ -154,6 +154,10 @@ func replayEvents(events []Event) (*Graph, error) {
 			}
 			task.Body = data.Body
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
+			meta := graph.Meta[data.ID]
+			if meta != nil {
+				meta.LastBodyAt = ts
+			}
 		case "epic":
 			var data EpicAssignEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
@@ -236,6 +240,7 @@ func compactEvents(graph *Graph) ([]Event, error) {
 		var lastStateAt time.Time
 		var lastClaimAt time.Time
 		var lastWorkerAt time.Time
+		var lastBodyAt time.Time
 		if meta != nil {
 			if !meta.CreatedAt.IsZero() {
 				createdAt = meta.CreatedAt
@@ -252,6 +257,7 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			lastStateAt = meta.LastStateAt
 			lastClaimAt = meta.LastClaimAt
 			lastWorkerAt = meta.LastWorkerAt
+			lastBodyAt = meta.LastBodyAt
 		}
 
 		payload := NewTaskEvent{
@@ -272,6 +278,19 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			return nil, err
 		}
 		events = append(events, event)
+
+		if task.Body != createdBody {
+			ts := pickTime(lastBodyAt, task.UpdatedAt)
+			bodyEvent, err := newEvent("body", ts, BodyUpdateEvent{
+				ID:   task.ID,
+				Body: task.Body,
+				TS:   formatTime(ts),
+			})
+			if err != nil {
+				return nil, err
+			}
+			events = append(events, bodyEvent)
+		}
 
 		if task.State != createdState {
 			ts := pickTime(lastStateAt, task.UpdatedAt)

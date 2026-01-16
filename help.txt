@@ -38,7 +38,7 @@
 
 {{HEADER}}FOR AGENTS{{RESET}}
   {{BOLD}}Always use --json for structured output.{{RESET}}  Use printf for JSON input (not heredocs).
-  Run `ergo quickstart` for complete reference.
+  Run `ergo quickstart` for complete reference and workflow.
 
 {{HEADER}}JSON INPUT (stdin only){{RESET}}
   All mutations (new, set) read JSON from stdin:

@@ -223,6 +223,7 @@ type TaskMeta struct {
 	LastStateAt   time.Time
 	LastClaimAt   time.Time
 	LastWorkerAt  time.Time
+	LastBodyAt    time.Time
 }
 
 type Graph struct {

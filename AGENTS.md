@@ -11,3 +11,10 @@
 # Other Guidance
 - don't use /tmp, it prompts me for permissions.  Prefer tmp/ or .scratch/ in the repo
 - When the code changes, the docs (such as README, code comments, --help, and "ergo quickstart") must also change to reflect. There must be total internal coherence in the project at all times.
+
+# Project goals
+- --help text is incredibly important because it's the front door for agents (our primary users). It seeks to be:
+    - as succinct and tight as we can get away with
+    - 100% coverage of options
+    - beautifully formatted, a great example of information design
+    - nutrient-dense for agents -- if it's the only thing they read, they can operate. if they go and read the quickstart, so much the better, they have a deeper understanding.
