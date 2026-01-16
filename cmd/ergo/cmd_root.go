@@ -44,6 +44,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&globalOpts.AgentID, "agent", "", "Agent ID for claims (default: hostname)")
 	rootCmd.PersistentFlags().BoolVarP(&globalOpts.Quiet, "quiet", "q", false, "Suppress output")
 	rootCmd.PersistentFlags().BoolVarP(&globalOpts.Verbose, "verbose", "v", false, "Verbose output")
+
+	// Set the version to enable --version flag
+	rootCmd.Version = version
 }
 
 func execute() {
