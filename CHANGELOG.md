@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+
+## [0.5.1] - 2026-01-16
+
+### Fixed
 - `compact` command now preserves body updates (previously only kept original body text)
 - `compact` now preserves `updated_at` even when the last event was a no-op (state/body/worker unchanged)
 - `compact` now preserves epic assignment changes (avoids treating the latest epic as the created epic)
@@ -126,7 +130,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/sandover/ergo/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/sandover/ergo/compare/v0.4.5...v0.5.0
 [0.4.0]: https://github.com/sandover/ergo/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/sandover/ergo/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sandover/ergo/compare/v0.2.0...v0.3.0
