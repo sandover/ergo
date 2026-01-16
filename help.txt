@@ -37,25 +37,25 @@
   -V, --version                           print version
 
 {{HEADER}}FOR AGENTS{{RESET}}
-  Use --json for structured output.  Use printf for JSON input (heredocs fail in
-  programmatic terminals).  Run `ergo quickstart` for the full reference.
+  {{BOLD}}Always use --json for structured output.{{RESET}}  Use printf for JSON input (not heredocs).
+  Run `ergo quickstart` for complete reference.
 
 {{HEADER}}JSON INPUT (stdin only){{RESET}}
   All mutations (new, set) read JSON from stdin:
 
-    printf '%s' '{"title":"Fix bug"}' | ergo new task
-    printf '%s' '{"title":"Auth","body":"Implement login"}' | ergo new epic
+    printf '%s' '{"title":"Auth","body":"Implement login"}' | ergo new task
     printf '%s' '{"state":"done"}' | ergo set TASKID
 
-  Schema (same for new and set):
-    title           string    required for new; optional for set
-    body            string    optional; if omitted, title is used as body
-    epic            string    optional; epic ID or "" to unassign
-    worker          string    optional; any|agent|human
-    state           string    optional; todo|doing|done|blocked|canceled|error
-    claim           string    optional; agent ID or "" to unclaim
-    result_path     string    optional; path to result file (requires result_summary)
-    result_summary  string    optional; one-line summary (requires result_path)
+  Fields (all strings):
+    title           required for new, optional for set
+    body            optional (defaults to title if omitted)
+    epic            epic ID or "" to unassign
+    worker          any|agent|human
+    state           todo|doing|done|blocked|canceled|error
+    claim           agent ID or "" to unclaim
+    result_path     file path (requires result_summary)
+    result_summary  one-liner (requires result_path)
 
-  Validation errors return structured JSON:
-    {"error":"validation_failed","message":"...","missing":["title"],"invalid":{...}}
+{{HEADER}}JSON OUTPUT (--json flag){{RESET}}
+  list → array:   [{id, title, state, ready, blocked, claimed_by, ...}]
+  show → object:  {id, body, deps, rdeps, state, results, ...}
