@@ -1,5 +1,5 @@
 // Stdin/stdout detection helpers for CLI behavior.
-package main
+package ergo
 
 import (
 	"os"

@@ -1,5 +1,5 @@
 // Tree view rendering for human-friendly list output.
-package main
+package ergo
 
 import (
 	"fmt"

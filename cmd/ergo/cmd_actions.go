@@ -2,9 +2,10 @@ package main
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/sandover/ergo/internal/ergo"
 )
 
-// Wrapper functions to adapt Cobra commands to existing runX functions
+// Wrapper functions to adapt Cobra commands to existing RunX functions
 // or implement new Cobra logic while reusing existing business logic.
 
 func init() {
@@ -40,7 +41,7 @@ var initCmd = &cobra.Command{
 	Short: "Initialize ergo in the current (or specified) directory",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runInit(args, globalOpts)
+		return ergo.RunInit(args, globalOpts)
 	},
 }
 
@@ -59,7 +60,7 @@ var newTaskCmd = &cobra.Command{
 		if formatJSON {
 			effectiveArgs = append(effectiveArgs, "--json")
 		}
-		return runNewTask(effectiveArgs, globalOpts)
+		return ergo.RunNewTask(effectiveArgs, globalOpts)
 	},
 }
 
@@ -72,7 +73,7 @@ var newEpicCmd = &cobra.Command{
 		if formatJSON {
 			effectiveArgs = append(effectiveArgs, "--json")
 		}
-		return runNewEpic(effectiveArgs, globalOpts)
+		return ergo.RunNewEpic(effectiveArgs, globalOpts)
 	},
 }
 
@@ -106,7 +107,7 @@ var listCmd = &cobra.Command{
 		if f, _ := cmd.Flags().GetBool("all"); f {
 			effectiveArgs = append(effectiveArgs, "--all")
 		}
-		return runList(effectiveArgs, globalOpts)
+		return ergo.RunList(effectiveArgs, globalOpts)
 	},
 }
 
@@ -132,7 +133,7 @@ var showCmd = &cobra.Command{
 		if f, _ := cmd.Flags().GetBool("short"); f {
 			effectiveArgs = append(effectiveArgs, "--short")
 		}
-		return runShow(effectiveArgs, globalOpts)
+		return ergo.RunShow(effectiveArgs, globalOpts)
 	},
 }
 
@@ -156,7 +157,7 @@ var nextCmd = &cobra.Command{
 		if f, _ := cmd.Flags().GetString("epic"); f != "" {
 			effectiveArgs = append(effectiveArgs, "--epic", f)
 		}
-		return runNext(effectiveArgs, globalOpts)
+		return ergo.RunNext(effectiveArgs, globalOpts)
 	},
 }
 
@@ -176,7 +177,7 @@ var setCmd = &cobra.Command{
 		if f, _ := cmd.Flags().GetBool("json"); f {
 			effectiveArgs = append(effectiveArgs, "--json")
 		}
-		return runSet(effectiveArgs, globalOpts)
+		return ergo.RunSet(effectiveArgs, globalOpts)
 	},
 }
 
@@ -189,7 +190,7 @@ var depCmd = &cobra.Command{
 	Use:   "dep <A> <B> | dep rm <A> <B>",
 	Short: "Manage dependencies (A depends on B)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runDep(args, globalOpts)
+		return ergo.RunDep(args, globalOpts)
 	},
 }
 
@@ -202,7 +203,7 @@ var whereCmd = &cobra.Command{
 		if f, _ := cmd.Flags().GetBool("json"); f {
 			effectiveArgs = append(effectiveArgs, "--json")
 		}
-		return runWhere(effectiveArgs, globalOpts)
+		return ergo.RunWhere(effectiveArgs, globalOpts)
 	},
 }
 
@@ -215,7 +216,7 @@ var compactCmd = &cobra.Command{
 	Use:   "compact",
 	Short: "Compact the event log",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runCompact(args, globalOpts)
+		return ergo.RunCompact(args, globalOpts)
 	},
 }
 
@@ -224,7 +225,7 @@ var quickstartCmd = &cobra.Command{
 	Use:   "quickstart",
 	Short: "Show quickstart guide",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runQuickstart(args)
+		return ergo.RunQuickstart(args)
 	},
 }
 

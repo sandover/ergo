@@ -6,7 +6,7 @@
 //	echo '{"title":"Auth system"}' | ergo new epic
 //
 // See json_input.go for the unified TaskInput schema.
-package main
+package ergo
 
 import (
 	"errors"
@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 )
 
-func runInit(args []string, opts GlobalOptions) error {
+func RunInit(args []string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "init"); err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func runInit(args []string, opts GlobalOptions) error {
 	return nil
 }
 
-func runNew(args []string, opts GlobalOptions) error {
+func RunNew(args []string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "new"); err != nil {
 		return err
 	}
@@ -71,15 +71,15 @@ func runNew(args []string, opts GlobalOptions) error {
 	subcommand := args[0]
 	switch subcommand {
 	case "epic":
-		return runNewEpic(args[1:], opts)
+		return RunNewEpic(args[1:], opts)
 	case "task":
-		return runNewTask(args[1:], opts)
+		return RunNewTask(args[1:], opts)
 	default:
 		return fmt.Errorf("unknown subcommand: %s (use 'epic' or 'task')", subcommand)
 	}
 }
 
-func runNewEpic(args []string, opts GlobalOptions) error {
+func RunNewEpic(args []string, opts GlobalOptions) error {
 	format, _, err := parseOutputFormatAndArgs(args, outputFormatText)
 	if err != nil {
 		return err
@@ -119,7 +119,7 @@ func runNewEpic(args []string, opts GlobalOptions) error {
 	return nil
 }
 
-func runNewTask(args []string, opts GlobalOptions) error {
+func RunNewTask(args []string, opts GlobalOptions) error {
 	format, _, err := parseOutputFormatAndArgs(args, outputFormatText)
 	if err != nil {
 		return err

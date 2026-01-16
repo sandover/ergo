@@ -5,7 +5,7 @@
 //	echo '{"state":"done"}' | ergo set T-xyz
 //
 // See json_input.go for the unified TaskInput schema.
-package main
+package ergo
 
 import (
 	"errors"
@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-func runSet(args []string, opts GlobalOptions) error {
+func RunSet(args []string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "set"); err != nil {
 		return err
 	}
@@ -212,7 +212,7 @@ func buildSetEvents(id string, task *Task, updates map[string]string, now time.T
 
 	// Handle worker
 	if workerStr, ok := remainingUpdates["worker"]; ok {
-		worker, err := parseWorker(workerStr)
+		worker, err := ParseWorker(workerStr)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -317,7 +317,7 @@ func identityBodyResolver(value string) (string, error) {
 	return value, nil
 }
 
-func runDep(args []string, opts GlobalOptions) error {
+func RunDep(args []string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "dep"); err != nil {
 		return err
 	}
@@ -344,7 +344,7 @@ func runDep(args []string, opts GlobalOptions) error {
 	return errors.New(usage)
 }
 
-func runList(args []string, opts GlobalOptions) error {
+func RunList(args []string, opts GlobalOptions) error {
 	format, err := parseOutputFormat(args, outputFormatText)
 	if err != nil {
 		return err
@@ -433,7 +433,7 @@ func runList(args []string, opts GlobalOptions) error {
 	return nil
 }
 
-func runNext(args []string, opts GlobalOptions) error {
+func RunNext(args []string, opts GlobalOptions) error {
 	peek := hasFlag(args, "--peek")
 
 	if !peek {
@@ -563,7 +563,7 @@ func runNext(args []string, opts GlobalOptions) error {
 	return nil
 }
 
-func runShow(args []string, opts GlobalOptions) error {
+func RunShow(args []string, opts GlobalOptions) error {
 	id, format, short, err := parseShowArgs(args)
 	if err != nil {
 		return err
@@ -651,7 +651,7 @@ func runShow(args []string, opts GlobalOptions) error {
 	return nil
 }
 
-func runCompact(args []string, opts GlobalOptions) error {
+func RunCompact(args []string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "compact"); err != nil {
 		return err
 	}
@@ -685,7 +685,7 @@ func runCompact(args []string, opts GlobalOptions) error {
 	})
 }
 
-func runWhere(args []string, opts GlobalOptions) error {
+func RunWhere(args []string, opts GlobalOptions) error {
 	format, remaining, err := parseOutputFormatAndArgs(args, outputFormatText)
 	if err != nil {
 		return err

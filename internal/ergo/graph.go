@@ -1,5 +1,5 @@
 // Event replay, compaction, and readiness/blocking logic.
-package main
+package ergo
 
 import (
 	"encoding/json"
@@ -30,7 +30,7 @@ func replayEvents(events []Event) (*Graph, error) {
 			if err != nil {
 				return nil, err
 			}
-			taskWorker, err := parseWorker(data.Worker)
+			taskWorker, err := ParseWorker(data.Worker)
 			if err != nil {
 				return nil, err
 			}
@@ -131,7 +131,7 @@ func replayEvents(events []Event) (*Graph, error) {
 			if err != nil {
 				return nil, err
 			}
-			taskWorker, err := parseWorker(data.Worker)
+			taskWorker, err := ParseWorker(data.Worker)
 			if err != nil {
 				return nil, err
 			}

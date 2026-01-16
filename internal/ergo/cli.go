@@ -1,5 +1,5 @@
 // CLI option and flag parsing helpers.
-package main
+package ergo
 
 import (
 	"errors"
@@ -11,7 +11,7 @@ import (
 
 func parseGlobalOptions(args []string) (GlobalOptions, []string, error) {
 	opts := GlobalOptions{
-		LockTimeout: defaultLockTimeout,
+		LockTimeout: DefaultLockTimeout,
 		As:          workerAny,
 	}
 
@@ -50,7 +50,7 @@ func parseGlobalOptions(args []string) (GlobalOptions, []string, error) {
 			if i+1 >= len(args) {
 				return GlobalOptions{}, nil, fmt.Errorf("missing value for %s", arg)
 			}
-			as, err := parseWorker(args[i+1])
+			as, err := ParseWorker(args[i+1])
 			if err != nil {
 				return GlobalOptions{}, nil, err
 			}

@@ -26,7 +26,7 @@
 //
 // Together, --help + quickstart must provide 100% of what any user or agent needs.
 // There is no separate man page, wiki, or external docs to maintain.
-package main
+package ergo
 
 import (
 	_ "embed"

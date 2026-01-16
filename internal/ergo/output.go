@@ -1,5 +1,5 @@
 // JSON output shapes and list-item formatting helpers.
-package main
+package ergo
 
 import (
 	"encoding/json"

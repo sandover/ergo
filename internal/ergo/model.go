@@ -1,5 +1,5 @@
 // Core domain types, constants, and parsing helpers for workers/kinds/state.
-package main
+package ergo
 
 import (
 	"encoding/json"
@@ -36,7 +36,7 @@ const (
 	kindEpic Kind = "epic"
 )
 
-func parseWorker(value string) (Worker, error) {
+func ParseWorker(value string) (Worker, error) {
 	switch strings.TrimSpace(strings.ToLower(value)) {
 	case "", "any":
 		return workerAny, nil
@@ -90,9 +90,9 @@ func isEpic(task *Task) bool {
 }
 
 var (
-	errNoErgoDir   = errors.New("no .ergo directory found")
-	errLockBusy    = errors.New("lock busy")
-	errLockTimeout = errors.New("lock timeout")
+	ErrNoErgoDir   = errors.New("no .ergo directory found")
+	ErrLockBusy    = errors.New("lock busy")
+	ErrLockTimeout = errors.New("lock timeout")
 )
 
 var validStates = map[string]struct{}{
@@ -197,7 +197,7 @@ type GlobalOptions struct {
 	Verbose     bool
 }
 
-const defaultLockTimeout = 30 * time.Second
+const DefaultLockTimeout = 30 * time.Second
 
 type Task struct {
 	ID        string

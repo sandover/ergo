@@ -9,7 +9,7 @@
 //   - Eliminates shell escaping issues (no inline JSON in args)
 //   - Uses one schema for both new and set (only `title` requirement differs)
 //   - Returns structured validation errors for agent consumption
-package main
+package ergo
 
 import (
 	"encoding/json"
@@ -145,7 +145,7 @@ func (t *TaskInput) validate(requireTitle bool, isEpic bool) *ValidationError {
 
 	// Worker validation
 	if t.Worker != nil {
-		if _, err := parseWorker(*t.Worker); err != nil {
+		if _, err := ParseWorker(*t.Worker); err != nil {
 			invalid["worker"] = fmt.Sprintf("invalid value %q, expected: any, agent, human", *t.Worker)
 		}
 	}
@@ -263,7 +263,7 @@ func (t *TaskInput) GetEpic() string {
 // GetWorker returns worker or workerAny if not set.
 func (t *TaskInput) GetWorker() Worker {
 	if t.Worker != nil {
-		w, _ := parseWorker(*t.Worker) // already validated
+		w, _ := ParseWorker(*t.Worker) // already validated
 		return w
 	}
 	return workerAny

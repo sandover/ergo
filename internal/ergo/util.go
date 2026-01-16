@@ -1,5 +1,5 @@
 // Shared helpers: sorting, locking, event building, ids, time, and agent identity.
-package main
+package ergo
 
 import (
 	"crypto/rand"
@@ -56,7 +56,7 @@ func withLock(path string, lockType int, timeout time.Duration, fn func() error)
 	if timeout == 0 {
 		if err := tryLock(); err != nil {
 			if isWouldBlock(err) {
-				return errLockBusy
+				return ErrLockBusy
 			}
 			return err
 		}
@@ -70,7 +70,7 @@ func withLock(path string, lockType int, timeout time.Duration, fn func() error)
 				break
 			} else if isWouldBlock(err) {
 				if !deadline.IsZero() && time.Now().After(deadline) {
-					return errLockTimeout
+					return ErrLockTimeout
 				}
 				time.Sleep(50 * time.Millisecond)
 				continue

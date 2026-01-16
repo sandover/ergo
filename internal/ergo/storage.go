@@ -1,5 +1,5 @@
 // Data directory discovery and event storage helpers.
-package main
+package ergo
 
 import (
 	"bufio"
@@ -43,7 +43,7 @@ func resolveErgoDir(start string) (string, error) {
 			return start, nil
 		}
 	}
-	return "", fmt.Errorf("%w (run ergo init)", errNoErgoDir)
+	return "", fmt.Errorf("%w (run ergo init)", ErrNoErgoDir)
 }
 
 func ergoDir(opts GlobalOptions) (string, error) {

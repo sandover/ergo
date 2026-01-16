@@ -1,4 +1,4 @@
-package main
+package ergo
 
 import (
 	"testing"
@@ -53,7 +53,7 @@ func TestFirstLine(t *testing.T) {
 	}
 }
 
-// Test parseWorker - domain validation
+// Test ParseWorker - domain validation
 func TestParseWorker(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -72,7 +72,7 @@ func TestParseWorker(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parseWorker(tt.input)
+			result, err := ParseWorker(tt.input)
 
 			if tt.wantErr {
 				if err == nil {
