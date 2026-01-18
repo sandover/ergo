@@ -562,7 +562,7 @@ func RunNext(args []string, opts GlobalOptions) error {
 	// Print ID on first line, then title+body
 	fmt.Println(chosen.ID)
 	fmt.Println(body)
-	
+
 	return nil
 }
 
@@ -647,7 +647,7 @@ func RunShow(args []string, opts GlobalOptions) error {
 		}
 	}
 	fmt.Println()
-	
+
 	// --- GLAMOUR RENDERING START ---
 	isTTY := stdoutIsTTY()
 	if isTTY && task.Body != "" {

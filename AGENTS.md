@@ -8,6 +8,9 @@
 - Body (a handful of lines) explains what/why/how plus constraints or invariants (and notable risks/tests if relevant)
 - When applicable, add trailers (one per line) for traceability: Fixes: #XYZ, Refs: PROJ-9, BREAKING CHANGE: ...
 
+# Invariants
+- **Green CI Before Release**: Never tag a release or merge to main without first verifying that the local code passes all linting and formatting checks (`task fmt lint test`). If `ci` fails on main, immediate priority is to fix it before adding features.
+
 # Other Guidance
 - don't use /tmp, it prompts me for permissions.  Prefer tmp/ or .scratch/ in the repo
 - When the code changes, the docs (such as README, code comments, --help, and "ergo quickstart") must also change to reflect. There must be total internal coherence in the project at all times.
