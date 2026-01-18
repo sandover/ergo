@@ -561,30 +561,7 @@ func RunNext(args []string, opts GlobalOptions) error {
 
 	// Print ID on first line, then title+body
 	fmt.Println(chosen.ID)
-	
-	// --- GLAMOUR RENDERING START ---
-	isTTY := stdoutIsTTY()
-	if isTTY && body != "" {
-		r, _ := glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
-			glamour.WithWordWrap(80),
-		)
-		out, err := r.Render(body)
-		if err == nil {
-			fmt.Print(out)
-		} else {
-			fmt.Print(body)
-			if !strings.HasSuffix(body, "\n") {
-				fmt.Println()
-			}
-		}
-	} else {
-		fmt.Print(body)
-		if body != "" && !strings.HasSuffix(body, "\n") {
-			fmt.Println()
-		}
-	}
-	// --- GLAMOUR RENDERING END ---
+	fmt.Println(body)
 	
 	return nil
 }
