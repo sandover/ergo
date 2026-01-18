@@ -15,6 +15,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/charmbracelet/glamour"
 )
 
 func RunSet(args []string, opts GlobalOptions) error {
@@ -559,7 +561,31 @@ func RunNext(args []string, opts GlobalOptions) error {
 
 	// Print ID on first line, then title+body
 	fmt.Println(chosen.ID)
-	fmt.Println(body)
+	
+	// --- GLAMOUR RENDERING START ---
+	isTTY := stdoutIsTTY()
+	if isTTY && body != "" {
+		r, _ := glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(80),
+		)
+		out, err := r.Render(body)
+		if err == nil {
+			fmt.Print(out)
+		} else {
+			fmt.Print(body)
+			if !strings.HasSuffix(body, "\n") {
+				fmt.Println()
+			}
+		}
+	} else {
+		fmt.Print(body)
+		if body != "" && !strings.HasSuffix(body, "\n") {
+			fmt.Println()
+		}
+	}
+	// --- GLAMOUR RENDERING END ---
+	
 	return nil
 }
 
@@ -644,10 +670,33 @@ func RunShow(args []string, opts GlobalOptions) error {
 		}
 	}
 	fmt.Println()
-	fmt.Print(task.Body)
-	if task.Body != "" && !strings.HasSuffix(task.Body, "\n") {
-		fmt.Println()
+	
+	// --- GLAMOUR RENDERING START ---
+	isTTY := stdoutIsTTY()
+	if isTTY && task.Body != "" {
+		r, _ := glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(80),
+		)
+		out, err := r.Render(task.Body)
+		if err == nil {
+			fmt.Print(out)
+		} else {
+			// Fallback if rendering fails
+			fmt.Print(task.Body)
+			if !strings.HasSuffix(task.Body, "\n") {
+				fmt.Println()
+			}
+		}
+	} else {
+		// Non-TTY or empty body: print raw
+		fmt.Print(task.Body)
+		if task.Body != "" && !strings.HasSuffix(task.Body, "\n") {
+			fmt.Println()
+		}
 	}
+	// --- GLAMOUR RENDERING END ---
+
 	return nil
 }
 

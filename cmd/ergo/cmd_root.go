@@ -1,8 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/sandover/ergo/internal/ergo"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -47,6 +51,12 @@ func init() {
 
 	// Set the version to enable --version flag
 	rootCmd.Version = version
+
+	// Override default help to use our custom text
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		isTTY := term.IsTerminal(int(os.Stdout.Fd()))
+		fmt.Println(ergo.UsageText(isTTY))
+	})
 }
 
 func execute() {

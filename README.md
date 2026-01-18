@@ -65,7 +65,7 @@ ergo next              # claim oldest READY task, set to doing, print body
 # Update task state
 echo '{"state":"done"}' | ergo set ABCDEF            # mark complete
 ```
-All mutations to tasks use JSON stdin style. Run `ergo --help` for syntax or `ergo quickstart` for the complete reference.
+All mutations to tasks use JSON stdin style. Run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
 
 ## Data Representation
 

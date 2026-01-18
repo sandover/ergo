@@ -47,13 +47,13 @@ var helpTextRaw string
 //go:embed quickstart.txt
 var quickstartTextRaw string
 
-// usageText returns the help text, colorized if color is true.
-func usageText(color bool) string {
+// UsageText returns the help text, colorized if color is true.
+func UsageText(color bool) string {
 	return applyMarkers(helpTextRaw, color)
 }
 
-// quickstartText returns the quickstart text, colorized if color is true.
-func quickstartText(color bool) string {
+// QuickstartText returns the quickstart text, colorized if color is true.
+func QuickstartText(color bool) string {
 	return applyMarkers(quickstartTextRaw, color)
 }
 

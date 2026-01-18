@@ -10,6 +10,6 @@ func RunQuickstart(args []string) error {
 	if len(args) != 0 {
 		return errors.New("usage: ergo quickstart")
 	}
-	fmt.Println(quickstartText(stdoutIsTTY()))
+	fmt.Println(QuickstartText(stdoutIsTTY()))
 	return nil
 }
