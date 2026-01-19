@@ -3,6 +3,7 @@ version: '3'
 vars:
   VERSION:
     sh: git describe --tags --always --dirty
+  GOLANGCI_LINT_VERSION: v1.64.8
 
 tasks:
   default:
@@ -53,9 +54,9 @@ tasks:
       - go vet ./...
 
   lint:
-    desc: Run golangci-lint (requires installation)
+    desc: Run golangci-lint (pinned version)
     cmds:
-      - golangci-lint run
+      - go run github.com/golangci/golangci-lint/cmd/golangci-lint@{{.GOLANGCI_LINT_VERSION}} run ./...
 
   clean:
     desc: Remove build artifacts and temporary files

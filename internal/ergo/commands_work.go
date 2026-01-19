@@ -39,7 +39,9 @@ func RunSet(args []string, opts GlobalOptions) error {
 	input, verr := ParseTaskInput()
 	if verr != nil {
 		if format == outputFormatJSON {
-			verr.WriteJSON(os.Stdout)
+			if err := verr.WriteJSON(os.Stdout); err != nil {
+				return err
+			}
 		}
 		return verr.GoError()
 	}
@@ -47,7 +49,9 @@ func RunSet(args []string, opts GlobalOptions) error {
 	// Validate for set (all fields optional)
 	if verr := input.ValidateForSet(); verr != nil {
 		if format == outputFormatJSON {
-			verr.WriteJSON(os.Stdout)
+			if err := verr.WriteJSON(os.Stdout); err != nil {
+				return err
+			}
 		}
 		return verr.GoError()
 	}

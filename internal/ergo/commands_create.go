@@ -95,7 +95,9 @@ func RunNewEpic(args []string, opts GlobalOptions) error {
 	}
 	if verr := input.ValidateForNewEpic(); verr != nil {
 		if format == outputFormatJSON {
-			verr.WriteJSON(os.Stdout)
+			if err := verr.WriteJSON(os.Stdout); err != nil {
+				return err
+			}
 		}
 		return verr.GoError()
 	}
