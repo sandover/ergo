@@ -739,7 +739,8 @@ func RunWhere(args []string, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	for _, arg := range remaining {
+	if len(remaining) > 0 {
+		arg := remaining[0]
 		if strings.HasPrefix(arg, "-") {
 			return fmt.Errorf("unknown flag %s", arg)
 		}

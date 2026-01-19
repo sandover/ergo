@@ -90,14 +90,7 @@ func snapshotResults(results []Result) []resultSnap {
 	}
 	out := make([]resultSnap, 0, len(results))
 	for _, r := range results {
-		out = append(out, resultSnap{
-			Summary:           r.Summary,
-			Path:              r.Path,
-			Sha256AtAttach:    r.Sha256AtAttach,
-			MtimeAtAttach:     r.MtimeAtAttach,
-			GitCommitAtAttach: r.GitCommitAtAttach,
-			CreatedAt:         r.CreatedAt,
-		})
+		out = append(out, resultSnap(r))
 	}
 	return out
 }

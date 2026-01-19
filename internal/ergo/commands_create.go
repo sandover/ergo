@@ -89,12 +89,10 @@ func RunNewEpic(args []string, opts GlobalOptions) error {
 	input, verr := ParseTaskInput()
 	if verr != nil {
 		if format == outputFormatJSON {
-			verr.WriteJSON(os.Stdout)
+			_ = verr.WriteJSON(os.Stdout)
 		}
 		return verr.GoError()
 	}
-
-	// Validate for epic creation
 	if verr := input.ValidateForNewEpic(); verr != nil {
 		if format == outputFormatJSON {
 			verr.WriteJSON(os.Stdout)
@@ -129,7 +127,7 @@ func RunNewTask(args []string, opts GlobalOptions) error {
 	input, verr := ParseTaskInput()
 	if verr != nil {
 		if format == outputFormatJSON {
-			verr.WriteJSON(os.Stdout)
+			_ = verr.WriteJSON(os.Stdout)
 		}
 		return verr.GoError()
 	}
@@ -137,7 +135,7 @@ func RunNewTask(args []string, opts GlobalOptions) error {
 	// Validate for task creation
 	if verr := input.ValidateForNewTask(); verr != nil {
 		if format == outputFormatJSON {
-			verr.WriteJSON(os.Stdout)
+			_ = verr.WriteJSON(os.Stdout)
 		}
 		return verr.GoError()
 	}

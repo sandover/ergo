@@ -48,9 +48,8 @@ type treeNode struct {
 	task           *Task
 	children       []*treeNode
 	isReady        bool
-	parentBlockers map[string]bool // blockers inherited from parent epic
-	collapsed      bool            // for done epics: show summary instead of children
-	collapsedCount int             // number of tasks in collapsed epic
+	collapsed      bool // for done epics: show summary instead of children
+	collapsedCount int  // number of tasks in collapsed epic
 }
 
 // renderTreeView outputs tasks in a hierarchical tree format.

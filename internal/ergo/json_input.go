@@ -91,7 +91,7 @@ func ParseTaskInput() (*TaskInput, *ValidationError) {
 			Message: fmt.Sprintf("failed to read stdin: %v", err),
 		}
 	}
-	if jsonBytes == nil || len(jsonBytes) == 0 {
+	if len(jsonBytes) == 0 {
 		return nil, &ValidationError{
 			Error:   "parse_error",
 			Message: "no input: pipe JSON to stdin",

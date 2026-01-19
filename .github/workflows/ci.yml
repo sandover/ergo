@@ -19,6 +19,9 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Tidy
+        run: go mod tidy && git diff --exit-code
+
       - name: Run tests
         run: go test -race -v ./...
 
@@ -37,6 +40,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+          args: ./...
 
   build:
     runs-on: ubuntu-latest

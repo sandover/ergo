@@ -79,7 +79,9 @@ func withLock(path string, lockType int, timeout time.Duration, fn func() error)
 			}
 		}
 	}
-	defer syscall.Flock(fd, syscall.LOCK_UN)
+	defer func() {
+		_ = syscall.Flock(fd, syscall.LOCK_UN)
+	}()
 	return fn()
 }
 

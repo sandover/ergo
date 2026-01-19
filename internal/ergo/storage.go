@@ -177,30 +177,6 @@ func writeLinkEvent(dir string, opts GlobalOptions, eventType, from, to string) 
 	})
 }
 
-func writeWorkerEvent(dir string, opts GlobalOptions, id string, worker Worker) error {
-	lockPath := filepath.Join(dir, "lock")
-	eventsPath := filepath.Join(dir, "events.jsonl")
-	return withLock(lockPath, syscall.LOCK_EX, opts.LockTimeout, func() error {
-		graph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
-		if _, ok := graph.Tasks[id]; !ok {
-			return fmt.Errorf("unknown task id %s", id)
-		}
-		now := time.Now().UTC()
-		event, err := newEvent("worker", now, WorkerEvent{
-			ID:     id,
-			Worker: string(worker),
-			TS:     formatTime(now),
-		})
-		if err != nil {
-			return err
-		}
-		return appendEvents(eventsPath, []Event{event})
-	})
-}
-
 func createTask(dir string, opts GlobalOptions, epicID string, isEpic bool, body string, worker Worker) (createOutput, error) {
 	eventsPath := filepath.Join(dir, "events.jsonl")
 	lockPath := filepath.Join(dir, "lock")
