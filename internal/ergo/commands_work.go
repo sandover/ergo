@@ -441,6 +441,10 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 		return writeJSON(os.Stdout, buildTaskListItems(tasksOnly, graph, repoDir))
 	}
 
+	if !opts.Quiet {
+		fmt.Fprintln(os.Stderr, "agents: use 'ergo --json list' for structured output")
+	}
+
 	// If --epics only, show simple epic list instead of tree
 	if showEpics && epicID == "" && !readyOnly && !blockedOnly {
 		for _, epic := range epics {
