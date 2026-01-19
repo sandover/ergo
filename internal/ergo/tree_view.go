@@ -645,7 +645,11 @@ func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useC
 		base.WriteString(colorReset)
 	}
 	baseStr := base.String()
-	baseWidth := visibleLen(baseStr)
+	titleSep := ""
+	if !strings.HasSuffix(stripANSICodes(baseStr), " ") {
+		titleSep = " "
+	}
+	baseWidth := visibleLen(baseStr) + visibleLen(titleSep)
 
 	content := title + " " + countStr
 	maxContent := idStart - minGap - baseWidth
@@ -745,7 +749,11 @@ func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, 
 		}
 	}
 	baseStr := base.String()
-	baseWidth := visibleLen(baseStr)
+	titleSep := ""
+	if !strings.HasSuffix(stripANSICodes(baseStr), " ") {
+		titleSep = " "
+	}
+	baseWidth := visibleLen(baseStr) + visibleLen(titleSep)
 
 	maxContent := idStart - minGap - baseWidth
 	if maxContent < 0 {
@@ -768,6 +776,9 @@ func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, 
 	// Build left side with color.
 	var left strings.Builder
 	left.WriteString(baseStr)
+	if titleSep != "" {
+		left.WriteString(titleSep)
+	}
 
 	isBlocked := task.State == stateTodo && !isReady && !task.IsEpic
 	if useColor {
