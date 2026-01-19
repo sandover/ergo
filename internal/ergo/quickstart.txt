@@ -57,6 +57,7 @@
 {{HEADER}}7. EPIC HIERARCHIES{{RESET}}
 
 {{COMMENT}}Epics are complete when all child tasks are done|canceled.{{RESET}}
+{{COMMENT}}Epics have no state.{{RESET}}
 {{COMMENT}}Epic-to-Epic dependencies block all tasks in the dependent epic.{{RESET}}
 
 {{CMD}}ergo dep EPIC_A EPIC_B{{RESET}}
