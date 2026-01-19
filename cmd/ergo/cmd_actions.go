@@ -54,33 +54,22 @@ var newCmd = &cobra.Command{
 var newTaskCmd = &cobra.Command{
 	Use:   "task",
 	Short: "Create a new task (JSON stdin)",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		formatJSON, _ := cmd.Flags().GetBool("json")
-		effectiveArgs := args
-		if formatJSON {
-			effectiveArgs = append(effectiveArgs, "--json")
-		}
-		return ergo.RunNewTask(effectiveArgs, globalOpts)
+		return ergo.RunNewTask(globalOpts)
 	},
 }
 
 var newEpicCmd = &cobra.Command{
 	Use:   "epic",
 	Short: "Create a new epic (JSON stdin)",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		formatJSON, _ := cmd.Flags().GetBool("json")
-		effectiveArgs := args
-		if formatJSON {
-			effectiveArgs = append(effectiveArgs, "--json")
-		}
-		return ergo.RunNewEpic(effectiveArgs, globalOpts)
+		return ergo.RunNewEpic(globalOpts)
 	},
 }
 
 func init() {
-	newTaskCmd.Flags().Bool("json", false, "Output JSON")
-	newEpicCmd.Flags().Bool("json", false, "Output JSON")
-	initCmd.Flags().Bool("json", false, "Output JSON")
 }
 
 // -- list --
@@ -88,31 +77,22 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List tasks",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var effectiveArgs []string
-		if f, _ := cmd.Flags().GetBool("json"); f {
-			effectiveArgs = append(effectiveArgs, "--json")
-		}
-		if f, _ := cmd.Flags().GetString("epic"); f != "" {
-			effectiveArgs = append(effectiveArgs, "--epic", f)
-		}
-		if f, _ := cmd.Flags().GetBool("ready"); f {
-			effectiveArgs = append(effectiveArgs, "--ready")
-		}
-		if f, _ := cmd.Flags().GetBool("blocked"); f {
-			effectiveArgs = append(effectiveArgs, "--blocked")
-		}
-		if f, _ := cmd.Flags().GetBool("epics"); f {
-			effectiveArgs = append(effectiveArgs, "--epics")
-		}
-		if f, _ := cmd.Flags().GetBool("all"); f {
-			effectiveArgs = append(effectiveArgs, "--all")
-		}
-		return ergo.RunList(effectiveArgs, globalOpts)
+		epicID, _ := cmd.Flags().GetString("epic")
+		readyOnly, _ := cmd.Flags().GetBool("ready")
+		blockedOnly, _ := cmd.Flags().GetBool("blocked")
+		showEpics, _ := cmd.Flags().GetBool("epics")
+		showAll, _ := cmd.Flags().GetBool("all")
+		return ergo.RunList(ergo.ListOptions{
+			EpicID:      epicID,
+			ReadyOnly:   readyOnly,
+			BlockedOnly: blockedOnly,
+			ShowEpics:   showEpics,
+			ShowAll:     showAll,
+		}, globalOpts)
 	},
 }
 
 func init() {
-	listCmd.Flags().Bool("json", false, "Output JSON")
 	listCmd.Flags().String("epic", "", "Filter by epic ID")
 	listCmd.Flags().Bool("ready", false, "Show only ready tasks")
 	listCmd.Flags().Bool("blocked", false, "Show only blocked tasks")
@@ -126,19 +106,12 @@ var showCmd = &cobra.Command{
 	Short: "Show task details",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var effectiveArgs []string = args
-		if f, _ := cmd.Flags().GetBool("json"); f {
-			effectiveArgs = append(effectiveArgs, "--json")
-		}
-		if f, _ := cmd.Flags().GetBool("short"); f {
-			effectiveArgs = append(effectiveArgs, "--short")
-		}
-		return ergo.RunShow(effectiveArgs, globalOpts)
+		short, _ := cmd.Flags().GetBool("short")
+		return ergo.RunShow(args[0], short, globalOpts)
 	},
 }
 
 func init() {
-	showCmd.Flags().Bool("json", false, "Output JSON")
 	showCmd.Flags().Bool("short", false, "Short output format")
 }
 
@@ -146,23 +119,18 @@ func init() {
 var nextCmd = &cobra.Command{
 	Use:   "next",
 	Short: "Claim and show the next ready task",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var effectiveArgs []string
-		if f, _ := cmd.Flags().GetBool("json"); f {
-			effectiveArgs = append(effectiveArgs, "--json")
-		}
-		if f, _ := cmd.Flags().GetBool("peek"); f {
-			effectiveArgs = append(effectiveArgs, "--peek")
-		}
-		if f, _ := cmd.Flags().GetString("epic"); f != "" {
-			effectiveArgs = append(effectiveArgs, "--epic", f)
-		}
-		return ergo.RunNext(effectiveArgs, globalOpts)
+		peek, _ := cmd.Flags().GetBool("peek")
+		epicID, _ := cmd.Flags().GetString("epic")
+		return ergo.RunNext(ergo.NextOptions{
+			Peek:   peek,
+			EpicID: epicID,
+		}, globalOpts)
 	},
 }
 
 func init() {
-	nextCmd.Flags().Bool("json", false, "Output JSON")
 	nextCmd.Flags().Bool("peek", false, "Peek at next task without claiming")
 	nextCmd.Flags().String("epic", "", "Filter by epic ID")
 }
@@ -173,16 +141,11 @@ var setCmd = &cobra.Command{
 	Short: "Update a task (JSON stdin)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var effectiveArgs []string = args
-		if f, _ := cmd.Flags().GetBool("json"); f {
-			effectiveArgs = append(effectiveArgs, "--json")
-		}
-		return ergo.RunSet(effectiveArgs, globalOpts)
+		return ergo.RunSet(args[0], globalOpts)
 	},
 }
 
 func init() {
-	setCmd.Flags().Bool("json", false, "Output JSON")
 }
 
 // -- dep --
@@ -198,25 +161,22 @@ var depCmd = &cobra.Command{
 var whereCmd = &cobra.Command{
 	Use:   "where",
 	Short: "Show ergo directory path",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var effectiveArgs []string
-		if f, _ := cmd.Flags().GetBool("json"); f {
-			effectiveArgs = append(effectiveArgs, "--json")
-		}
-		return ergo.RunWhere(effectiveArgs, globalOpts)
+		return ergo.RunWhere(globalOpts)
 	},
 }
 
 func init() {
-	whereCmd.Flags().Bool("json", false, "Output JSON")
 }
 
 // -- compact --
 var compactCmd = &cobra.Command{
 	Use:   "compact",
 	Short: "Compact the event log",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunCompact(args, globalOpts)
+		return ergo.RunCompact(globalOpts)
 	},
 }
 

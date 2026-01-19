@@ -195,6 +195,7 @@ type GlobalOptions struct {
 	AgentID     string
 	Quiet       bool
 	Verbose     bool
+	JSON        bool
 }
 
 const DefaultLockTimeout = 30 * time.Second

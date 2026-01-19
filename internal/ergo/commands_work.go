@@ -19,26 +19,32 @@ import (
 	"github.com/charmbracelet/glamour"
 )
 
-func RunSet(args []string, opts GlobalOptions) error {
+type ListOptions struct {
+	EpicID      string
+	ReadyOnly   bool
+	BlockedOnly bool
+	ShowEpics   bool
+	ShowAll     bool
+}
+
+type NextOptions struct {
+	EpicID string
+	Peek   bool
+}
+
+func RunSet(id string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "set"); err != nil {
 		return err
 	}
 
-	format, remaining, err := parseOutputFormatAndArgs(args, outputFormatText)
-	if err != nil {
-		return err
-	}
-
-	// First arg is the task/epic ID
-	if len(remaining) < 1 {
+	if id == "" {
 		return errors.New("usage: echo '{\"state\":\"done\"}' | ergo set <id>")
 	}
-	id := remaining[0]
 
 	// Parse JSON from stdin
 	input, verr := ParseTaskInput()
 	if verr != nil {
-		if format == outputFormatJSON {
+		if opts.JSON {
 			if err := verr.WriteJSON(os.Stdout); err != nil {
 				return err
 			}
@@ -48,7 +54,7 @@ func RunSet(args []string, opts GlobalOptions) error {
 
 	// Validate for set (all fields optional)
 	if verr := input.ValidateForSet(); verr != nil {
-		if format == outputFormatJSON {
+		if opts.JSON {
 			if err := verr.WriteJSON(os.Stdout); err != nil {
 				return err
 			}
@@ -360,21 +366,12 @@ func RunDep(args []string, opts GlobalOptions) error {
 	return errors.New(usage)
 }
 
-func RunList(args []string, opts GlobalOptions) error {
-	format, err := parseOutputFormat(args, outputFormatText)
-	if err != nil {
-		return err
-	}
-
-	epicID, err := parseFlagValue(args, "--epic")
-	if err != nil {
-		return err
-	}
-
-	readyOnly := hasFlag(args, "--ready")
-	blockedOnly := hasFlag(args, "--blocked")
-	showEpics := hasFlag(args, "--epics")
-	showAll := hasFlag(args, "--all")
+func RunList(listOpts ListOptions, opts GlobalOptions) error {
+	epicID := listOpts.EpicID
+	readyOnly := listOpts.ReadyOnly
+	blockedOnly := listOpts.BlockedOnly
+	showEpics := listOpts.ShowEpics
+	showAll := listOpts.ShowAll
 
 	if readyOnly && blockedOnly {
 		return errors.New("cannot use both --ready and --blocked")
@@ -433,7 +430,7 @@ func RunList(args []string, opts GlobalOptions) error {
 		sortByCreatedAt(epics)
 	}
 
-	if format == outputFormatJSON {
+	if opts.JSON {
 		// JSON output includes all tasks (agents filter themselves)
 		// Return bare array for simplicity and consistency with show --json
 		if showEpics {
@@ -462,24 +459,15 @@ func RunList(args []string, opts GlobalOptions) error {
 	return nil
 }
 
-func RunNext(args []string, opts GlobalOptions) error {
-	peek := hasFlag(args, "--peek")
+func RunNext(nextOpts NextOptions, opts GlobalOptions) error {
+	peek := nextOpts.Peek
 
 	if !peek {
 		if err := requireWritable(opts, "next"); err != nil {
 			return err
 		}
 	}
-
-	format, err := parseOutputFormat(args, outputFormatText)
-	if err != nil {
-		return err
-	}
-
-	epicID, err := parseFlagValue(args, "--epic")
-	if err != nil {
-		return err
-	}
+	epicID := nextOpts.EpicID
 
 	dir, err := ergoDir(opts)
 	if err != nil {
@@ -500,7 +488,7 @@ func RunNext(args []string, opts GlobalOptions) error {
 		}
 
 		chosen := ready[0]
-		if format == outputFormatJSON {
+		if opts.JSON {
 			return writeJSON(os.Stdout, map[string]interface{}{
 				"id":     chosen.ID,
 				"epic":   chosen.EpicID,
@@ -570,7 +558,7 @@ func RunNext(args []string, opts GlobalOptions) error {
 		return err
 	}
 
-	if format == outputFormatJSON {
+	if opts.JSON {
 		if chosen == nil {
 			return errors.New("internal error: missing chosen task")
 		}
@@ -593,10 +581,12 @@ func RunNext(args []string, opts GlobalOptions) error {
 	return nil
 }
 
-func RunShow(args []string, opts GlobalOptions) error {
-	id, format, short, err := parseShowArgs(args)
-	if err != nil {
-		return err
+func RunShow(id string, short bool, opts GlobalOptions) error {
+	if id == "" {
+		return errors.New("usage: ergo show <id> [--short] [--json]")
+	}
+	if short && opts.JSON {
+		return errors.New("conflicting flags: --short and --json")
 	}
 	dir, err := ergoDir(opts)
 	if err != nil {
@@ -612,7 +602,7 @@ func RunShow(args []string, opts GlobalOptions) error {
 		return fmt.Errorf("unknown task id %s", id)
 	}
 	claimedAt := claimedAtForTask(task, graph.Meta[id])
-	if format == outputFormatJSON {
+	if opts.JSON {
 		return writeJSON(os.Stdout, taskShowOutput{
 			ID:        task.ID,
 			UUID:      task.UUID,
@@ -704,12 +694,9 @@ func RunShow(args []string, opts GlobalOptions) error {
 	return nil
 }
 
-func RunCompact(args []string, opts GlobalOptions) error {
+func RunCompact(opts GlobalOptions) error {
 	if err := requireWritable(opts, "compact"); err != nil {
 		return err
-	}
-	if len(args) != 0 {
-		return errors.New("usage: ergo compact")
 	}
 	dir, err := ergoDir(opts)
 	if err != nil {
@@ -738,18 +725,7 @@ func RunCompact(args []string, opts GlobalOptions) error {
 	})
 }
 
-func RunWhere(args []string, opts GlobalOptions) error {
-	format, remaining, err := parseOutputFormatAndArgs(args, outputFormatText)
-	if err != nil {
-		return err
-	}
-	if len(remaining) > 0 {
-		arg := remaining[0]
-		if strings.HasPrefix(arg, "-") {
-			return fmt.Errorf("unknown flag %s", arg)
-		}
-		return errors.New("usage: ergo where [--json]")
-	}
+func RunWhere(opts GlobalOptions) error {
 	start, err := os.Getwd()
 	if err != nil {
 		return err
@@ -767,7 +743,7 @@ func RunWhere(args []string, opts GlobalOptions) error {
 	}
 	repoDir := filepath.Dir(ergoDir)
 	debugf(opts, "where start=%s ergo_dir=%s repo_dir=%s", start, ergoDir, repoDir)
-	if format == outputFormatJSON {
+	if opts.JSON {
 		return writeJSON(os.Stdout, whereOutput{
 			ErgoDir: ergoDir,
 			RepoDir: repoDir,

@@ -48,6 +48,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&globalOpts.AgentID, "agent", "", "Agent ID for claims (default: hostname)")
 	rootCmd.PersistentFlags().BoolVarP(&globalOpts.Quiet, "quiet", "q", false, "Suppress output")
 	rootCmd.PersistentFlags().BoolVarP(&globalOpts.Verbose, "verbose", "v", false, "Verbose output")
+	rootCmd.PersistentFlags().BoolVar(&globalOpts.JSON, "json", false, "Output JSON")
 
 	// Set the version to enable --version flag
 	rootCmd.Version = version

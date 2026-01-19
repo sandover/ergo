@@ -522,4 +522,13 @@ func TestListJSONIncludesAllTasks(t *testing.T) {
 	if !ids[todoID] {
 		t.Error("todo task missing from JSON output")
 	}
+
+	// Global --json should work before the command as well
+	stdout, _, code = runErgo(t, dir, "", "--json", "list", "--all")
+	if code != 0 {
+		t.Fatalf("--json list --all failed: exit %d", code)
+	}
+	if err := json.Unmarshal([]byte(stdout), &tasks); err != nil {
+		t.Fatalf("failed to parse JSON with global --json: %v", err)
+	}
 }

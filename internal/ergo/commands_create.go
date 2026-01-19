@@ -19,15 +19,11 @@ func RunInit(args []string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "init"); err != nil {
 		return err
 	}
-	format, positional, err := parseOutputFormatAndArgs(args, outputFormatText)
-	if err != nil {
-		return err
-	}
 	dir := "."
-	if len(positional) > 0 {
-		dir = positional[0]
+	if len(args) > 0 {
+		dir = args[0]
 	}
-	if len(positional) > 1 {
+	if len(args) > 1 {
 		return errors.New("usage: ergo init [dir]")
 	}
 	target := filepath.Join(dir, dataDirName)
@@ -47,7 +43,7 @@ func RunInit(args []string, opts GlobalOptions) error {
 	if err := os.WriteFile(lockPath, []byte{}, 0644); err != nil {
 		return err
 	}
-	if format == outputFormatJSON {
+	if opts.JSON {
 		if err := writeJSON(os.Stdout, initOutput{ErgoDir: target}); err != nil {
 			return err
 		}
@@ -64,37 +60,32 @@ func RunNew(args []string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "new"); err != nil {
 		return err
 	}
-	if len(args) < 1 {
+	if len(args) != 1 {
 		return errors.New("usage: echo '{\"title\":\"...\"}' | ergo new task|epic")
 	}
 
 	subcommand := args[0]
 	switch subcommand {
 	case "epic":
-		return RunNewEpic(args[1:], opts)
+		return RunNewEpic(opts)
 	case "task":
-		return RunNewTask(args[1:], opts)
+		return RunNewTask(opts)
 	default:
 		return fmt.Errorf("unknown subcommand: %s (use 'epic' or 'task')", subcommand)
 	}
 }
 
-func RunNewEpic(args []string, opts GlobalOptions) error {
-	format, _, err := parseOutputFormatAndArgs(args, outputFormatText)
-	if err != nil {
-		return err
-	}
-
+func RunNewEpic(opts GlobalOptions) error {
 	// Parse JSON from stdin
 	input, verr := ParseTaskInput()
 	if verr != nil {
-		if format == outputFormatJSON {
+		if opts.JSON {
 			_ = verr.WriteJSON(os.Stdout)
 		}
 		return verr.GoError()
 	}
 	if verr := input.ValidateForNewEpic(); verr != nil {
-		if format == outputFormatJSON {
+		if opts.JSON {
 			if err := verr.WriteJSON(os.Stdout); err != nil {
 				return err
 			}
@@ -112,23 +103,18 @@ func RunNewEpic(args []string, opts GlobalOptions) error {
 		return err
 	}
 
-	if format == outputFormatJSON {
+	if opts.JSON {
 		return writeJSON(os.Stdout, created)
 	}
 	fmt.Println(created.ID)
 	return nil
 }
 
-func RunNewTask(args []string, opts GlobalOptions) error {
-	format, _, err := parseOutputFormatAndArgs(args, outputFormatText)
-	if err != nil {
-		return err
-	}
-
+func RunNewTask(opts GlobalOptions) error {
 	// Parse JSON from stdin
 	input, verr := ParseTaskInput()
 	if verr != nil {
-		if format == outputFormatJSON {
+		if opts.JSON {
 			_ = verr.WriteJSON(os.Stdout)
 		}
 		return verr.GoError()
@@ -136,7 +122,7 @@ func RunNewTask(args []string, opts GlobalOptions) error {
 
 	// Validate for task creation
 	if verr := input.ValidateForNewTask(); verr != nil {
-		if format == outputFormatJSON {
+		if opts.JSON {
 			_ = verr.WriteJSON(os.Stdout)
 		}
 		return verr.GoError()
@@ -170,7 +156,7 @@ func RunNewTask(args []string, opts GlobalOptions) error {
 		}
 	}
 
-	if format == outputFormatJSON {
+	if opts.JSON {
 		return writeJSON(os.Stdout, created)
 	}
 	fmt.Println(created.ID)
