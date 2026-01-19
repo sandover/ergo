@@ -11,6 +11,7 @@
 # Invariants
 - **CI Stays Green**: Never tag a release without first verifying that the local code passes all linting & formatting checks and tests.
 - **Docs are Accurate**: When the code changes, docs (such as README, code comments, --help, and "ergo quickstart") must also change to reflect. There must be total internal coherence in the project at all times.
+- **CI Parity**: Run `task ci` before pushing to match CI tool versions and steps.
 
 # Other Guidance
 - don't use /tmp, it prompts me for permissions.  Prefer tmp/ or .scratch/ in the repo

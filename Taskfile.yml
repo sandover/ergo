@@ -58,6 +58,11 @@ tasks:
     cmds:
       - go run github.com/golangci/golangci-lint/cmd/golangci-lint@{{.GOLANGCI_LINT_VERSION}} run ./...
 
+  ci:
+    desc: Run CI parity checks (tidy, lint, test)
+    cmds:
+      - GOLANGCI_LINT_VERSION={{.GOLANGCI_LINT_VERSION}} ./scripts/ci.sh
+
   clean:
     desc: Remove build artifacts and temporary files
     cmds:
