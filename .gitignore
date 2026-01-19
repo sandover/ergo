@@ -1,6 +1,7 @@
 # Local ergo state
 /.ergo/
 /.scratch/
+/.gemini-clipboard/
 
 # Go build/test artifacts
 /ergo

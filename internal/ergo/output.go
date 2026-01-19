@@ -10,18 +10,16 @@ import (
 )
 
 type taskListItem struct {
-	Kind         string            `json:"kind"`
-	ID           string            `json:"id"`
-	EpicID       string            `json:"epic_id"`
-	State        string            `json:"state"`
-	ClaimedBy    string            `json:"claimed_by"`
-	ClaimedAt    string            `json:"claimed_at"`
-	Title        string            `json:"title"`
-	Worker       string            `json:"worker"`
-	Ready        bool              `json:"ready"`
-	Blocked      bool              `json:"blocked"`
-	HasResults   bool              `json:"has_results,omitempty"`
-	LatestResult *resultOutputItem `json:"latest_result,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+	ID         string `json:"id"`
+	EpicID     string `json:"epic_id,omitempty"`
+	State      string `json:"state"`
+	ClaimedBy  string `json:"claimed_by,omitempty"`
+	Title      string `json:"title"`
+	Worker     string `json:"worker,omitempty"`
+	Ready      bool   `json:"ready"`
+	Blocked    bool   `json:"blocked"`
+	HasResults bool   `json:"has_results,omitempty"`
 }
 
 // resultOutputItem is the JSON representation of a result with derived file_url.
@@ -114,24 +112,17 @@ func deriveFileURL(relPath, repoDir string) string {
 func buildTaskListItems(tasks []*Task, graph *Graph, repoDir string) []taskListItem {
 	items := make([]taskListItem, 0, len(tasks))
 	for _, task := range tasks {
-		meta := graph.Meta[task.ID]
 		item := taskListItem{
 			Kind:       string(kindForTask(task)),
 			ID:         task.ID,
 			EpicID:     task.EpicID,
 			State:      task.State,
 			ClaimedBy:  task.ClaimedBy,
-			ClaimedAt:  claimedAtForTask(task, meta),
 			Title:      firstLine(task.Body),
 			Worker:     string(task.Worker),
 			Ready:      isReady(task, graph),
 			Blocked:    isBlocked(task, graph),
 			HasResults: len(task.Results) > 0,
-		}
-		// Include latest result for terminal tasks
-		if len(task.Results) > 0 {
-			latestResult := buildResultOutputItem(task.Results[0], repoDir)
-			item.LatestResult = &latestResult
 		}
 		items = append(items, item)
 	}

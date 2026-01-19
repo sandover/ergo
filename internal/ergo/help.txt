@@ -12,8 +12,9 @@
   set <id>                                update task/epic from JSON stdin
 
   list [--epic <id>] [--ready|--blocked] [--epics] [--all]
-                                          list tasks; --epics shows only epics
-                                          canceled tasks hidden unless --all
+                                          list active tasks (todo/doing/blocked/error)
+                                          --all shows everything (including done/canceled)
+                                          --epics shows only epics
   show <id>                               show epic or task details
 
   next [--epic <id>] [--peek]             claim oldest READY task, set doing, print ID + body
@@ -58,5 +59,5 @@
     result_summary  one-liner (requires result_path)
 
 {{HEADER}}JSON OUTPUT (--json flag){{RESET}}
-  list → array:   [{id, title, state, ready, blocked, claimed_by, ...}]
+  list → array:   [{id, title, state, ready, blocked, ...}]
   show → object:  {id, body, deps, rdeps, state, results, ...}

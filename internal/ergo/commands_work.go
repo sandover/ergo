@@ -394,6 +394,19 @@ func RunList(args []string, opts GlobalOptions) error {
 		tasksOnly = filterTasksByWorker(tasksOnly, opts.As)
 	}
 
+	// Apply Active Set filtering (default behavior)
+	// If --all is NOT set, and we aren't targeting specific states via --ready/--blocked,
+	// hide done and canceled tasks.
+	if !showAll && !readyOnly && !blockedOnly {
+		var active []*Task
+		for _, task := range tasksOnly {
+			if task.State != stateDone && task.State != stateCanceled {
+				active = append(active, task)
+			}
+		}
+		tasksOnly = active
+	}
+
 	// Handle epics if --epics flag is set
 	var epics []*Task
 	if showEpics {
