@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [0.5.7] - 2026-01-19
+
+### Fixed
+- CI lint now uses pinned golangci-lint; JSON error output checks WriteJSON errors
+- Tree view: collapsed epic IDs align and render in default color
+
+### Documentation
+- Clarify that epics have no intrinsic state (derived from child tasks)
+
+## [0.5.6] - 2026-01-18
+
+### Added
+- `set`: implicit claim when transitioning to `doing`/`error`
+
+### Changed
+- `list`: default to active tasks; leaner JSON output
+
+## [0.5.5] - 2026-01-18
+
+### Changed
+- `show`: render Markdown in TTY output (via Glamour)
+
+## [0.5.4] - 2026-01-16
+
+### Added
+- `Taskfile.yml` for common dev workflows
+
+### Changed
+- CI linting modernized; quickstart tightened for agent consumption
+
+## [0.5.3] - 2026-01-16
+
+### Fixed
+- CLI: enable Cobra `--version` flag; CI build path updated
+
+## [0.5.2] - 2026-01-16
+
+### Changed
+- Adopt Cobra CLI and standard Go project layout; update goreleaser config
+
 ## [0.5.1] - 2026-01-16
 
 ### Fixed
