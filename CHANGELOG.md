@@ -8,7 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+
+## [0.5.8] - 2026-01-19
+
+### Fixed
 - List rendering now skips heading-only first lines and falls back to the first meaningful line.
+- Tree view layout now uses a single build/measure/truncate pipeline for stable ID alignment.
+- Tree view alignment refactor with explicit ID layout contract and consistent margins
 
 ## [0.5.7] - 2026-01-19
 
