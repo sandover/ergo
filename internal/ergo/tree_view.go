@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mattn/go-runewidth"
 	"golang.org/x/term"
 )
 
@@ -33,6 +34,13 @@ const (
 	colorMagenta = "\033[35m"
 )
 
+const (
+	// Layout contract: IDs start at (termWidth - rightMargin - idWidth - minGap).
+	// All truncation and padding must use visibleLen/ truncateToWidth.
+	idMinGap      = 2
+	idRightMargin = 2
+)
+
 // State icons
 const (
 	iconDone     = "✓"
@@ -41,6 +49,7 @@ const (
 	iconBlocked  = "·"
 	iconCanceled = "✗"
 	iconError    = "⚠"
+	iconEpic     = "Ⓔ"
 )
 
 // treeNode represents a task or epic in the tree structure.
@@ -490,7 +499,7 @@ func abbreviate(s string, maxLen int) string {
 // stateIcon returns the appropriate icon for a task's state.
 func stateIcon(task *Task, isReady bool) string {
 	if task.IsEpic {
-		return "" // Epics don't get icons
+		return iconEpic
 	}
 	switch task.State {
 	case stateDone:
@@ -539,9 +548,13 @@ func getBlockers(task *Task, graph *Graph) []string {
 	return blockers
 }
 
-// visibleLen returns the visible length of a string, excluding ANSI escape codes.
+// visibleLen returns the display width of a string, excluding ANSI escape codes.
 func visibleLen(s string) int {
-	length := 0
+	return runewidth.StringWidth(stripANSICodes(s))
+}
+
+func stripANSICodes(s string) string {
+	var b strings.Builder
 	inEscape := false
 	for _, r := range s {
 		if r == '\033' {
@@ -554,9 +567,9 @@ func visibleLen(s string) int {
 			}
 			continue
 		}
-		length++
+		b.WriteRune(r)
 	}
-	return length
+	return b.String()
 }
 
 // truncateToWidth truncates a string to maxWidth visible characters, adding ellipsis if truncated.
@@ -570,9 +583,13 @@ func truncateToWidth(s string, maxWidth int) string {
 	if visibleLen(s) <= maxWidth {
 		return s
 	}
-	// Build truncated string rune by rune
+	ellipsisWidth := runewidth.RuneWidth('…')
+	targetWidth := maxWidth - ellipsisWidth
+	if targetWidth < 1 {
+		return "…"
+	}
 	var result []rune
-	length := 0
+	width := 0
 	inEscape := false
 	for _, r := range s {
 		if r == '\033' {
@@ -587,11 +604,12 @@ func truncateToWidth(s string, maxWidth int) string {
 			}
 			continue
 		}
-		if length >= maxWidth-1 {
+		rw := runewidth.RuneWidth(r)
+		if width+rw > targetWidth {
 			break
 		}
 		result = append(result, r)
-		length++
+		width += rw
 	}
 	return string(result) + "…"
 }
@@ -599,46 +617,66 @@ func truncateToWidth(s string, maxWidth int) string {
 // formatCollapsedEpicLine formats a done epic as a single collapsed line.
 // Format: ├ ✓ Epic title [3 tasks]                                    EPICID
 func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useColor bool, termWidth int) string {
+	// Layout contract: ids are right-aligned at idStart.
+	minGap := idMinGap
+	rightMargin := idRightMargin
+	idWidth := len(id)
+	idStart := termWidth - rightMargin - idWidth - minGap
+	if idStart < 0 {
+		idStart = 0
+	}
+
+	var base strings.Builder
+	if useColor {
+		base.WriteString(colorDim)
+	}
+	base.WriteString(prefix)
+	base.WriteString(connector)
+	base.WriteString(" ")
+	if useColor {
+		base.WriteString(colorReset)
+	}
+	if useColor {
+		base.WriteString(colorGreen)
+	}
+	base.WriteString("✓")
+	base.WriteString(" ")
+	if useColor {
+		base.WriteString(colorReset)
+	}
+	baseStr := base.String()
+	baseWidth := visibleLen(baseStr)
+
+	content := title + " " + countStr
+	maxContent := idStart - minGap - baseWidth
+	if maxContent < 0 {
+		maxContent = 0
+	}
+	if visibleLen(content) > maxContent {
+		countWidth := visibleLen(countStr)
+		if maxContent >= countWidth+1 {
+			title = truncateToWidth(title, maxContent-countWidth-1)
+			content = title + " " + countStr
+		} else if maxContent > 0 {
+			content = truncateToWidth(countStr, maxContent)
+		} else {
+			content = ""
+		}
+	}
+
 	var sb strings.Builder
+	sb.WriteString(baseStr)
+	sb.WriteString(content)
 
-	// Tree structure (dim)
-	if useColor {
-		sb.WriteString(colorDim)
+	padding := idStart - visibleLen(sb.String())
+	if padding < 0 {
+		padding = 0
 	}
-	sb.WriteString(prefix)
-	sb.WriteString(connector)
-	sb.WriteString(" ")
-	if useColor {
-		sb.WriteString(colorReset)
+	if padding > 0 {
+		sb.WriteString(strings.Repeat(" ", padding))
 	}
+	sb.WriteString(strings.Repeat(" ", minGap))
 
-	// Done icon
-	if useColor {
-		sb.WriteString(colorGreen)
-	}
-	sb.WriteString("✓")
-	sb.WriteString(" ")
-	if useColor {
-		sb.WriteString(colorReset)
-	}
-
-	// Title (default color for closed epic)
-	sb.WriteString(title)
-	sb.WriteString(" ")
-	sb.WriteString(countStr)
-	if useColor {
-		sb.WriteString(colorReset)
-	}
-
-	// Calculate padding for right-aligned ID
-	leftLen := visibleLen(prefix) + visibleLen(connector) + 1 + 2 + visibleLen(title) + 1 + visibleLen(countStr)
-	padding := termWidth - leftLen - len(id) - 2
-	if padding < 2 {
-		padding = 2
-	}
-	sb.WriteString(strings.Repeat(" ", padding))
-
-	// ID (default color, right-aligned)
 	if useColor {
 		sb.WriteString(colorReset)
 	}
@@ -654,151 +692,151 @@ func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useC
 // Visual hierarchy: icon → [h] → title → @claimer → [blocker column] → ID (right-aligned)
 // Ensures the line never exceeds termWidth by truncating content as needed.
 func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, annotations []string, blockerAnnotation string, task *Task, isReady bool, useColor bool, termWidth int) string {
-	// Calculate fixed overhead to determine available space for content
-	// Use visible lengths for Unicode characters (prefix/connector may have box-drawing chars)
-	prefixVisLen := visibleLen(prefix) + visibleLen(connector) + 1 // prefix + connector + space
-	iconLen := 0
+	// Layout contract: ids are right-aligned at idStart.
+	minGap := idMinGap
+	rightMargin := idRightMargin
+	idWidth := len(id)
+	idStart := termWidth - rightMargin - idWidth - minGap
+	if idStart < 0 {
+		idStart = 0
+	}
+
+	iconStr := ""
 	if icon != "" {
-		iconLen = 2 // icon + space (icon is 1 visible char)
-	}
-	workerLen := 0
-	if workerIndicator != "" {
-		workerLen = len(workerIndicator) + 1 // indicator + space (ASCII)
-	}
-	idLen := len(id) + 2 // ID + minimum 2-space padding before it (ASCII)
-
-	// Available space for title + annotations + blocker
-	overhead := prefixVisLen + iconLen + workerLen + idLen
-	availableSpace := termWidth - overhead
-	if availableSpace < 10 {
-		availableSpace = 10 // minimum for readability
+		iconStr = icon + " "
+		if task.IsEpic {
+			iconStr += " "
+		}
 	}
 
-	// Prepare annotation string
 	annotationStr := ""
 	if len(annotations) > 0 {
 		annotationStr = "  " + strings.Join(annotations, "  ")
 	}
 
-	// Calculate how much space title + annotations would take (visible length)
-	contentLen := visibleLen(title) + visibleLen(annotationStr)
-
-	// Truncate if needed, prioritizing title over annotations
-	if contentLen > availableSpace {
-		// First try to truncate annotations
-		maxAnnotation := availableSpace - visibleLen(title) - 2 // 2 for "  " separator
-		if maxAnnotation > 5 && len(annotationStr) > 0 {
-			// Truncate annotations to maxAnnotation visible chars
-			annotationStr = truncateToWidth(annotationStr, maxAnnotation)
-		} else if visibleLen(title) > availableSpace {
-			// Must truncate title too
-			annotationStr = "" // drop annotations entirely
-			title = truncateToWidth(title, availableSpace)
-		}
-	}
-
-	// Now build the string
-	var sb strings.Builder
-
-	// Tree structure (dim)
+	// Build base prefix (tree + icon + worker).
+	var base strings.Builder
 	if useColor {
-		sb.WriteString(colorDim)
+		base.WriteString(colorDim)
 	}
-	sb.WriteString(prefix)
-	sb.WriteString(connector)
-	sb.WriteString(" ")
+	base.WriteString(prefix)
+	base.WriteString(connector)
+	base.WriteString(" ")
 	if useColor {
-		sb.WriteString(colorReset)
+		base.WriteString(colorReset)
 	}
-
-	// Icon with state-based color
-	if icon != "" {
+	if iconStr != "" {
 		if useColor {
-			sb.WriteString(stateColor(task))
+			base.WriteString(stateColor(task))
 		}
-		sb.WriteString(icon)
-		sb.WriteString(" ")
+		base.WriteString(iconStr)
 		if useColor {
-			sb.WriteString(colorReset)
+			base.WriteString(colorReset)
 		}
 	}
-
-	// Worker indicator (e.g., [h] for human) - before title, dim
 	if workerIndicator != "" {
 		if useColor {
-			sb.WriteString(colorDim)
+			base.WriteString(colorDim)
 		}
-		sb.WriteString(workerIndicator)
-		sb.WriteString(" ")
+		base.WriteString(workerIndicator)
+		base.WriteString(" ")
 		if useColor {
-			sb.WriteString(colorReset)
+			base.WriteString(colorReset)
+		}
+	}
+	baseStr := base.String()
+	baseWidth := visibleLen(baseStr)
+
+	maxContent := idStart - minGap - baseWidth
+	if maxContent < 0 {
+		maxContent = 0
+	}
+
+	// Fit title + annotations within maxContent.
+	if visibleLen(title)+visibleLen(annotationStr) > maxContent {
+		maxAnnotation := maxContent - visibleLen(title)
+		if maxAnnotation > 0 && annotationStr != "" {
+			annotationStr = truncateToWidth(annotationStr, maxAnnotation)
+		} else {
+			annotationStr = ""
+		}
+		if visibleLen(title) > maxContent {
+			title = truncateToWidth(title, maxContent)
 		}
 	}
 
-	// Title (prominent for ready/epics, dim for blocked)
+	// Build left side with color.
+	var left strings.Builder
+	left.WriteString(baseStr)
+
 	isBlocked := task.State == stateTodo && !isReady && !task.IsEpic
 	if useColor {
 		if isBlocked {
-			sb.WriteString(colorDim)
+			left.WriteString(colorDim)
 		} else if task.IsEpic {
-			sb.WriteString(colorBold)
+			left.WriteString(colorBold)
 		}
 	}
-	sb.WriteString(title)
+	left.WriteString(title)
 	if useColor {
-		sb.WriteString(colorReset)
+		left.WriteString(colorReset)
 	}
 
-	// Annotations (dim) - like @claimer - immediately after title
 	if annotationStr != "" {
 		if useColor {
-			sb.WriteString(colorDim)
+			left.WriteString(colorDim)
 		}
-		sb.WriteString(annotationStr)
+		left.WriteString(annotationStr)
 		if useColor {
-			sb.WriteString(colorReset)
+			left.WriteString(colorReset)
 		}
 	}
 
-	// Blocker annotation - skip if no space
-	idCol := termWidth - len(id) - 2
+	var sb strings.Builder
+	sb.WriteString(left.String())
+
+	// Optional blocker annotation within remaining space before ID.
+	if blockerAnnotation != "" {
+		available := idStart - minGap - visibleLen(sb.String())
+		if available > 6 {
+			blockerCol := termWidth * 55 / 100
+			maxBlockerStart := idStart - minGap - 1
+			if blockerCol > maxBlockerStart {
+				blockerCol = maxBlockerStart
+			}
+			paddingToBlocker := blockerCol - visibleLen(sb.String())
+			if paddingToBlocker > 1 {
+				sb.WriteString(strings.Repeat(" ", paddingToBlocker))
+			} else {
+				sb.WriteString("  ")
+			}
+			maxBlockerLen := idStart - minGap - visibleLen(sb.String())
+			if maxBlockerLen > 0 {
+				if useColor {
+					sb.WriteString(colorDim)
+				}
+				if visibleLen(blockerAnnotation) > maxBlockerLen {
+					sb.WriteString(truncateToWidth(blockerAnnotation, maxBlockerLen))
+				} else {
+					sb.WriteString(blockerAnnotation)
+				}
+				if useColor {
+					sb.WriteString(colorReset)
+				}
+			}
+		}
+	}
+
+	// Pad to ID column and append ID.
 	currentLen := visibleLen(sb.String())
-	spaceForBlocker := idCol - currentLen - 4 // need some padding
-
-	if blockerAnnotation != "" && spaceForBlocker > 5 {
-		blockerCol := termWidth * 55 / 100
-		paddingToBlocker := blockerCol - currentLen
-		if paddingToBlocker > 1 {
-			sb.WriteString(strings.Repeat(" ", paddingToBlocker))
-		} else {
-			sb.WriteString("  ")
-		}
-
-		// Truncate blocker text if needed
-		maxBlockerLen := idCol - visibleLen(sb.String()) - 2
-		if useColor {
-			sb.WriteString(colorDim)
-		}
-		if len(blockerAnnotation) > maxBlockerLen && maxBlockerLen > 3 {
-			sb.WriteString(blockerAnnotation[:maxBlockerLen-1])
-			sb.WriteString("…")
-		} else if maxBlockerLen > 0 {
-			sb.WriteString(blockerAnnotation)
-		}
-		if useColor {
-			sb.WriteString(colorReset)
-		}
+	padding := idStart - currentLen
+	if padding < 0 {
+		padding = 0
 	}
-
-	// ID (right-aligned; white for epics, dim for tasks)
-	currentLen = visibleLen(sb.String())
-	padding := idCol - currentLen
-
 	if padding > 0 {
 		sb.WriteString(strings.Repeat(" ", padding))
-	} else {
-		sb.WriteString("  ") // minimum spacing
 	}
+	sb.WriteString(strings.Repeat(" ", minGap))
 	if useColor {
 		if task.IsEpic {
 			sb.WriteString(colorReset)
