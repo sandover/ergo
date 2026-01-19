@@ -58,9 +58,10 @@ EOF
 ergo dep ABCDEF GHIJKL
 
 # List, inspect, & claim tasks
-ergo list              # tree view; filter with --ready or --blocked
-ergo show ABCDEF       # task details for humans, --json for agents
-ergo next              # claim oldest READY task, set to doing, print body
+ergo list                 # tree view; filter with --ready or --blocked
+ergo --json show ABCDEF   # task details for agents (structured)
+ergo show ABCDEF          # task details for humans
+ergo next                 # claim oldest READY task, set to doing, print body
 
 # Update task state
 echo '{"state":"done"}' | ergo set ABCDEF            # mark complete
