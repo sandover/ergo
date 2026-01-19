@@ -622,10 +622,7 @@ func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useC
 		sb.WriteString(colorReset)
 	}
 
-	// Title (dim for done epic)
-	if useColor {
-		sb.WriteString(colorDim)
-	}
+	// Title (default color for closed epic)
 	sb.WriteString(title)
 	sb.WriteString(" ")
 	sb.WriteString(countStr)
@@ -634,16 +631,16 @@ func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useC
 	}
 
 	// Calculate padding for right-aligned ID
-	leftLen := len(prefix) + len(connector) + 1 + 2 + len(title) + 1 + len(countStr)
+	leftLen := visibleLen(prefix) + visibleLen(connector) + 1 + 2 + visibleLen(title) + 1 + visibleLen(countStr)
 	padding := termWidth - leftLen - len(id) - 2
 	if padding < 2 {
 		padding = 2
 	}
 	sb.WriteString(strings.Repeat(" ", padding))
 
-	// ID (dim, right-aligned)
+	// ID (default color, right-aligned)
 	if useColor {
-		sb.WriteString(colorDim)
+		sb.WriteString(colorReset)
 	}
 	sb.WriteString(id)
 	if useColor {
