@@ -448,7 +448,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	// If --epics only, show simple epic list instead of tree
 	if showEpics && epicID == "" && !readyOnly && !blockedOnly {
 		for _, epic := range epics {
-			fmt.Printf("%s  %s\n", epic.ID, firstLine(epic.Body))
+			fmt.Printf("%s  %s\n", epic.ID, titleForBody(epic.Body))
 		}
 		if len(epics) == 0 {
 			fmt.Println("no epics")
@@ -498,7 +498,7 @@ func RunNext(nextOpts NextOptions, opts GlobalOptions) error {
 				"epic":   chosen.EpicID,
 				"worker": string(chosen.Worker),
 				"state":  chosen.State,
-				"title":  firstLine(chosen.Body),
+				"title":  titleForBody(chosen.Body),
 				"body":   chosen.Body,
 			})
 		}
@@ -571,7 +571,7 @@ func RunNext(nextOpts NextOptions, opts GlobalOptions) error {
 			"epic":       chosen.EpicID,
 			"worker":     string(chosen.Worker),
 			"state":      stateDoing,
-			"title":      firstLine(body),
+			"title":      titleForBody(body),
 			"body":       body,
 			"agent_id":   agentID,
 			"claimed_at": formatTime(now),
@@ -632,7 +632,7 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 		if claimed == "" {
 			claimed = "-"
 		}
-		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", task.ID, task.State, epic, claimed, firstLine(task.Body))
+		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", task.ID, task.State, epic, claimed, titleForBody(task.Body))
 		return nil
 	}
 	fmt.Printf("id: %s\n", task.ID)

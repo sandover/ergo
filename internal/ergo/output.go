@@ -118,7 +118,7 @@ func buildTaskListItems(tasks []*Task, graph *Graph, repoDir string) []taskListI
 			EpicID:     task.EpicID,
 			State:      task.State,
 			ClaimedBy:  task.ClaimedBy,
-			Title:      firstLine(task.Body),
+			Title:      titleForBody(task.Body),
 			Worker:     string(task.Worker),
 			Ready:      isReady(task, graph),
 			Blocked:    isBlocked(task, graph),
@@ -135,6 +135,35 @@ func firstLine(body string) string {
 	}
 	line, _, _ := strings.Cut(body, "\n")
 	return strings.TrimSpace(line)
+}
+
+func titleForBody(body string) string {
+	line := firstLine(body)
+	if line != "" && !isBodyHeading(line) {
+		return line
+	}
+	for _, raw := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" || isBodyHeading(trimmed) {
+			continue
+		}
+		return trimmed
+	}
+	return "(untitled)"
+}
+
+func isBodyHeading(line string) bool {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false
+	}
+	if !strings.HasPrefix(line, "#") {
+		return false
+	}
+	for len(line) > 0 && line[0] == '#' {
+		line = strings.TrimPrefix(line, "#")
+	}
+	return strings.TrimSpace(line) != ""
 }
 
 func claimedAtForTask(task *Task, meta *TaskMeta) string {

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- List rendering now skips heading-only first lines and falls back to the first meaningful line.
 
 ## [0.5.7] - 2026-01-19
 

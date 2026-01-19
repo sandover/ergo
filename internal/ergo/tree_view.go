@@ -384,7 +384,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 
 	// Handle collapsed (done) epics
 	if node.collapsed && task.IsEpic {
-		title := firstLine(task.Body)
+		title := titleForBody(task.Body)
 		countStr := fmt.Sprintf("[%d tasks]", node.collapsedCount)
 		line := formatCollapsedEpicLine(prefix, connector, task.ID, title, countStr, useColor, termWidth)
 		fmt.Fprintln(w, line)
@@ -393,7 +393,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 
 	// Build the line
 	icon := stateIcon(task, node.isReady)
-	title := firstLine(task.Body)
+	title := titleForBody(task.Body)
 
 	// Worker indicator - compact, shown before title
 	workerIndicator := ""
@@ -421,7 +421,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 			if parentBlockers == nil || !parentBlockers[bid] {
 				// Show by name, not ID
 				if blocker := graph.Tasks[bid]; blocker != nil {
-					name := abbreviate(firstLine(blocker.Body), 20)
+					name := abbreviate(titleForBody(blocker.Body), 20)
 					newBlockers = append(newBlockers, name)
 				} else {
 					newBlockers = append(newBlockers, bid)
