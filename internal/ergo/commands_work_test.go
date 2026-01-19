@@ -17,10 +17,9 @@ func TestBuildSetEvents_StateValidation(t *testing.T) {
 		errorMsg    string
 	}{
 		{
-			name:        "valid state transition",
+			name:        "implicit claim when transitioning to doing",
 			updates:     map[string]string{"state": "doing"},
-			expectError: true, // should fail - doing requires claim
-			errorMsg:    "state=doing requires a claim",
+			expectError: false, // now succeeds via implicit claim
 		},
 		{
 			name:        "invalid state",
@@ -29,9 +28,9 @@ func TestBuildSetEvents_StateValidation(t *testing.T) {
 			errorMsg:    "invalid state",
 		},
 		{
-			name:        "valid state with claim",
+			name:        "valid state with explicit claim",
 			updates:     map[string]string{"claim": "agent-1", "state": "doing"},
-			expectError: false, // claim is set in same update, so state=doing should work
+			expectError: false,
 		},
 		{
 			name:        "empty title rejected",
@@ -54,7 +53,7 @@ func TestBuildSetEvents_StateValidation(t *testing.T) {
 				return s, nil
 			}
 
-			_, _, err := buildSetEvents("T1", task, tt.updates, now, bodyResolver)
+			_, _, err := buildSetEvents("T1", task, tt.updates, "test-agent", now, bodyResolver)
 
 			if tt.expectError {
 				if err == nil {
@@ -106,7 +105,7 @@ func TestBuildSetEvents_ClaimHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bodyResolver := func(s string) (string, error) { return s, nil }
 
-			events, _, err := buildSetEvents(tt.task.ID, tt.task, tt.updates, now, bodyResolver)
+			events, _, err := buildSetEvents(tt.task.ID, tt.task, tt.updates, "test-agent", now, bodyResolver)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -132,14 +131,14 @@ func TestBuildSetEvents_UnknownKeys(t *testing.T) {
 	updates["state"] = "done"
 	delete(updates, "valid")
 
-	_, remaining, err := buildSetEvents("T1", task, updates, now, bodyResolver)
+	_, remaining, err := buildSetEvents("T1", task, updates, "test-agent", now, bodyResolver)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
 	// The function should have consumed "state" but left "unknown"
 	updates2 := map[string]string{"unknown": "value", "state": "done"}
-	_, remaining2, _ := buildSetEvents("T1", task, updates2, now, bodyResolver)
+	_, remaining2, _ := buildSetEvents("T1", task, updates2, "test-agent", now, bodyResolver)
 
 	if len(remaining2) != 1 {
 		t.Errorf("Expected 1 unknown key, got %d (remaining: %v)", len(remaining2), remaining)
@@ -161,7 +160,7 @@ func TestBuildSetEvents_EventOrdering(t *testing.T) {
 		"claim":  "agent-1",
 	}
 
-	events, _, err := buildSetEvents("T1", task, updates, now, bodyResolver)
+	events, _, err := buildSetEvents("T1", task, updates, "test-agent", now, bodyResolver)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}

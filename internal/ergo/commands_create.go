@@ -163,7 +163,8 @@ func RunNewTask(args []string, opts GlobalOptions) error {
 		delete(updates, "worker")
 
 		if len(updates) > 0 {
-			if err := applySetUpdates(dir, opts, created.ID, updates, true); err != nil {
+			agentID := resolveAgentID(opts)
+			if err := applySetUpdates(dir, opts, created.ID, updates, agentID, true); err != nil {
 				return err
 			}
 		}

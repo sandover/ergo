@@ -491,10 +491,10 @@ func TestListJSONIncludesAllTasks(t *testing.T) {
 	stdout, _, _ = runErgo(t, dir, fmt.Sprintf(`{"title":"Todo task","epic":"%s"}`, epicID), "new", "task")
 	todoID := strings.TrimSpace(stdout)
 
-	// List with JSON format - should include ALL tasks
-	stdout, _, code := runErgo(t, dir, "", "list", "--json")
+	// List with JSON format and --all - should include ALL tasks
+	stdout, _, code := runErgo(t, dir, "", "list", "--json", "--all")
 	if code != 0 {
-		t.Fatalf("list --json failed: exit %d", code)
+		t.Fatalf("list --json --all failed: exit %d", code)
 	}
 
 	var tasks []map[string]interface{}

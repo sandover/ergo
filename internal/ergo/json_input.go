@@ -158,11 +158,14 @@ func (t *TaskInput) validate(requireTitle bool, isEpic bool) *ValidationError {
 	}
 
 	// Claim invariants (doing/error require claim)
+	// Relaxed for implicit claim: we only reject if claim is explicitly empty ("").
+	// If claim is nil (missing from JSON), the logic layer will handle implicit claim.
 	if t.State != nil {
 		state := *t.State
-		hasClaim := t.Claim != nil && *t.Claim != ""
-		if (state == stateDoing || state == stateError) && !hasClaim {
-			invalid["claim"] = fmt.Sprintf("required when state=%s", state)
+		isClaimNeeded := state == stateDoing || state == stateError
+		isClaimEmpty := t.Claim != nil && *t.Claim == ""
+		if isClaimNeeded && isClaimEmpty {
+			invalid["claim"] = fmt.Sprintf("cannot be empty when state=%s", state)
 		}
 	}
 

@@ -81,10 +81,9 @@ func TestTaskInput_ValidateForNewTask(t *testing.T) {
 			invalidKeys: []string{"state"},
 		},
 		{
-			name:        "state=doing without claim",
+			name:        "state=doing without claim (implicit allowed)",
 			input:       TaskInput{Title: ptr("X"), Body: ptr("X"), State: ptr("doing")},
-			expectError: true,
-			invalidKeys: []string{"claim"},
+			expectError: false,
 		},
 		{
 			name:        "state=doing with claim",
@@ -92,10 +91,15 @@ func TestTaskInput_ValidateForNewTask(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "state=error without claim",
-			input:       TaskInput{Title: ptr("X"), Body: ptr("X"), State: ptr("error")},
+			name:        "state=doing with explicitly empty claim (rejected)",
+			input:       TaskInput{Title: ptr("X"), Body: ptr("X"), State: ptr("doing"), Claim: ptr("")},
 			expectError: true,
 			invalidKeys: []string{"claim"},
+		},
+		{
+			name:        "state=error without claim (implicit allowed)",
+			input:       TaskInput{Title: ptr("X"), Body: ptr("X"), State: ptr("error")},
+			expectError: false,
 		},
 		{
 			name:        "result_path without result_summary",

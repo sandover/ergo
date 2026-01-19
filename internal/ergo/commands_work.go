@@ -62,10 +62,11 @@ func RunSet(args []string, opts GlobalOptions) error {
 		return err
 	}
 
-	return applySetUpdates(dir, opts, id, updates, false)
+	agentID := resolveAgentID(opts)
+	return applySetUpdates(dir, opts, id, updates, agentID, false)
 }
 
-func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, quiet bool) error {
+func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, agentID string, quiet bool) error {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := filepath.Join(dir, "events.jsonl")
 
@@ -120,7 +121,7 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 		now := time.Now().UTC()
 
 		// Build events using pure function, passing I/O-dependent body resolver
-		events, remainingUpdates, err := buildSetEvents(id, task, updates, now, identityBodyResolver)
+		events, remainingUpdates, err := buildSetEvents(id, task, updates, agentID, now, identityBodyResolver)
 		if err != nil {
 			return err
 		}
@@ -146,11 +147,20 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 
 // buildSetEvents generates the event list for a set command.
 // Separated from I/O to improve testability and separation of concerns.
-func buildSetEvents(id string, task *Task, updates map[string]string, now time.Time, bodyResolver func(string) (string, error)) ([]Event, map[string]string, error) {
+func buildSetEvents(id string, task *Task, updates map[string]string, agentID string, now time.Time, bodyResolver func(string) (string, error)) ([]Event, map[string]string, error) {
 	var events []Event
 	remainingUpdates := make(map[string]string)
 	for k, v := range updates {
 		remainingUpdates[k] = v
+	}
+
+	// Handle implicit claim: if transitioning to doing/error and unclaimed, and no claim provided, use session identity
+	if !isEpic(task) && task.ClaimedBy == "" {
+		newState, hasState := remainingUpdates["state"]
+		_, hasClaim := remainingUpdates["claim"]
+		if hasState && (newState == stateDoing || newState == stateError) && !hasClaim {
+			remainingUpdates["claim"] = agentID
+		}
 	}
 
 	// Handle title update (can't be empty)
