@@ -1,6 +1,6 @@
 # ergo
 
-**A task graph for coding agents. Human-readable.**
+**A fast, minimal planning CLI tool for Claude Code and Codex.**
 
 [![License](https://img.shields.io/github/license/sandover/ergo)](LICENSE)
 [![CI](https://github.com/sandover/ergo/actions/workflows/ci.yml/badge.svg)](https://github.com/sandover/ergo/actions/workflows/ci.yml)
