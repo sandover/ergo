@@ -45,6 +45,8 @@ Once you and your agent have aligned on what it is you want done (whether throug
 
 You almost always get better results by then asking the agent to *evaluate and improve upon its own plan*.
 
+Once the plan is solid, tell your agent(s), "implement this plan" and they'll start picking up tasks and executing them.
+
 ## Usage (Humans)
 
 ### `ergo list`
