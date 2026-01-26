@@ -7,10 +7,12 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo)](https://goreportcard.com/report/github.com/sandover/ergo)
 [![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo.svg)](https://pkg.go.dev/github.com/sandover/ergo)
 
-`ergo` gives your AI agents a better place to plan. Tasks and dependencies persist across sessions, stay visible to humans, and are safe for concurrent agents. Data lives in the repo as plain text.
+`ergo` gives your AI agents (Claude Code, Codex, etc.) a better place to plan. Tasks and dependencies persist across sessions, stay visible to humans, and are safe for concurrent agents. Data lives in the repo as plain text.
 
 ### Why?
-Coding agents' plans are ephemeral and not inspectable, or they are sprawling markdown files. `ergo` gives agents a structured place to plan -- with a dependency graph and epics -- while keeping everything visible to humans.
+Coding agents' plans are ephemeral and not inspectable, or they are sprawling markdown files. `ergo` gives agents a structured way to describe a plan as a series of tasks. Tasks can have dependency relationships, and they can be grouped into epics. 
+
+Agents are the primary user of ergo, but human-friendly views of the task tree are available via `ergo list` and `ergo show`.
 
 Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler and faster.
 
@@ -28,45 +30,86 @@ Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler and f
 # Install
 brew install sandover/tap/ergo   # or: go install github.com/sandover/ergo@latest
 
-# Initialize (run once per repo)
+# Initialize
 ergo init
 
 # Tell your agent
-echo "Use 'ergo' for task tracking" >> AGENTS.md
+echo "Use 'ergo' for all planning & task tracking, run ergo --help now" >> AGENTS.md
 ```
 
-## Usage
+## Usage (Humans)
+
+### `ergo list`
+
 ```bash
-# Create an epic (JSON stdin, title + body required)
-echo '{"title":"User login","body":"Let users sign in with email and password"}' | ergo new epic
-# => created OFKSTE
-
-# Add a task to the epic
-echo '{"title":"Password hashing","body":"Use bcrypt with cost=12","epic":"OFKSTE"}' | ergo new task
-
-# Heredoc for complex JSON (here: a human-only task with multi-line body)
-ergo new task <<'EOF'
-{
-  "title": "Choose session duration",
-  "body": "Decide between 1h and 24h access tokens.\nWeigh security vs UX tradeoffs.",
-  "epic": "OFKSTE",
-  "worker": "human"
-}
-EOF
-
-# Add dependencies (A depends on B)
-ergo dep ABCDEF GHIJKL
-
-# List, inspect, & claim tasks
-ergo list                 # tree view; filter with --ready or --blocked
-ergo --json show ABCDEF   # task details for agents (structured)
-ergo show ABCDEF          # task details for humans
-ergo next                 # claim oldest READY task, set to doing, print body
-
-# Update task state
-echo '{"state":"done"}' | ergo set ABCDEF            # mark complete
+ergo list --all
 ```
-All mutations to tasks use JSON stdin style. Run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
+
+![Example output of ergo list](docs/img/ergo-list-screenshot.jpg)
+
+Legend:
+- `○` ready (todo + all deps satisfied)
+- `◐` in progress (doing)
+- `·` blocked (blocked or todo with unmet deps)
+- `✓` done
+- `✗` canceled
+- `⚠` error
+- `[h]` human-only task
+- `@agent-id` claimed by
+- `⧗ …` blocked by (dependency summary)
+
+### `ergo show`
+
+```bash
+ergo show GQUJPG
+```
+
+![Example output of ergo show](docs/img/ergo-show-screenshot.jpg)
+
+## Usage (Agents)
+
+Agents read with `--json` and write by piping JSON to stdin.
+
+### Plan Creation
+
+```bash
+# Create an epic
+echo '{"title":"User login","body":"Let users sign in with email+pw"}' | ergo new epic
+# => ergo returns a new task ID, e.g. ABCDEF
+
+# Add a task to that epic
+echo '{"title":"Password hashing","body":"Use bcrypt with cost=12","epic":"ABCDEF"}' | ergo new task
+# => returns a new task ID, e.g. GHIJKL
+
+# Add a task with a multi-line body (prefer printf style for this)
+printf '%s' '{"title":"Choose session duration","body":"Decide between 1h and 24h access tokens.\nWeigh security vs UX tradeoffs.","epic":"ABCDEF","worker":"human"}' | ergo new task
+# => returns e.g. MNOPQR
+
+# Add dependencies between tasks
+ergo dep MNOPQR GHIJKL
+
+# Read the list of all tasks
+ergo --json list --all
+```
+
+### Execution
+
+```bash
+# Find actionable work
+ergo --json list --ready --as agent
+
+# Claim oldest ready task (atomic)
+ergo --json next --as agent
+
+# Inspect a task
+ergo --json show GHIJKL
+
+# Update a task
+printf '%s' '{"state":"done"}' | ergo set GHIJKL
+```
+
+Run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
+
 
 ## Data Representation
 
