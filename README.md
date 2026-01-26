@@ -7,10 +7,10 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo)](https://goreportcard.com/report/github.com/sandover/ergo)
 [![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo.svg)](https://pkg.go.dev/github.com/sandover/ergo)
 
-`ergo` gives your AI agents (Claude Code, Codex, etc.) a better place to plan. Tasks and dependencies persist across sessions, stay visible to humans, and are safe for concurrent agents. Data lives in the repo as plain text.
+`ergo` gives your AI agents a better place to plan. Tasks and dependencies persist across sessions, stay visible to humans, and are safe for concurrent agents. Data lives in the repo as plain text.
 
 ### Why?
-Coding agents' plans are ephemeral and not inspectable, or they are sprawling markdown files. `ergo` gives agents a structured way to describe a plan as a series of tasks. Tasks can have dependency relationships, and they can be grouped into epics. 
+Coding agents' plans are ephemeral and not inspectable, or they are sprawling markdown files that don't necessarily capture how the work should be decomposed and ordered. `ergo` gives agents a more structured way to describe a plan as a set of tasks. Tasks can have dependency relationships, and they can be grouped into epics. 
 
 Agents are the primary user of ergo, but human-friendly views of the task tree are available via `ergo list` and `ergo show`.
 
