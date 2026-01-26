@@ -37,6 +37,14 @@ ergo init
 echo "Use 'ergo' for all planning & task tracking, run ergo --help now" >> AGENTS.md
 ```
 
+## Planning Instructions for your Agent
+
+Once you and your agent have aligned on what it is you want done (whether through chat, or through giving it a set of specs), you can then tell it something like this:
+
+> Write your plan into ergo as a set of well-described, tractable tasks, each with a goal, rationale, definition of done, and validation.
+
+You almost always get better results by then asking the agent to *evaluate and improve upon its own plan*.
+
 ## Usage (Humans)
 
 ### `ergo list`
