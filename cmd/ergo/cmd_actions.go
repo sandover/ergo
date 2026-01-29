@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+
 	"github.com/sandover/ergo/internal/ergo"
 	"github.com/spf13/cobra"
 )
@@ -19,8 +21,8 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 	// ergo show
 	rootCmd.AddCommand(showCmd)
-	// ergo next
-	rootCmd.AddCommand(nextCmd)
+	// ergo claim
+	rootCmd.AddCommand(claimCmd)
 	// ergo set
 	rootCmd.AddCommand(setCmd)
 	// ergo dep
@@ -115,24 +117,32 @@ func init() {
 	showCmd.Flags().Bool("short", false, "Short output format")
 }
 
-// -- next --
-var nextCmd = &cobra.Command{
-	Use:   "next",
-	Short: "Claim and show the next ready task",
-	Args:  cobra.NoArgs,
+// -- claim --
+var claimCmd = &cobra.Command{
+	Use:   "claim [<id>]",
+	Short: "Claim a task (or oldest ready task)",
+	Args:  cobra.RangeArgs(0, 1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		peek, _ := cmd.Flags().GetBool("peek")
+		state, _ := cmd.Flags().GetString("state")
 		epicID, _ := cmd.Flags().GetString("epic")
-		return ergo.RunNext(ergo.NextOptions{
-			Peek:   peek,
-			EpicID: epicID,
-		}, globalOpts)
+
+		if len(args) == 0 {
+			if state != "" {
+				return errors.New("--state requires an explicit task id")
+			}
+			return ergo.RunClaimOldestReady(epicID, globalOpts)
+		}
+
+		if epicID != "" {
+			return errors.New("--epic is only supported when claiming oldest-ready (no task id)")
+		}
+		return ergo.RunClaim(args[0], state, globalOpts)
 	},
 }
 
 func init() {
-	nextCmd.Flags().Bool("peek", false, "Peek at next task without claiming")
-	nextCmd.Flags().String("epic", "", "Filter by epic ID")
+	claimCmd.Flags().String("state", "", "Set state after claim (default: doing)")
+	claimCmd.Flags().String("epic", "", "Filter by epic ID (oldest-ready only)")
 }
 
 // -- set --

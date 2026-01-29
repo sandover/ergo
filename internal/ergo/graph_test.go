@@ -15,6 +15,7 @@ func TestReplayEvents_StateTransitions(t *testing.T) {
 			ID:        "T1",
 			UUID:      "uuid-1",
 			State:     stateTodo,
+			Title:     "Task 1",
 			Body:      "Task 1",
 			Worker:    "any",
 			CreatedAt: formatTime(now),
@@ -53,6 +54,7 @@ func TestReplayEvents_Claims(t *testing.T) {
 			ID:        "T1",
 			UUID:      "uuid-1",
 			State:     stateTodo,
+			Title:     "Task 1",
 			Body:      "Task 1",
 			Worker:    "any",
 			CreatedAt: formatTime(now),
@@ -88,6 +90,7 @@ func TestReplayEvents_Dependencies(t *testing.T) {
 			ID:        "T1",
 			UUID:      "uuid-1",
 			State:     stateTodo,
+			Title:     "Task 1",
 			Body:      "Task 1",
 			Worker:    "any",
 			CreatedAt: formatTime(now),
@@ -96,6 +99,7 @@ func TestReplayEvents_Dependencies(t *testing.T) {
 			ID:        "T2",
 			UUID:      "uuid-2",
 			State:     stateTodo,
+			Title:     "Task 2",
 			Body:      "Task 2",
 			Worker:    "any",
 			CreatedAt: formatTime(now),
@@ -283,6 +287,7 @@ func TestStateClearsClaim(t *testing.T) {
 					ID:        "T1",
 					UUID:      "uuid-1",
 					State:     stateDoing,
+					Title:     "Test",
 					Body:      "Test",
 					Worker:    "any",
 					CreatedAt: formatTime(now),
@@ -302,6 +307,51 @@ func TestStateClearsClaim(t *testing.T) {
 				t.Error("Expected claim kept, but was cleared")
 			}
 		})
+	}
+}
+
+func TestLegacyTitleMigration(t *testing.T) {
+	now := time.Now().UTC()
+	events := []Event{
+		mustNewEvent("new_task", now, NewTaskEvent{
+			ID:        "T1",
+			UUID:      "uuid-1",
+			State:     stateTodo,
+			Title:     "",
+			Body:      "Title line\nDetails line",
+			Worker:    "any",
+			CreatedAt: formatTime(now),
+		}),
+		mustNewEvent("new_task", now, NewTaskEvent{
+			ID:        "T2",
+			UUID:      "uuid-2",
+			State:     stateTodo,
+			Title:     "",
+			Body:      "# Heading\n\nActual title\nDetails",
+			Worker:    "any",
+			CreatedAt: formatTime(now),
+		}),
+	}
+
+	graph, err := replayEvents(events)
+	if err != nil {
+		t.Fatalf("replayEvents failed: %v", err)
+	}
+
+	task1 := graph.Tasks["T1"]
+	if task1.Title != "Title line" {
+		t.Errorf("expected migrated title 'Title line', got %q", task1.Title)
+	}
+	if task1.Body != "Details line" {
+		t.Errorf("expected migrated body 'Details line', got %q", task1.Body)
+	}
+
+	task2 := graph.Tasks["T2"]
+	if task2.Title != "Actual title" {
+		t.Errorf("expected migrated title 'Actual title', got %q", task2.Title)
+	}
+	if task2.Body != "Details" {
+		t.Errorf("expected migrated body 'Details', got %q", task2.Body)
 	}
 }
 

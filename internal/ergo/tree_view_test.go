@@ -202,7 +202,7 @@ func TestRenderCollapsedEpic(t *testing.T) {
 	// Create an epic with 5 done tasks
 	graph := &Graph{
 		Tasks: map[string]*Task{
-			"E1": {ID: "E1", IsEpic: true, Body: "My Epic"},
+			"E1": {ID: "E1", IsEpic: true, Title: "My Epic"},
 			"T1": {ID: "T1", EpicID: "E1", State: stateDone},
 			"T2": {ID: "T2", EpicID: "E1", State: stateDone},
 			"T3": {ID: "T3", EpicID: "E1", State: stateDone},
@@ -230,7 +230,7 @@ func TestRenderCollapsedEpic(t *testing.T) {
 func TestFormatTreeLineTruncation(t *testing.T) {
 	task := &Task{
 		ID:        "ABC123",
-		Body:      "Test task",
+		Title:     "Test task",
 		State:     stateDoing,
 		ClaimedBy: "very-long-username@very-long-hostname.example.com",
 	}

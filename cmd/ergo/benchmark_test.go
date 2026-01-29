@@ -44,8 +44,8 @@ func BenchmarkList500Tasks(b *testing.B) { benchList(b, 500) }
 // BenchmarkList1000Tasks validates scaling for 1000 tasks.
 func BenchmarkList1000Tasks(b *testing.B) { benchList(b, 1000) }
 
-// BenchmarkNextClaim benchmarks the claim hot path.
-func BenchmarkNextClaim(b *testing.B) {
+// BenchmarkClaim benchmarks the claim hot path.
+func BenchmarkClaim(b *testing.B) {
 	dir := b.TempDir()
 	ergo := buildErgoBinary(b)
 
@@ -58,7 +58,7 @@ func BenchmarkNextClaim(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		runBenchErgo(b, ergo, dir, "", "next")
+		runBenchErgo(b, ergo, dir, "", "claim")
 	}
 }
 
@@ -77,7 +77,7 @@ func TestPerformance_List1000Tasks(t *testing.T) {
 	assertListUnder(t, 1000, 500*time.Millisecond)
 }
 
-func TestPerformance_NextClaim(t *testing.T) {
+func TestPerformance_Claim(t *testing.T) {
 	dir := t.TempDir()
 	ergo := buildErgoBinaryForTest(t)
 
@@ -88,14 +88,14 @@ func TestPerformance_NextClaim(t *testing.T) {
 	}
 
 	start := time.Now()
-	runTestErgo(t, ergo, dir, "", "next")
+	runTestErgo(t, ergo, dir, "", "claim")
 	elapsed := time.Since(start)
 
 	// Expected ~6ms, threshold 200ms
 	if elapsed > 200*time.Millisecond {
-		t.Errorf("next claim took %v, expected <200ms (regression guard)", elapsed)
+		t.Errorf("claim took %v, expected <200ms (regression guard)", elapsed)
 	}
-	t.Logf("next claim: %v", elapsed)
+	t.Logf("claim: %v", elapsed)
 }
 
 func assertListUnder(t *testing.T, taskCount int, maxDuration time.Duration) {
@@ -145,7 +145,7 @@ func TestConcurrentClaimNoDoubles(t *testing.T) {
 		wg.Add(1)
 		go func(agentNum int) {
 			defer wg.Done()
-			stdout, _, exitCode := runTestErgoWithExit(ergo, dir, "", "next", "--agent", fmt.Sprintf("agent-%d", agentNum))
+			stdout, _, exitCode := runTestErgoWithExit(ergo, dir, "", "claim", "--agent", fmt.Sprintf("agent-%d", agentNum))
 			if exitCode == 0 && stdout != "" {
 				// Extract ID from output (first line or first field)
 				id := extractTaskID(stdout)
@@ -238,7 +238,7 @@ func runBenchErgo(b *testing.B, binary, dir, stdin string, args ...string) strin
 	out, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			// Some commands (like next with no tasks) exit non-zero
+			// Some commands (like claim with no tasks) exit non-zero
 			_ = exitErr
 		}
 	}

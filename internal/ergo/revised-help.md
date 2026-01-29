@@ -15,9 +15,9 @@ COMMANDS
                                           --as applies only with --ready/--blocked. use --json for agents.
   show <id>                               show epic or task details. respects --json.
 
-  next [--epic <id>] [--peek]             (atomic) pick oldest READY task, claim, set doing, print title+body
-                                          filters: --epic and --as apply. --peek does not claim.
-                                          exit code 3 if no READY task.
+  claim [<id>] [--epic <id>]             (atomic) claim oldest READY task, set doing, print title+body
+                                          or claim a specific task by id.
+                                          filters: --epic and --as apply. exit code 3 if none.
 
   set <id> key=value [key=value ...]      update fields (see KEYS). rejects empty title.
   dep <A> <B>                             A depends on B (B blocks A).
@@ -31,7 +31,7 @@ COMMANDS
 
 GLOBAL FLAGS
   --dir <path>                            discovery start dir (or explicit .ergo dir)
-  --as <any|agent|human>                  filter READY/BLOCKED and next (default: any)
+  --as <any|agent|human>                  filter READY/BLOCKED and claim (default: any)
   --agent <id>                            claim identity (default: username@hostname)
   --json                                  JSON output (default: text), recommended for agents
   --readonly                              block commands that write

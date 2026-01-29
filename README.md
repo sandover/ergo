@@ -20,7 +20,7 @@ Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler and f
 
 - **Repo-local:** state lives in `.ergo/` as append-only JSONL -- inspectable and diffable.
 - **Simple:** no daemons, no git hooks, few opinions, easy to reason about.
-- **Concurrency-safe:** file lock serializes writes; `next` is race-safe.
+- **Concurrency-safe:** file lock serializes writes; `claim` is race-safe.
 - **Unix:** Plain text for pipes, `--json` for scripts.
 - **Fast:** 5-15x faster than beads, especially for large projects.
 
@@ -78,7 +78,8 @@ ergo show GQUJPG
 
 ## Usage (Agents)
 
-Agents read with `--json` and write by piping JSON to stdin.
+Agents read with `--json` and write by piping JSON to stdin (title and body are separate fields).
+Legacy archives without a title are auto-migrated by deriving title from the first non-empty, non-heading body line.
 
 ### Plan Creation
 
@@ -109,7 +110,10 @@ ergo --json list --all
 ergo --json list --ready --as agent
 
 # Claim oldest ready task (atomic)
-ergo --json next --as agent
+ergo --json claim --as agent
+
+# Claim a specific task
+ergo claim GHIJKL
 
 # Inspect a task
 ergo --json show GHIJKL
@@ -139,7 +143,7 @@ All state lives in `.ergo/` at your repo root:
 
 **Concurrency safety:**
 - All writes acquire an exclusive `flock(2)` on `.ergo/lock` before appending.
-- `ergo next` is atomic: read → find oldest READY → claim → write, all under lock.
+- `ergo claim` is atomic: read → find oldest READY → claim → write, all under lock.
 - Multiple agents can safely race to claim work; exactly one wins, others retry.
 - Lock timeout is configurable (`--lock-timeout 5s`); default 30s, `0` = fail fast.
 

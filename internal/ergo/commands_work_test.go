@@ -176,6 +176,32 @@ func TestBuildSetEvents_EventOrdering(t *testing.T) {
 	}
 }
 
+func TestBuildSetEvents_TitleAndBody(t *testing.T) {
+	now := time.Now().UTC()
+	task := &Task{ID: "T1", State: stateTodo, ClaimedBy: "", EpicID: "E1"}
+	bodyResolver := func(s string) (string, error) { return s, nil }
+
+	updates := map[string]string{
+		"title": "New title",
+		"body":  "New body",
+	}
+
+	events, _, err := buildSetEvents("T1", task, updates, "test-agent", now, bodyResolver)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(events) != 2 {
+		t.Fatalf("Expected 2 events, got %d", len(events))
+	}
+	if events[0].Type != "title" {
+		t.Errorf("Expected first event to be title, got %s", events[0].Type)
+	}
+	if events[1].Type != "body" {
+		t.Errorf("Expected second event to be body, got %s", events[1].Type)
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsSubstring(s, substr))
 }

@@ -98,7 +98,7 @@ func RunNewEpic(opts GlobalOptions) error {
 		return err
 	}
 
-	created, err := createTask(dir, opts, "", true, input.GetFullBody(), workerAny)
+	created, err := createTask(dir, opts, "", true, input.GetTitle(), input.GetBody(), workerAny)
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func RunNewTask(opts GlobalOptions) error {
 	}
 
 	// Create the task
-	created, err := createTask(dir, opts, input.GetEpic(), false, input.GetFullBody(), input.GetWorker())
+	created, err := createTask(dir, opts, input.GetEpic(), false, input.GetTitle(), input.GetBody(), input.GetWorker())
 	if err != nil {
 		return err
 	}

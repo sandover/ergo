@@ -393,7 +393,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 
 	// Handle collapsed (done) epics
 	if node.collapsed && task.IsEpic {
-		title := titleForBody(task.Body)
+		title := task.Title
 		countStr := fmt.Sprintf("[%d tasks]", node.collapsedCount)
 		line := formatCollapsedEpicLine(prefix, connector, task.ID, title, countStr, useColor, termWidth)
 		fmt.Fprintln(w, line)
@@ -402,7 +402,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 
 	// Build the line
 	icon := stateIcon(task, node.isReady)
-	title := titleForBody(task.Body)
+	title := task.Title
 
 	// Worker indicator - compact, shown before title
 	workerIndicator := ""
@@ -430,7 +430,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 			if parentBlockers == nil || !parentBlockers[bid] {
 				// Show by name, not ID
 				if blocker := graph.Tasks[bid]; blocker != nil {
-					name := abbreviate(titleForBody(blocker.Body), 20)
+					name := abbreviate(blocker.Title, 20)
 					newBlockers = append(newBlockers, name)
 				} else {
 					newBlockers = append(newBlockers, bid)
@@ -615,7 +615,7 @@ func truncateToWidth(s string, maxWidth int) string {
 }
 
 // formatCollapsedEpicLine formats a done epic as a single collapsed line.
-// Format: ├ ✓ Epic title [3 tasks]                                    EPICID
+// Format: ├ Ⓔ  ✓ Epic title [3 tasks]                                    EPICID
 func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useColor bool, termWidth int) string {
 	// Layout contract: ids are right-aligned at idStart.
 	minGap := idMinGap
@@ -636,10 +636,12 @@ func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useC
 	if useColor {
 		base.WriteString(colorReset)
 	}
+	base.WriteString(iconEpic)
+	base.WriteString("  ")
 	if useColor {
 		base.WriteString(colorGreen)
 	}
-	base.WriteString("✓")
+	base.WriteString(iconDone)
 	base.WriteString(" ")
 	if useColor {
 		base.WriteString(colorReset)
