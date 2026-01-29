@@ -595,102 +595,46 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	return nil
 }
 
-func RunShow(id string, short bool, opts GlobalOptions) error {
-	if id == "" {
-		return errors.New("usage: ergo show <id> [--short] [--json]")
+// collectEpicChildren returns all tasks belonging to the given epic, sorted by ID.
+func collectEpicChildren(epicID string, graph *Graph) []*Task {
+	var children []*Task
+	for _, t := range graph.Tasks {
+		if !isEpic(t) && t.EpicID == epicID {
+			children = append(children, t)
+		}
 	}
-	if short && opts.JSON {
-		return errors.New("conflicting flags: --short and --json")
-	}
-	dir, err := ergoDir(opts)
-	if err != nil {
-		return err
-	}
-	repoDir := filepath.Dir(dir)
-	graph, err := loadGraph(dir)
-	if err != nil {
-		return err
-	}
-	task, ok := graph.Tasks[id]
-	if !ok {
-		return fmt.Errorf("unknown task id %s", id)
-	}
-	claimedAt := claimedAtForTask(task, graph.Meta[id])
+	sort.Slice(children, func(i, j int) bool {
+		return children[i].ID < children[j].ID
+	})
+	return children
+}
 
-	// For epics, collect child tasks
-	var childTasks []*Task
-	if isEpic(task) {
-		for _, t := range graph.Tasks {
-			if !isEpic(t) && t.EpicID == id {
-				childTasks = append(childTasks, t)
-			}
-		}
-		// Sort by ID for consistent output
-		sort.Slice(childTasks, func(i, j int) bool {
-			return childTasks[i].ID < childTasks[j].ID
-		})
+// buildTaskShowOutput creates a taskShowOutput struct for JSON serialization.
+func buildTaskShowOutput(task *Task, meta *TaskMeta, repoDir string) taskShowOutput {
+	claimedAt := claimedAtForTask(task, meta)
+	return taskShowOutput{
+		ID:        task.ID,
+		UUID:      task.UUID,
+		EpicID:    task.EpicID,
+		State:     task.State,
+		Worker:    string(task.Worker),
+		ClaimedBy: task.ClaimedBy,
+		ClaimedAt: claimedAt,
+		CreatedAt: formatTime(task.CreatedAt),
+		UpdatedAt: formatTime(task.UpdatedAt),
+		Deps:      task.Deps,
+		RDeps:     task.RDeps,
+		Title:     task.Title,
+		Body:      task.Body,
+		Results:   buildResultOutputItems(task.Results, repoDir),
 	}
+}
 
-	if opts.JSON {
-		epicOutput := taskShowOutput{
-			ID:        task.ID,
-			UUID:      task.UUID,
-			EpicID:    task.EpicID,
-			State:     task.State,
-			Worker:    string(task.Worker),
-			ClaimedBy: task.ClaimedBy,
-			ClaimedAt: claimedAt,
-			CreatedAt: formatTime(task.CreatedAt),
-			UpdatedAt: formatTime(task.UpdatedAt),
-			Deps:      task.Deps,
-			RDeps:     task.RDeps,
-			Title:     task.Title,
-			Body:      task.Body,
-			Results:   buildResultOutputItems(task.Results, repoDir),
-		}
+// printTaskDetails prints the human-readable show output for a single task.
+func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
+	claimedAt := claimedAtForTask(task, meta)
 
-		// If it's an epic with children, wrap with children
-		if isEpic(task) && len(childTasks) > 0 {
-			childOutputs := make([]taskShowOutput, len(childTasks))
-			for i, child := range childTasks {
-				childClaimedAt := claimedAtForTask(child, graph.Meta[child.ID])
-				childOutputs[i] = taskShowOutput{
-					ID:        child.ID,
-					UUID:      child.UUID,
-					EpicID:    child.EpicID,
-					State:     child.State,
-					Worker:    string(child.Worker),
-					ClaimedBy: child.ClaimedBy,
-					ClaimedAt: childClaimedAt,
-					CreatedAt: formatTime(child.CreatedAt),
-					UpdatedAt: formatTime(child.UpdatedAt),
-					Deps:      child.Deps,
-					RDeps:     child.RDeps,
-					Title:     child.Title,
-					Body:      child.Body,
-					Results:   buildResultOutputItems(child.Results, repoDir),
-				}
-			}
-			// Return object with epic and children
-			return writeJSON(os.Stdout, map[string]interface{}{
-				"epic":     epicOutput,
-				"children": childOutputs,
-			})
-		}
-		return writeJSON(os.Stdout, epicOutput)
-	}
-	if short {
-		epic := task.EpicID
-		if epic == "" {
-			epic = "-"
-		}
-		claimed := task.ClaimedBy
-		if claimed == "" {
-			claimed = "-"
-		}
-		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", task.ID, task.State, epic, claimed, task.Title)
-		return nil
-	}
+	// Metadata
 	fmt.Printf("id: %s\n", task.ID)
 	fmt.Printf("uuid: %s\n", task.UUID)
 	if task.EpicID != "" {
@@ -712,6 +656,8 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 	if len(task.RDeps) > 0 {
 		fmt.Printf("rdeps: %s\n", strings.Join(task.RDeps, ","))
 	}
+
+	// Results
 	if len(task.Results) > 0 {
 		fmt.Printf("results: %d\n", len(task.Results))
 		for i, r := range task.Results {
@@ -725,7 +671,7 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 	}
 	fmt.Println()
 
-	// --- GLAMOUR RENDERING START ---
+	// Title and body with glamour rendering
 	isTTY := stdoutIsTTY()
 	if task.Title != "" {
 		fmt.Println(task.Title)
@@ -742,89 +688,82 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 		if err == nil {
 			fmt.Print(out)
 		} else {
-			// Fallback if rendering fails
 			fmt.Print(task.Body)
 			if !strings.HasSuffix(task.Body, "\n") {
 				fmt.Println()
 			}
 		}
 	} else {
-		// Non-TTY or empty body: print raw
 		fmt.Print(task.Body)
 		if task.Body != "" && !strings.HasSuffix(task.Body, "\n") {
 			fmt.Println()
 		}
 	}
-	// --- GLAMOUR RENDERING END ---
+}
 
-	// Show child tasks if this is an epic
-	if isEpic(task) && len(childTasks) > 0 {
-		for _, child := range childTasks {
-			fmt.Println("---")
-			childClaimedAt := claimedAtForTask(child, graph.Meta[child.ID])
-			fmt.Printf("id: %s\n", child.ID)
-			fmt.Printf("uuid: %s\n", child.UUID)
-			if child.EpicID != "" {
-				fmt.Printf("epic: %s\n", child.EpicID)
-			}
-			fmt.Printf("state: %s\n", child.State)
-			fmt.Printf("worker: %s\n", child.Worker)
-			if child.ClaimedBy != "" {
-				fmt.Printf("claimed_by: %s\n", child.ClaimedBy)
-				if childClaimedAt != "" {
-					fmt.Printf("claimed_at: %s\n", childClaimedAt)
-				}
-			}
-			fmt.Printf("created_at: %s\n", formatTime(child.CreatedAt))
-			fmt.Printf("updated_at: %s\n", formatTime(child.UpdatedAt))
-			if len(child.Deps) > 0 {
-				fmt.Printf("deps: %s\n", strings.Join(child.Deps, ","))
-			}
-			if len(child.RDeps) > 0 {
-				fmt.Printf("rdeps: %s\n", strings.Join(child.RDeps, ","))
-			}
-			if len(child.Results) > 0 {
-				fmt.Printf("results: %d\n", len(child.Results))
-				for i, r := range child.Results {
-					fileURL := deriveFileURL(r.Path, repoDir)
-					fmt.Printf("  [%d] %s\n", i+1, r.Summary)
-					fmt.Printf("      path: %s\n", r.Path)
-					fmt.Printf("      file_url: %s\n", fileURL)
-					fmt.Printf("      sha256: %s\n", r.Sha256AtAttach)
-					fmt.Printf("      attached: %s\n", formatTime(r.CreatedAt))
-				}
-			}
-			fmt.Println()
+func RunShow(id string, short bool, opts GlobalOptions) error {
+	if id == "" {
+		return errors.New("usage: ergo show <id> [--short] [--json]")
+	}
+	if short && opts.JSON {
+		return errors.New("conflicting flags: --short and --json")
+	}
+	dir, err := ergoDir(opts)
+	if err != nil {
+		return err
+	}
+	repoDir := filepath.Dir(dir)
+	graph, err := loadGraph(dir)
+	if err != nil {
+		return err
+	}
+	task, ok := graph.Tasks[id]
+	if !ok {
+		return fmt.Errorf("unknown task id %s", id)
+	}
 
-			// Render child task content
-			isTTY := stdoutIsTTY()
-			if child.Title != "" {
-				fmt.Println(child.Title)
-				if child.Body != "" {
-					fmt.Println()
-				}
+	// Collect child tasks if this is an epic
+	var childTasks []*Task
+	if isEpic(task) {
+		childTasks = collectEpicChildren(id, graph)
+	}
+
+	if opts.JSON {
+		output := buildTaskShowOutput(task, graph.Meta[id], repoDir)
+
+		// If it's an epic with children, wrap with children
+		if isEpic(task) && len(childTasks) > 0 {
+			childOutputs := make([]taskShowOutput, len(childTasks))
+			for i, child := range childTasks {
+				childOutputs[i] = buildTaskShowOutput(child, graph.Meta[child.ID], repoDir)
 			}
-			if isTTY && child.Body != "" {
-				r, _ := glamour.NewTermRenderer(
-					glamour.WithAutoStyle(),
-					glamour.WithWordWrap(80),
-				)
-				out, err := r.Render(child.Body)
-				if err == nil {
-					fmt.Print(out)
-				} else {
-					fmt.Print(child.Body)
-					if !strings.HasSuffix(child.Body, "\n") {
-						fmt.Println()
-					}
-				}
-			} else {
-				fmt.Print(child.Body)
-				if child.Body != "" && !strings.HasSuffix(child.Body, "\n") {
-					fmt.Println()
-				}
-			}
+			return writeJSON(os.Stdout, map[string]interface{}{
+				"epic":     output,
+				"children": childOutputs,
+			})
 		}
+		return writeJSON(os.Stdout, output)
+	}
+	if short {
+		epic := task.EpicID
+		if epic == "" {
+			epic = "-"
+		}
+		claimed := task.ClaimedBy
+		if claimed == "" {
+			claimed = "-"
+		}
+		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", task.ID, task.State, epic, claimed, task.Title)
+		return nil
+	}
+
+	// Print the main task/epic
+	printTaskDetails(task, graph.Meta[id], repoDir)
+
+	// Print child tasks if this is an epic
+	for _, child := range childTasks {
+		fmt.Println("---")
+		printTaskDetails(child, graph.Meta[child.ID], repoDir)
 	}
 
 	return nil
