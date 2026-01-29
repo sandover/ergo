@@ -1,3 +1,5 @@
+// Dependency rule tests for task/epic graph constraints.
+// Covers allowed edge types, cycles, and error conditions.
 package ergo
 
 import (

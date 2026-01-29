@@ -1,3 +1,5 @@
+// Tests for JSON input parsing and validation.
+// Ensures schema rules and error shapes stay stable.
 package ergo
 
 import (

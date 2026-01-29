@@ -1,3 +1,5 @@
+// State machine tests for task state transitions.
+// Ensures transitions and invariants match the defined rules.
 package ergo
 
 import (

@@ -1,3 +1,5 @@
+// CLI-level tests for option parsing and user-visible behaviors.
+// Validates contract of CLI helpers used by commands.
 package ergo
 
 import (

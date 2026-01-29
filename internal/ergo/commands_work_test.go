@@ -1,3 +1,5 @@
+// Tests for work command validation and event generation.
+// Focuses on claim/state invariants and buildSetEvents behavior.
 package ergo
 
 import (

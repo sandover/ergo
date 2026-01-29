@@ -1,3 +1,5 @@
+// Tests for result attachment and validation helpers.
+// Covers path validation, evidence capture, and replay.
 package ergo
 
 import (

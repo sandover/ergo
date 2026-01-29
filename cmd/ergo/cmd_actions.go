@@ -1,8 +1,8 @@
+// Cobra command wiring for ergo subcommands.
+// Maps CLI verbs to internal ergo.RunX implementations and flags.
 package main
 
 import (
-	"errors"
-
 	"github.com/sandover/ergo/internal/ergo"
 	"github.com/spf13/cobra"
 )

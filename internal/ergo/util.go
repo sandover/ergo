@@ -1,4 +1,5 @@
 // Shared helpers: sorting, locking, event building, ids, and time.
+// Keeps cross-cutting utilities small and reusable.
 package ergo
 
 import (

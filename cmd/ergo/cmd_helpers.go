@@ -1,3 +1,5 @@
+// CLI helper utilities for error handling and output formatting.
+// Keeps Cobra execution paths thin and consistent.
 package main
 
 import (

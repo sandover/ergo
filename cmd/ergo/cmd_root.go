@@ -1,3 +1,5 @@
+// Root command configuration for the ergo CLI.
+// Defines global flags, help output, and top-level command metadata.
 package main
 
 import (

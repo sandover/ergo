@@ -1,3 +1,5 @@
+// Tests for tree view rendering and formatting.
+// Verifies list/show output structure for tasks and epics.
 package ergo
 
 import (

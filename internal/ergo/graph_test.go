@@ -1,3 +1,5 @@
+// Tests for graph replay, traversal, and state derivation.
+// Validates event handling and dependency resolution.
 package ergo
 
 import (

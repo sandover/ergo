@@ -1,3 +1,5 @@
+// Round-trip tests for compacting the event log.
+// Ensures compact output faithfully represents current state.
 package ergo
 
 import (
