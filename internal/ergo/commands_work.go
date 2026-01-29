@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -615,8 +616,23 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 		return fmt.Errorf("unknown task id %s", id)
 	}
 	claimedAt := claimedAtForTask(task, graph.Meta[id])
+
+	// For epics, collect child tasks
+	var childTasks []*Task
+	if isEpic(task) {
+		for _, t := range graph.Tasks {
+			if !isEpic(t) && t.EpicID == id {
+				childTasks = append(childTasks, t)
+			}
+		}
+		// Sort by ID for consistent output
+		sort.Slice(childTasks, func(i, j int) bool {
+			return childTasks[i].ID < childTasks[j].ID
+		})
+	}
+
 	if opts.JSON {
-		return writeJSON(os.Stdout, taskShowOutput{
+		epicOutput := taskShowOutput{
 			ID:        task.ID,
 			UUID:      task.UUID,
 			EpicID:    task.EpicID,
@@ -631,7 +647,37 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 			Title:     task.Title,
 			Body:      task.Body,
 			Results:   buildResultOutputItems(task.Results, repoDir),
-		})
+		}
+
+		// If it's an epic with children, wrap with children
+		if isEpic(task) && len(childTasks) > 0 {
+			childOutputs := make([]taskShowOutput, len(childTasks))
+			for i, child := range childTasks {
+				childClaimedAt := claimedAtForTask(child, graph.Meta[child.ID])
+				childOutputs[i] = taskShowOutput{
+					ID:        child.ID,
+					UUID:      child.UUID,
+					EpicID:    child.EpicID,
+					State:     child.State,
+					Worker:    string(child.Worker),
+					ClaimedBy: child.ClaimedBy,
+					ClaimedAt: childClaimedAt,
+					CreatedAt: formatTime(child.CreatedAt),
+					UpdatedAt: formatTime(child.UpdatedAt),
+					Deps:      child.Deps,
+					RDeps:     child.RDeps,
+					Title:     child.Title,
+					Body:      child.Body,
+					Results:   buildResultOutputItems(child.Results, repoDir),
+				}
+			}
+			// Return object with epic and children
+			return writeJSON(os.Stdout, map[string]interface{}{
+				"epic":     epicOutput,
+				"children": childOutputs,
+			})
+		}
+		return writeJSON(os.Stdout, epicOutput)
 	}
 	if short {
 		epic := task.EpicID
@@ -710,6 +756,76 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 		}
 	}
 	// --- GLAMOUR RENDERING END ---
+
+	// Show child tasks if this is an epic
+	if isEpic(task) && len(childTasks) > 0 {
+		for _, child := range childTasks {
+			fmt.Println("---")
+			childClaimedAt := claimedAtForTask(child, graph.Meta[child.ID])
+			fmt.Printf("id: %s\n", child.ID)
+			fmt.Printf("uuid: %s\n", child.UUID)
+			if child.EpicID != "" {
+				fmt.Printf("epic: %s\n", child.EpicID)
+			}
+			fmt.Printf("state: %s\n", child.State)
+			fmt.Printf("worker: %s\n", child.Worker)
+			if child.ClaimedBy != "" {
+				fmt.Printf("claimed_by: %s\n", child.ClaimedBy)
+				if childClaimedAt != "" {
+					fmt.Printf("claimed_at: %s\n", childClaimedAt)
+				}
+			}
+			fmt.Printf("created_at: %s\n", formatTime(child.CreatedAt))
+			fmt.Printf("updated_at: %s\n", formatTime(child.UpdatedAt))
+			if len(child.Deps) > 0 {
+				fmt.Printf("deps: %s\n", strings.Join(child.Deps, ","))
+			}
+			if len(child.RDeps) > 0 {
+				fmt.Printf("rdeps: %s\n", strings.Join(child.RDeps, ","))
+			}
+			if len(child.Results) > 0 {
+				fmt.Printf("results: %d\n", len(child.Results))
+				for i, r := range child.Results {
+					fileURL := deriveFileURL(r.Path, repoDir)
+					fmt.Printf("  [%d] %s\n", i+1, r.Summary)
+					fmt.Printf("      path: %s\n", r.Path)
+					fmt.Printf("      file_url: %s\n", fileURL)
+					fmt.Printf("      sha256: %s\n", r.Sha256AtAttach)
+					fmt.Printf("      attached: %s\n", formatTime(r.CreatedAt))
+				}
+			}
+			fmt.Println()
+
+			// Render child task content
+			isTTY := stdoutIsTTY()
+			if child.Title != "" {
+				fmt.Println(child.Title)
+				if child.Body != "" {
+					fmt.Println()
+				}
+			}
+			if isTTY && child.Body != "" {
+				r, _ := glamour.NewTermRenderer(
+					glamour.WithAutoStyle(),
+					glamour.WithWordWrap(80),
+				)
+				out, err := r.Render(child.Body)
+				if err == nil {
+					fmt.Print(out)
+				} else {
+					fmt.Print(child.Body)
+					if !strings.HasSuffix(child.Body, "\n") {
+						fmt.Println()
+					}
+				}
+			} else {
+				fmt.Print(child.Body)
+				if child.Body != "" && !strings.HasSuffix(child.Body, "\n") {
+					fmt.Println()
+				}
+			}
+		}
+	}
 
 	return nil
 }
