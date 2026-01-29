@@ -21,7 +21,8 @@
 
 {{COMMENT}}Or claim a specific task:{{RESET}}
 {{CMD}}ergo claim ABCDEF --agent gpt-5-2-codex@brandon-mbp{{RESET}}
-{{CMD}}ergo claim ABCDEF --state blocked{{RESET}}
+{{COMMENT}}Option: change state later (uses existing claim if present).{{RESET}}
+{{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
 
 {{HEADER}}3. CREATE WORK (JSON stdin){{RESET}}
 
@@ -32,7 +33,8 @@
 {{COMMENT}}prints ID (e.g. OFKSTE){{RESET}}
 
 {{COMMENT}}Atomic Create-and-Claim (preferred for dynamic tasking):{{RESET}}
-{{CMD}}printf '%s' '{"title":"Fix CVE","state":"doing","claim":"agent-1"}' | ergo new task{{RESET}}
+{{CMD}}printf '%s' '{"title":"Fix CVE","claim":"agent-1"}' | ergo new task{{RESET}}
+{{COMMENT}}claim implies state=doing unless state is explicitly set.{{RESET}}
 
 {{HEADER}}4. DEPENDENCIES{{RESET}}
 
@@ -49,6 +51,7 @@
 
 {{CMD}}printf '%s' '{"state":"error"}' | ergo set ABCDEF{{RESET}}
 {{COMMENT}}requires claim (agent-id) to show who failed.{{RESET}}
+{{COMMENT}}if unclaimed, pass --agent (or set claim explicitly in JSON).{{RESET}}
 
 {{HEADER}}6. ATTACH RESULTS{{RESET}}
 
@@ -90,6 +93,7 @@
 
 {{COMMENT}}Invariants:{{RESET}}
 {{COMMENT}}  state=doing/error requires claim.{{RESET}}
+{{COMMENT}}  for implicit claims, pass --agent (or set claim explicitly in JSON).{{RESET}}
 {{COMMENT}}  state=todo/done/canceled clears claim.{{RESET}}
 
 {{HEADER}}REFERENCE: RULES{{RESET}}

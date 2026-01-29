@@ -68,30 +68,25 @@ func RunSet(id string, opts GlobalOptions) error {
 		return err
 	}
 
-	agentID := resolveAgentID(opts)
+	agentID := opts.AgentID
 	return applySetUpdates(dir, opts, id, updates, agentID, false)
 }
 
-func RunClaim(id string, state string, opts GlobalOptions) error {
+func RunClaim(id string, opts GlobalOptions) error {
 	if err := requireWritable(opts, "claim"); err != nil {
 		return err
 	}
 	if id == "" {
-		return errors.New("usage: ergo claim <id> [--state <doing|error|blocked>]")
+		return errors.New("usage: ergo claim <id>")
 	}
 
-	agentID := resolveAgentID(opts)
+	agentID := opts.AgentID
+	if agentID == "" {
+		return errors.New("claim requires --agent")
+	}
 	updates := map[string]string{
 		"claim": agentID,
-	}
-	if state == "" {
-		state = stateDoing
-	}
-	switch state {
-	case stateDoing, stateError, stateBlocked:
-		updates["state"] = state
-	default:
-		return fmt.Errorf("invalid state %q, expected: doing, error, blocked", state)
+		"state": stateDoing,
 	}
 
 	dir, err := ergoDir(opts)
@@ -133,7 +128,7 @@ func RunClaim(id string, state string, opts GlobalOptions) error {
 	return nil
 }
 
-func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
+func RunClaimOldestReady(opts GlobalOptions) error {
 	if err := requireWritable(opts, "claim"); err != nil {
 		return err
 	}
@@ -148,7 +143,10 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 
 	var chosen *Task
 	var now time.Time
-	agentID := resolveAgentID(opts)
+	agentID := opts.AgentID
+	if agentID == "" {
+		return errors.New("claim requires --agent")
+	}
 
 	err = withLock(lockPath, syscall.LOCK_EX, func() error {
 		graph, err := loadGraph(dir)
@@ -156,7 +154,7 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 			return err
 		}
 
-		ready := readyTasks(graph, epicID, kindTask)
+		ready := readyTasks(graph, "", kindTask)
 		if len(ready) == 0 {
 			return errors.New("no ready tasks")
 		}
@@ -186,7 +184,11 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 	})
 	if err != nil {
 		if err.Error() == "no ready tasks" {
-			os.Exit(3)
+			if opts.JSON {
+				return writeJSON(os.Stdout, "No ready ergo tasks.")
+			}
+			fmt.Println("No ready ergo tasks.")
+			return nil
 		}
 		return err
 	}
@@ -309,6 +311,9 @@ func buildSetEvents(id string, task *Task, updates map[string]string, agentID st
 		newState, hasState := remainingUpdates["state"]
 		_, hasClaim := remainingUpdates["claim"]
 		if hasState && (newState == stateDoing || newState == stateError) && !hasClaim {
+			if agentID == "" {
+				return nil, nil, errors.New("state requires claim; pass --agent or set claim explicitly")
+			}
 			remainingUpdates["claim"] = agentID
 		}
 	}

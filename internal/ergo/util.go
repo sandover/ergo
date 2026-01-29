@@ -1,4 +1,4 @@
-// Shared helpers: sorting, locking, event building, ids, time, and agent identity.
+// Shared helpers: sorting, locking, event building, ids, and time.
 package ergo
 
 import (
@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"os/user"
 	"sort"
 	"strings"
 	"syscall"
@@ -126,26 +124,4 @@ func maxTime(current, next time.Time) time.Time {
 		return next
 	}
 	return current
-}
-
-func defaultAgentID() string {
-	current, err := user.Current()
-	if err != nil || current == nil || current.Username == "" {
-		return "unknown"
-	}
-	hostname, err := os.Hostname()
-	if err != nil || hostname == "" {
-		return current.Username
-	}
-	return fmt.Sprintf("%s@%s", current.Username, hostname)
-}
-
-func resolveAgentID(opts GlobalOptions) string {
-	if opts.AgentID != "" {
-		return opts.AgentID
-	}
-	if value := os.Getenv("ERGO_AGENT_ID"); value != "" {
-		return value
-	}
-	return defaultAgentID()
 }

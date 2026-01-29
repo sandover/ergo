@@ -10,18 +10,20 @@
 `ergo` gives your AI agents a better place to plan. Tasks and dependencies persist across sessions, stay visible to humans, and are safe for concurrent agents. Data lives in the repo as plain text.
 
 ### Why?
-Coding agents' plans are ephemeral and not inspectable, or they are sprawling markdown files that don't necessarily capture how the work should be decomposed and ordered. `ergo` gives agents a more structured way to describe a plan as a set of tasks. Tasks can have dependency relationships, and they can be grouped into epics. 
+Coding agents' plans tend to be ephemeral and not inspectable -- or they take the form of (proliferating) markdown files that are hard to manage and don't necessarily capture how a project should be decomposed and sequenced. 
 
-Agents are the primary user of ergo, but human-friendly views of the task tree are available via `ergo list` and `ergo show`.
+`ergo` is a tool for agents to use to write down their plan as an orderly collection of tasks -- storing that collection in the repo, not in the agent. Tasks can have dependency relationships, and they can be grouped into epics. 
 
-Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler and faster.
+Agents are the primary user of ergo, but human-friendly views of the task collection are available via `ergo list` and `ergo show`.
+
+Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler, sounder, and faster.
 
 ## Features
 
 - **Repo-local:** state lives in `.ergo/` as append-only JSONL -- inspectable and diffable.
 - **Simple:** no daemons, no git hooks, few opinions, easy to reason about.
 - **Concurrency-safe:** file lock serializes writes; `claim` is race-safe.
-- **Unix:** Plain text for pipes, `--json` for scripts.
+- **Unixy:** plain text or JSON on stdin and stdout.
 - **Fast:** 5-15x faster than beads, especially for large projects.
 
 ## Quick Start
@@ -74,7 +76,7 @@ ergo show GQUJPG
 
 ## Usage (Agents)
 
-For most commands, agents read and write JSON to `ergo` via stdin. The `printf` style is robust even in unusual terminals like VSCode & Cursor.
+For most commands, agents read and write JSON to `ergo` via stdin. For multi-line input, the `printf` style is robust even in unusual terminals like VSCode & Cursor.
 
 Agents (and humans) should run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
 
@@ -138,8 +140,6 @@ On each command, ergo replays `events.jsonl` to build current state in memory qu
 
 **Why not SQLite?**
 SQLite is great, but binary files don't diff well in git, and concurrent writers from multiple processes need careful handling. JSONL is trivially inspectable (`cat | jq`), merges via normal git workflows, and append-only writes with `flock` are dead simple. For a task graph of a few thousand items, replay is instant; you don't need a query engine.
-
-Add `/.ergo/` to `.gitignore` for local-only use, or commit it for shared state across machines.
 
 ## Is it any good?
 

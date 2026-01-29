@@ -1,6 +1,8 @@
 package ergo
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -13,34 +15,47 @@ func TestBuildSetEvents_StateValidation(t *testing.T) {
 	tests := []struct {
 		name        string
 		updates     map[string]string
+		agentID     string
 		expectError bool
 		errorMsg    string
 	}{
 		{
 			name:        "implicit claim when transitioning to doing",
 			updates:     map[string]string{"state": "doing"},
+			agentID:     "test-agent",
 			expectError: false, // now succeeds via implicit claim
+		},
+		{
+			name:        "implicit claim without agent id",
+			updates:     map[string]string{"state": "doing"},
+			agentID:     "",
+			expectError: true,
+			errorMsg:    "state requires claim",
 		},
 		{
 			name:        "invalid state",
 			updates:     map[string]string{"state": "invalid"},
+			agentID:     "test-agent",
 			expectError: true,
 			errorMsg:    "invalid state",
 		},
 		{
 			name:        "valid state with explicit claim",
 			updates:     map[string]string{"claim": "agent-1", "state": "doing"},
+			agentID:     "",
 			expectError: false,
 		},
 		{
 			name:        "empty title rejected",
 			updates:     map[string]string{"title": ""},
+			agentID:     "test-agent",
 			expectError: true,
 			errorMsg:    "title cannot be empty",
 		},
 		{
 			name:        "empty title with whitespace rejected",
 			updates:     map[string]string{"title": "   "},
+			agentID:     "test-agent",
 			expectError: true,
 			errorMsg:    "title cannot be empty",
 		},
@@ -53,7 +68,7 @@ func TestBuildSetEvents_StateValidation(t *testing.T) {
 				return s, nil
 			}
 
-			_, _, err := buildSetEvents("T1", task, tt.updates, "test-agent", now, bodyResolver)
+			_, _, err := buildSetEvents("T1", task, tt.updates, tt.agentID, now, bodyResolver)
 
 			if tt.expectError {
 				if err == nil {
@@ -67,6 +82,37 @@ func TestBuildSetEvents_StateValidation(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestBuildSetEvents_StateValidation_ClaimedTaskNoAgent(t *testing.T) {
+	now := time.Now().UTC()
+	task := &Task{ID: "T1", State: stateTodo, ClaimedBy: "agent-1", EpicID: "E1"}
+	updates := map[string]string{"state": "doing"}
+	bodyResolver := func(s string) (string, error) { return s, nil }
+
+	_, _, err := buildSetEvents("T1", task, updates, "", now, bodyResolver)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+}
+
+func TestRunClaimRequiresAgent(t *testing.T) {
+	err := RunClaim("T1", GlobalOptions{})
+	if err == nil || !contains(err.Error(), "claim requires --agent") {
+		t.Fatalf("Expected claim requires --agent error, got %v", err)
+	}
+}
+
+func TestRunClaimOldestReadyRequiresAgent(t *testing.T) {
+	repoDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repoDir, ".ergo"), 0755); err != nil {
+		t.Fatalf("failed to create .ergo dir: %v", err)
+	}
+	opts := GlobalOptions{StartDir: repoDir}
+	err := RunClaimOldestReady(opts)
+	if err == nil || !contains(err.Error(), "claim requires --agent") {
+		t.Fatalf("Expected claim requires --agent error, got %v", err)
 	}
 }
 
