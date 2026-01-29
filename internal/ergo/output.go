@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/url"
 	"path/filepath"
-	"strings"
 )
 
 type taskListItem struct {
@@ -45,6 +44,7 @@ type taskShowOutput struct {
 	UpdatedAt string             `json:"updated_at"`
 	Deps      []string           `json:"deps"`
 	RDeps     []string           `json:"rdeps"`
+	Title     string             `json:"title"`
 	Body      string             `json:"body"`
 	Results   []resultOutputItem `json:"results,omitempty"`
 }
@@ -60,6 +60,8 @@ type createOutput struct {
 	EpicID    string `json:"epic_id"`
 	State     string `json:"state"`
 	Worker    string `json:"worker"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -118,7 +120,7 @@ func buildTaskListItems(tasks []*Task, graph *Graph, repoDir string) []taskListI
 			EpicID:     task.EpicID,
 			State:      task.State,
 			ClaimedBy:  task.ClaimedBy,
-			Title:      titleForBody(task.Body),
+			Title:      task.Title,
 			Worker:     string(task.Worker),
 			Ready:      isReady(task, graph),
 			Blocked:    isBlocked(task, graph),
@@ -127,43 +129,6 @@ func buildTaskListItems(tasks []*Task, graph *Graph, repoDir string) []taskListI
 		items = append(items, item)
 	}
 	return items
-}
-
-func firstLine(body string) string {
-	if body == "" {
-		return ""
-	}
-	line, _, _ := strings.Cut(body, "\n")
-	return strings.TrimSpace(line)
-}
-
-func titleForBody(body string) string {
-	line := firstLine(body)
-	if line != "" && !isBodyHeading(line) {
-		return line
-	}
-	for _, raw := range strings.Split(body, "\n") {
-		trimmed := strings.TrimSpace(raw)
-		if trimmed == "" || isBodyHeading(trimmed) {
-			continue
-		}
-		return trimmed
-	}
-	return "(untitled)"
-}
-
-func isBodyHeading(line string) bool {
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return false
-	}
-	if !strings.HasPrefix(line, "#") {
-		return false
-	}
-	for len(line) > 0 && line[0] == '#' {
-		line = strings.TrimPrefix(line, "#")
-	}
-	return strings.TrimSpace(line) != ""
 }
 
 func claimedAtForTask(task *Task, meta *TaskMeta) string {

@@ -21,6 +21,7 @@ type taskSnapshot struct {
 	EpicID    string         `json:"epic_id"`
 	IsEpic    bool           `json:"is_epic"`
 	State     string         `json:"state"`
+	Title     string         `json:"title"`
 	Body      string         `json:"body"`
 	Worker    Worker         `json:"worker"`
 	ClaimedBy string         `json:"claimed_by"`
@@ -67,6 +68,7 @@ func snapshotTaskState(task *Task) taskSnapshot {
 		EpicID:    task.EpicID,
 		IsEpic:    task.IsEpic,
 		State:     task.State,
+		Title:     task.Title,
 		Body:      task.Body,
 		Worker:    task.Worker,
 		ClaimedBy: task.ClaimedBy,
@@ -137,7 +139,7 @@ func mustNewEventT(t *testing.T, eventType string, ts time.Time, payload interfa
 	return event
 }
 
-func newTaskEvent(t *testing.T, ts time.Time, id, uuid, epicID, body string, worker Worker, isEpic bool) Event {
+func newTaskEvent(t *testing.T, ts time.Time, id, uuid, epicID, title, body string, worker Worker, isEpic bool) Event {
 	t.Helper()
 	eventType := "new_task"
 	if isEpic {
@@ -149,6 +151,7 @@ func newTaskEvent(t *testing.T, ts time.Time, id, uuid, epicID, body string, wor
 		UUID:      uuid,
 		EpicID:    epicID,
 		State:     stateTodo,
+		Title:     title,
 		Body:      body,
 		Worker:    string(worker),
 		CreatedAt: formatTime(ts),
@@ -187,6 +190,15 @@ func workerEvent(t *testing.T, ts time.Time, id string, worker Worker) Event {
 		ID:     id,
 		Worker: string(worker),
 		TS:     formatTime(ts),
+	})
+}
+
+func titleEvent(t *testing.T, ts time.Time, id, title string) Event {
+	t.Helper()
+	return mustNewEventT(t, "title", ts, TitleUpdateEvent{
+		ID:    id,
+		Title: title,
+		TS:    formatTime(ts),
 	})
 }
 
@@ -244,9 +256,9 @@ func TestCompactEvents_RoundTrip_TaskEvolvesOverTime(t *testing.T) {
 	ts := func(i int) time.Time { return t0.Add(time.Duration(i) * time.Minute) }
 
 	events := []Event{
-		newTaskEvent(t, ts(0), "E1", "uuid-e1", "", "Epic 1", workerAny, true),
-		newTaskEvent(t, ts(1), "T1", "uuid-t1", "", "Initial title", workerAny, false),
-		newTaskEvent(t, ts(2), "T2", "uuid-t2", "", "Task 2", workerAny, false),
+		newTaskEvent(t, ts(0), "E1", "uuid-e1", "", "Epic 1", "", workerAny, true),
+		newTaskEvent(t, ts(1), "T1", "uuid-t1", "", "Initial title", "", workerAny, false),
+		newTaskEvent(t, ts(2), "T2", "uuid-t2", "", "Task 2", "", workerAny, false),
 
 		epicAssignEvent(t, ts(3), "T1", "E1"),
 		epicAssignEvent(t, ts(3), "T2", "E1"),
@@ -259,11 +271,12 @@ func TestCompactEvents_RoundTrip_TaskEvolvesOverTime(t *testing.T) {
 		// Task 1: claim + doing, body changes, error/retry, worker change, then done + reopen.
 		claimEvent(t, ts(7), "T1", "agent-1"),
 		stateEvent(t, ts(7), "T1", stateDoing),
-		bodyEvent(t, ts(8), "T1", "Title\n\n## Details\nbody v2"),
+		titleEvent(t, ts(8), "T1", "Title"),
+		bodyEvent(t, ts(8), "T1", "## Details\nbody v2"),
 		stateEvent(t, ts(9), "T1", stateError),
 		workerEvent(t, ts(10), "T1", workerHuman),
 		stateEvent(t, ts(11), "T1", stateDoing),
-		bodyEvent(t, ts(12), "T1", "Title\n\n## Details\nbody v3\n\n- bullets\n- more"),
+		bodyEvent(t, ts(12), "T1", "## Details\nbody v3\n\n- bullets\n- more"),
 		stateEvent(t, ts(13), "T1", stateDone),
 		stateEvent(t, ts(14), "T1", stateTodo),
 
@@ -334,7 +347,7 @@ func (s *simState) ensureDepsMap(from string) map[string]struct{} {
 	return s.deps[from]
 }
 
-func (s *simState) applyNewTask(id, uuid, epicID string, isEpic bool, body string, worker Worker, createdAt time.Time) {
+func (s *simState) applyNewTask(id, uuid, epicID string, isEpic bool, title, body string, worker Worker, createdAt time.Time) {
 	if isEpic {
 		epicID = ""
 	}
@@ -344,6 +357,7 @@ func (s *simState) applyNewTask(id, uuid, epicID string, isEpic bool, body strin
 		EpicID:    epicID,
 		IsEpic:    isEpic,
 		State:     stateTodo,
+		Title:     title,
 		Body:      body,
 		Worker:    worker,
 		CreatedAt: createdAt,
@@ -385,6 +399,15 @@ func (s *simState) applyBody(id, body string, ts time.Time) {
 		return
 	}
 	task.Body = body
+	task.UpdatedAt = maxTime(task.UpdatedAt, ts)
+}
+
+func (s *simState) applyTitle(id, title string, ts time.Time) {
+	task := s.tasks[id]
+	if task == nil {
+		return
+	}
+	task.Title = title
 	task.UpdatedAt = maxTime(task.UpdatedAt, ts)
 }
 
@@ -454,17 +477,18 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 	{
 		epicID := fmt.Sprintf("E%d", nextEpic)
 		nextEpic++
-		events = append(events, newTaskEvent(t, now(len(events)), epicID, "uuid-"+epicID, "", "Epic "+epicID, workerAny, true))
-		sim.applyNewTask(epicID, "uuid-"+epicID, "", true, "Epic "+epicID, workerAny, now(len(events)-1))
+		title := "Epic " + epicID
+		events = append(events, newTaskEvent(t, now(len(events)), epicID, "uuid-"+epicID, "", title, "", workerAny, true))
+		sim.applyNewTask(epicID, "uuid-"+epicID, "", true, title, "", workerAny, now(len(events)-1))
 	}
 	for i := 0; i < 2; i++ {
 		taskID := fmt.Sprintf("T%d", nextTask)
 		nextTask++
 		epicID := "E1"
-		body := fmt.Sprintf("Task %s", taskID)
+		title := fmt.Sprintf("Task %s", taskID)
 		worker := []Worker{workerAny, workerAgent, workerHuman}[r.Intn(3)]
-		events = append(events, newTaskEvent(t, now(len(events)), taskID, "uuid-"+taskID, epicID, body, worker, false))
-		sim.applyNewTask(taskID, "uuid-"+taskID, epicID, false, body, worker, now(len(events)-1))
+		events = append(events, newTaskEvent(t, now(len(events)), taskID, "uuid-"+taskID, epicID, title, "", worker, false))
+		sim.applyNewTask(taskID, "uuid-"+taskID, epicID, false, title, "", worker, now(len(events)-1))
 	}
 
 	taskIDs := func() []string {
@@ -497,13 +521,13 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 
 	for i := 0; i < steps; i++ {
 		ts := now(len(events))
-		switch r.Intn(9) {
+		switch r.Intn(10) {
 		case 0: // new epic
 			epicID := fmt.Sprintf("E%d", nextEpic)
 			nextEpic++
-			body := fmt.Sprintf("Epic %s", epicID)
-			events = append(events, newTaskEvent(t, ts, epicID, "uuid-"+epicID, "", body, workerAny, true))
-			sim.applyNewTask(epicID, "uuid-"+epicID, "", true, body, workerAny, ts)
+			title := fmt.Sprintf("Epic %s", epicID)
+			events = append(events, newTaskEvent(t, ts, epicID, "uuid-"+epicID, "", title, "", workerAny, true))
+			sim.applyNewTask(epicID, "uuid-"+epicID, "", true, title, "", workerAny, ts)
 
 		case 1: // new task
 			taskID := fmt.Sprintf("T%d", nextTask)
@@ -513,10 +537,11 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 			if len(epics) > 0 && r.Intn(2) == 0 {
 				epicID = epics[r.Intn(len(epics))]
 			}
-			body := fmt.Sprintf("Task %s\n\nseed=%d step=%d", taskID, seed, i)
+			title := fmt.Sprintf("Task %s", taskID)
+			body := fmt.Sprintf("seed=%d step=%d", seed, i)
 			worker := []Worker{workerAny, workerAgent, workerHuman}[r.Intn(3)]
-			events = append(events, newTaskEvent(t, ts, taskID, "uuid-"+taskID, epicID, body, worker, false))
-			sim.applyNewTask(taskID, "uuid-"+taskID, epicID, false, body, worker, ts)
+			events = append(events, newTaskEvent(t, ts, taskID, "uuid-"+taskID, epicID, title, body, worker, false))
+			sim.applyNewTask(taskID, "uuid-"+taskID, epicID, false, title, body, worker, ts)
 
 		case 2: // body update (task or epic)
 			id, ok := choose(append(taskIDs(), epicIDs()...))
@@ -527,7 +552,16 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 			events = append(events, bodyEvent(t, ts, id, body))
 			sim.applyBody(id, body, ts)
 
-		case 3: // worker update (task only; epics cannot have workers)
+		case 3: // title update (task or epic)
+			id, ok := choose(append(taskIDs(), epicIDs()...))
+			if !ok {
+				continue
+			}
+			title := fmt.Sprintf("Title %s seed=%d step=%d", id, seed, i)
+			events = append(events, titleEvent(t, ts, id, title))
+			sim.applyTitle(id, title, ts)
+
+		case 4: // worker update (task only; epics cannot have workers)
 			id, ok := choose(taskIDs())
 			if !ok {
 				continue
@@ -536,7 +570,7 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 			events = append(events, workerEvent(t, ts, id, worker))
 			sim.applyWorker(id, worker, ts)
 
-		case 4: // state transition + optional claim mechanics (task only)
+		case 5: // state transition + optional claim mechanics (task only)
 			id, ok := choose(taskIDs())
 			if !ok {
 				continue
@@ -559,7 +593,7 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 			events = append(events, stateEvent(t, ts, id, newState))
 			sim.applyState(id, newState, ts)
 
-		case 5: // epic assignment (task only)
+		case 6: // epic assignment (task only)
 			id, ok := choose(taskIDs())
 			if !ok {
 				continue
@@ -572,7 +606,7 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 			events = append(events, epicAssignEvent(t, ts, id, epicID))
 			sim.applyEpic(id, epicID, ts)
 
-		case 6: // dependency link/unlink (tasks only, cycle-free)
+		case 7: // dependency link/unlink (tasks only, cycle-free)
 			ids := taskIDs()
 			if len(ids) < 2 {
 				continue
@@ -606,7 +640,7 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 			events = append(events, linkEvent(t, ts, from, to))
 			sim.applyLink(from, to)
 
-		case 7: // result attachment (task only)
+		case 8: // result attachment (task only)
 			id, ok := choose(taskIDs())
 			if !ok {
 				continue
@@ -632,7 +666,7 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 				CreatedAt:         ts,
 			}, ts)
 
-		case 8: // claim churn without state changes (task only)
+		case 9: // claim churn without state changes (task only)
 			id, ok := choose(taskIDs())
 			if !ok {
 				continue

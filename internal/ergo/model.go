@@ -206,6 +206,7 @@ type Task struct {
 	EpicID    string
 	IsEpic    bool
 	State     string
+	Title     string
 	Body      string
 	Worker    Worker
 	ClaimedBy string
@@ -217,6 +218,7 @@ type Task struct {
 }
 
 type TaskMeta struct {
+	CreatedTitle     string
 	CreatedBody      string
 	CreatedState     string
 	CreatedWorker    Worker
@@ -226,6 +228,7 @@ type TaskMeta struct {
 	LastStateAt      time.Time
 	LastClaimAt      time.Time
 	LastWorkerAt     time.Time
+	LastTitleAt      time.Time
 	LastBodyAt       time.Time
 	LastEpicAt       time.Time
 }
@@ -248,6 +251,7 @@ type NewTaskEvent struct {
 	UUID      string `json:"uuid"`
 	EpicID    string `json:"epic_id"`
 	State     string `json:"state"`
+	Title     string `json:"title"`
 	Body      string `json:"body"`
 	Worker    string `json:"worker"`
 	CreatedAt string `json:"created_at"`
@@ -275,6 +279,12 @@ type WorkerEvent struct {
 	ID     string `json:"id"`
 	Worker string `json:"worker"`
 	TS     string `json:"ts"`
+}
+
+type TitleUpdateEvent struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	TS    string `json:"ts"`
 }
 
 type BodyUpdateEvent struct {

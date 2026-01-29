@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING (0.Y.0):** Title and body are separate fields (no implicit title-from-body).
+- **BREAKING (0.Y.0):** Removed `next`; use `claim` (no args) to claim oldest READY task.
+- Legacy archives without titles are auto-migrated from the first non-empty, non-heading body line.
+- JSON outputs now carry explicit title/body fields where applicable.
+
 ### Fixed
 
 ## [0.5.8] - 2026-01-19

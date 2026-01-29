@@ -12,12 +12,16 @@
 {{HEADER}}2. AGENT WORKFLOW{{RESET}}
 
 {{COMMENT}}Recommended agent loop:{{RESET}}
-{{COMMENT}}  1. ergo --json next --as agent          (claim oldest ready work){{RESET}}
+{{COMMENT}}  1. ergo --json claim --as agent         (claim oldest ready work){{RESET}}
 {{COMMENT}}  2. do the work (write project files: docs/, src/){{RESET}}
 {{COMMENT}}  3. printf '{...}' | ergo set <id>       (attach results & mark done){{RESET}}
 
-{{CMD}}ergo --json next --as agent{{RESET}}
+{{CMD}}ergo --json claim --as agent{{RESET}}
 {{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
+
+{{COMMENT}}Or claim a specific task:{{RESET}}
+{{CMD}}ergo claim ABCDEF{{RESET}}
+{{CMD}}ergo claim ABCDEF --state blocked{{RESET}}
 
 {{HEADER}}3. CREATE WORK (JSON stdin){{RESET}}
 
@@ -65,7 +69,12 @@
 {{HEADER}}REFERENCE: JSON OUTPUT SCHEMA{{RESET}}
 
 {{COMMENT}}Task (list/show):{{RESET}}
-{{COMMENT}}  {id, uuid, epic_id, state, worker, claimed_by, claimed_at, body, deps[], results[]}{{RESET}}
+{{COMMENT}}  {id, uuid, epic_id, state, worker, claimed_by, claimed_at, title, body, deps[], results[]}{{RESET}}
+
+{{HEADER}}REFERENCE: TITLE + BODY{{RESET}}
+{{COMMENT}}Title and body are separate fields.{{RESET}}
+{{COMMENT}}Use JSON title for the task name; JSON body for details.{{RESET}}
+{{COMMENT}}Legacy: if title is missing, ergo derives it from the first non-empty non-heading line of body.{{RESET}}
 
 {{COMMENT}}Result:{{RESET}}
 {{COMMENT}}  {summary, path, file_url, sha256_at_attach, attached_at}{{RESET}}
@@ -87,4 +96,4 @@
 
 {{COMMENT}}- dep: task->task or epic->epic only.{{RESET}}
 {{COMMENT}}- cycles: forbidden (rejected by dep).{{RESET}}
-{{COMMENT}}- human: worker=human tasks ignored by 'next' unless --as human.{{RESET}}
+{{COMMENT}}- human: worker=human tasks ignored by 'claim' unless --as human.{{RESET}}

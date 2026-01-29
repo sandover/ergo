@@ -320,44 +320,6 @@ func TestTaskInput_ToKeyValueMap_OnlySetFields(t *testing.T) {
 	}
 }
 
-func TestTaskInput_GetFullBody(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    TaskInput
-		expected string
-	}{
-		{
-			name:     "title and body combined",
-			input:    TaskInput{Title: ptr("My Title"), Body: ptr("My body text")},
-			expected: "My Title\nMy body text",
-		},
-		{
-			name:     "title only (no body)",
-			input:    TaskInput{Title: ptr("Just Title"), Body: nil},
-			expected: "Just Title",
-		},
-		{
-			name:     "title with empty body",
-			input:    TaskInput{Title: ptr("Title Here"), Body: ptr("")},
-			expected: "Title Here",
-		},
-		{
-			name:     "multiline body preserved",
-			input:    TaskInput{Title: ptr("Title"), Body: ptr("Line 1\nLine 2\nLine 3")},
-			expected: "Title\nLine 1\nLine 2\nLine 3",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.input.GetFullBody()
-			if result != tt.expected {
-				t.Errorf("expected %q, got %q", tt.expected, result)
-			}
-		})
-	}
-}
-
 func TestValidationError_GoError(t *testing.T) {
 	tests := []struct {
 		name     string

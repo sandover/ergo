@@ -149,7 +149,8 @@ func TestResultEventReplay(t *testing.T) {
 		ID:        "T1",
 		UUID:      "uuid-1",
 		EpicID:    "",
-		Body:      "Test task",
+		Title:     "Test task",
+		Body:      "",
 		State:     stateTodo,
 		Worker:    "any",
 		CreatedAt: nowStr,
@@ -205,7 +206,8 @@ func TestResultCompaction(t *testing.T) {
 				ID:        "T1",
 				UUID:      "uuid-1",
 				State:     stateDone,
-				Body:      "Test task",
+				Title:     "Test task",
+				Body:      "",
 				Worker:    workerAny,
 				CreatedAt: now,
 				UpdatedAt: now.Add(time.Hour),
@@ -229,7 +231,8 @@ func TestResultCompaction(t *testing.T) {
 		RDeps: map[string]map[string]struct{}{},
 		Meta: map[string]*TaskMeta{
 			"T1": {
-				CreatedBody:  "Test task",
+				CreatedTitle: "Test task",
+				CreatedBody:  "",
 				CreatedState: stateTodo,
 				CreatedAt:    now,
 			},
@@ -273,7 +276,8 @@ func TestCompactionPreservesBodyUpdates(t *testing.T) {
 				ID:        "T1",
 				UUID:      "uuid-1",
 				State:     stateTodo,
-				Body:      "Fix npx caching - use @latest in docs\n\n## Problem\nThe docs show `npx superconnect` which uses cached versions...",
+				Title:     "Fix npx caching - use @latest in docs",
+				Body:      "## Problem\nThe docs show `npx superconnect` which uses cached versions...",
 				Worker:    workerAny,
 				CreatedAt: now,
 				UpdatedAt: now.Add(time.Minute),
@@ -283,7 +287,8 @@ func TestCompactionPreservesBodyUpdates(t *testing.T) {
 		RDeps: map[string]map[string]struct{}{},
 		Meta: map[string]*TaskMeta{
 			"T1": {
-				CreatedBody:  "Fix npx caching - use @latest in docs",
+				CreatedTitle: "Fix npx caching - use @latest in docs",
+				CreatedBody:  "",
 				CreatedState: stateTodo,
 				CreatedAt:    now,
 				LastBodyAt:   now.Add(time.Minute),
@@ -308,7 +313,7 @@ func TestCompactionPreservesBodyUpdates(t *testing.T) {
 	}
 
 	// Should preserve the full body with markdown
-	expectedBody := "Fix npx caching - use @latest in docs\n\n## Problem\nThe docs show `npx superconnect` which uses cached versions..."
+	expectedBody := "## Problem\nThe docs show `npx superconnect` which uses cached versions..."
 	if task.Body != expectedBody {
 		t.Errorf("body not preserved after compaction.\nExpected: %q\nGot: %q", expectedBody, task.Body)
 	}

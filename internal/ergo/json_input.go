@@ -21,7 +21,7 @@ import (
 
 // TaskInput is the unified JSON schema for creating and updating tasks/epics.
 //
-// For `new task` / `new epic`: title and body are required.
+// For `new task` / `new epic`: title is required; body is optional (details).
 // For `set`: all fields are optional; provided fields override existing values.
 //
 // Validation rules (apply to both new and set):
@@ -32,7 +32,7 @@ import (
 //   - result_path and result_summary must be provided together
 type TaskInput struct {
 	Title  *string `json:"title,omitempty"`  // required for new; optional for set
-	Body   *string `json:"body,omitempty"`   // required for new; optional for set
+	Body   *string `json:"body,omitempty"`   // optional details (cannot be empty if provided)
 	Epic   *string `json:"epic,omitempty"`   // epic ID or "" to unassign
 	Worker *string `json:"worker,omitempty"` // any|agent|human
 	State  *string `json:"state,omitempty"`  // todo|doing|done|blocked|canceled|error
@@ -138,7 +138,7 @@ func (t *TaskInput) validate(requireTitle bool, isEpic bool) *ValidationError {
 		invalid["title"] = "cannot be empty"
 	}
 
-	// Body validation - optional if title provided (title becomes the body)
+	// Body validation - optional details
 	if t.Body != nil && strings.TrimSpace(*t.Body) == "" {
 		invalid["body"] = "cannot be empty"
 	}
@@ -196,9 +196,13 @@ func (t *TaskInput) validate(requireTitle bool, isEpic bool) *ValidationError {
 	}
 
 	if len(missing) > 0 || len(invalid) > 0 {
+		message := "invalid input"
+		if len(missing) > 0 && len(invalid) == 0 {
+			message = "missing required fields"
+		}
 		return &ValidationError{
 			Error:   "validation_failed",
-			Message: "invalid input",
+			Message: message,
 			Missing: missing,
 			Invalid: invalid,
 		}
@@ -270,15 +274,4 @@ func (t *TaskInput) GetWorker() Worker {
 		return w
 	}
 	return workerAny
-}
-
-// GetFullBody returns the combined title + body for storage.
-// The internal model stores everything in Body, with title as first line.
-func (t *TaskInput) GetFullBody() string {
-	title := t.GetTitle()
-	body := t.GetBody()
-	if body == "" {
-		return title
-	}
-	return title + "\n" + body
 }

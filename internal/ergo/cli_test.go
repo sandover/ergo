@@ -4,55 +4,6 @@ import (
 	"testing"
 )
 
-// Test firstLine - pure function for extracting title from body
-func TestFirstLine(t *testing.T) {
-	tests := []struct {
-		name     string
-		body     string
-		expected string
-	}{
-		{
-			name:     "single line",
-			body:     "Just a title",
-			expected: "Just a title",
-		},
-		{
-			name:     "multiline extracts first",
-			body:     "Title line\nSecond line\nThird line",
-			expected: "Title line",
-		},
-		{
-			name:     "empty body",
-			body:     "",
-			expected: "",
-		},
-		{
-			name:     "newline only",
-			body:     "\n",
-			expected: "",
-		},
-		{
-			name:     "title with trailing newlines",
-			body:     "Title\n\n\n",
-			expected: "Title",
-		},
-		{
-			name:     "whitespace trimmed",
-			body:     "  Title with spaces  \nBody",
-			expected: "Title with spaces",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := firstLine(tt.body)
-			if result != tt.expected {
-				t.Errorf("Expected %q, got %q", tt.expected, result)
-			}
-		})
-	}
-}
-
 // Test ParseWorker - domain validation
 func TestParseWorker(t *testing.T) {
 	tests := []struct {

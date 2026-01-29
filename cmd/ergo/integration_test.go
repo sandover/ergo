@@ -358,8 +358,8 @@ func TestSet_MultipleFields(t *testing.T) {
 		t.Fatalf("failed to parse show output: %v", err)
 	}
 
-	if !strings.Contains(task["body"].(string), "Updated title") {
-		t.Errorf("title not updated, got body: %v", task["body"])
+	if task["title"] != "Updated title" {
+		t.Errorf("expected title updated, got %v", task["title"])
 	}
 	if task["state"] != "doing" {
 		t.Errorf("expected state=doing, got %v", task["state"])
@@ -372,9 +372,7 @@ func TestSet_MultipleFields(t *testing.T) {
 	}
 }
 
-// TestTitleAndBodyStoredCorrectly verifies that title and body are combined
-// and stored correctly, with title appearing as the first line.
-// This prevents regression of the "list shows body instead of title" bug.
+// TestTitleAndBodyStoredCorrectly verifies that title and body are stored separately.
 func TestTitleAndBodyStoredCorrectly(t *testing.T) {
 	dir := setupErgo(t)
 
@@ -387,7 +385,7 @@ func TestTitleAndBodyStoredCorrectly(t *testing.T) {
 	}
 	taskID := strings.TrimSpace(stdout)
 
-	// Verify via show --json that body contains title as first line
+	// Verify via show --json that title and body are distinct
 	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
 	if code != 0 {
 		t.Fatalf("show failed: exit %d", code)
@@ -398,19 +396,15 @@ func TestTitleAndBodyStoredCorrectly(t *testing.T) {
 		t.Fatalf("failed to parse show output: %v", err)
 	}
 
+	if task["title"] != "My Important Task" {
+		t.Errorf("expected title %q, got %v", "My Important Task", task["title"])
+	}
 	body, ok := task["body"].(string)
 	if !ok {
 		t.Fatalf("expected body string, got %T", task["body"])
 	}
-
-	// Body should start with title
-	if !strings.HasPrefix(body, "My Important Task\n") {
-		t.Errorf("body should start with title, got: %q", body)
-	}
-
-	// Body should contain the body text
-	if !strings.Contains(body, "This is the detailed body text") {
-		t.Errorf("body should contain body text, got: %q", body)
+	if body != "This is the detailed body text" {
+		t.Errorf("expected body %q, got %q", "This is the detailed body text", body)
 	}
 }
 

@@ -1,4 +1,4 @@
-// Work commands: dep/list/next/set/show/compact/where.
+// Work commands: dep/list/claim/set/show/compact/where.
 //
 // The set command uses stdin-only JSON input:
 //
@@ -25,11 +25,6 @@ type ListOptions struct {
 	BlockedOnly bool
 	ShowEpics   bool
 	ShowAll     bool
-}
-
-type NextOptions struct {
-	EpicID string
-	Peek   bool
 }
 
 func RunSet(id string, opts GlobalOptions) error {
@@ -74,6 +69,150 @@ func RunSet(id string, opts GlobalOptions) error {
 
 	agentID := resolveAgentID(opts)
 	return applySetUpdates(dir, opts, id, updates, agentID, false)
+}
+
+func RunClaim(id string, state string, opts GlobalOptions) error {
+	if err := requireWritable(opts, "claim"); err != nil {
+		return err
+	}
+	if id == "" {
+		return errors.New("usage: ergo claim <id> [--state <doing|error|blocked>]")
+	}
+
+	agentID := resolveAgentID(opts)
+	updates := map[string]string{
+		"claim": agentID,
+	}
+	if state == "" {
+		state = stateDoing
+	}
+	switch state {
+	case stateDoing, stateError, stateBlocked:
+		updates["state"] = state
+	default:
+		return fmt.Errorf("invalid state %q, expected: doing, error, blocked", state)
+	}
+
+	dir, err := ergoDir(opts)
+	if err != nil {
+		return err
+	}
+	if err := applySetUpdates(dir, opts, id, updates, agentID, true); err != nil {
+		return err
+	}
+
+	graph, err := loadGraph(dir)
+	if err != nil {
+		return err
+	}
+	task := graph.Tasks[id]
+	if task == nil {
+		return errors.New("internal error: missing claimed task")
+	}
+
+	if opts.JSON {
+		claimedAt := claimedAtForTask(task, graph.Meta[id])
+		return writeJSON(os.Stdout, map[string]interface{}{
+			"id":         task.ID,
+			"epic":       task.EpicID,
+			"worker":     string(task.Worker),
+			"state":      task.State,
+			"title":      task.Title,
+			"body":       task.Body,
+			"agent_id":   agentID,
+			"claimed_at": claimedAt,
+		})
+	}
+
+	fmt.Println(task.ID)
+	fmt.Println(task.Title)
+	if task.Body != "" {
+		fmt.Println(task.Body)
+	}
+	return nil
+}
+
+func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
+	if err := requireWritable(opts, "claim"); err != nil {
+		return err
+	}
+
+	dir, err := ergoDir(opts)
+	if err != nil {
+		return err
+	}
+
+	lockPath := filepath.Join(dir, "lock")
+	eventsPath := filepath.Join(dir, "events.jsonl")
+
+	var chosen *Task
+	var now time.Time
+	agentID := resolveAgentID(opts)
+
+	err = withLock(lockPath, syscall.LOCK_EX, opts.LockTimeout, func() error {
+		graph, err := loadGraph(dir)
+		if err != nil {
+			return err
+		}
+
+		ready := readyTasks(graph, epicID, opts.As, kindTask)
+		if len(ready) == 0 {
+			return errors.New("no ready tasks")
+		}
+
+		chosen = ready[0]
+		now = time.Now().UTC()
+
+		claimEvent, err := newEvent("claim", now, ClaimEvent{
+			ID:      chosen.ID,
+			AgentID: agentID,
+			TS:      formatTime(now),
+		})
+		if err != nil {
+			return err
+		}
+
+		stateEvent, err := newEvent("state", now, StateEvent{
+			ID:       chosen.ID,
+			NewState: stateDoing,
+			TS:       formatTime(now),
+		})
+		if err != nil {
+			return err
+		}
+
+		return appendEvents(eventsPath, []Event{claimEvent, stateEvent})
+	})
+	if err != nil {
+		if err.Error() == "no ready tasks" {
+			os.Exit(3)
+		}
+		return err
+	}
+
+	if chosen == nil {
+		return errors.New("internal error: missing chosen task")
+	}
+
+	if opts.JSON {
+		return writeJSON(os.Stdout, map[string]interface{}{
+			"id":         chosen.ID,
+			"epic":       chosen.EpicID,
+			"worker":     string(chosen.Worker),
+			"state":      stateDoing,
+			"title":      chosen.Title,
+			"body":       chosen.Body,
+			"agent_id":   agentID,
+			"claimed_at": formatTime(now),
+		})
+	}
+
+	fmt.Println(chosen.ID)
+	fmt.Println(chosen.Title)
+	if chosen.Body != "" {
+		fmt.Println(chosen.Body)
+	}
+	return nil
 }
 
 func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, agentID string, quiet bool) error {
@@ -173,33 +312,25 @@ func buildSetEvents(id string, task *Task, updates map[string]string, agentID st
 		}
 	}
 
-	// Handle title update (can't be empty)
-	if title, ok := remainingUpdates["title"]; ok {
+	// Handle title/body updates (explicit fields).
+	if title, hasTitle := remainingUpdates["title"]; hasTitle {
 		title = strings.TrimSpace(title)
 		if title == "" {
 			return nil, nil, errors.New("title cannot be empty")
 		}
-		// Title update via body update (reusing existing event)
-		bodyToSet := title
-		if body, hasBody := remainingUpdates["body"]; hasBody {
-			resolvedBody, err := bodyResolver(body)
-			if err != nil {
-				return nil, nil, err
-			}
-			bodyToSet = resolvedBody
-		}
-		event, err := newEvent("body", now, BodyUpdateEvent{
-			ID:   id,
-			Body: bodyToSet,
-			TS:   formatTime(now),
+		event, err := newEvent("title", now, TitleUpdateEvent{
+			ID:    id,
+			Title: title,
+			TS:    formatTime(now),
 		})
 		if err != nil {
 			return nil, nil, err
 		}
 		events = append(events, event)
 		delete(remainingUpdates, "title")
-		delete(remainingUpdates, "body") // already handled
-	} else if body, ok := remainingUpdates["body"]; ok {
+	}
+
+	if body, hasBody := remainingUpdates["body"]; hasBody {
 		resolvedBody, err := bodyResolver(body)
 		if err != nil {
 			return nil, nil, err
@@ -448,7 +579,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	// If --epics only, show simple epic list instead of tree
 	if showEpics && epicID == "" && !readyOnly && !blockedOnly {
 		for _, epic := range epics {
-			fmt.Printf("%s  %s\n", epic.ID, titleForBody(epic.Body))
+			fmt.Printf("%s  %s\n", epic.ID, epic.Title)
 		}
 		if len(epics) == 0 {
 			fmt.Println("no epics")
@@ -459,128 +590,6 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	// Tree view (human-friendly hierarchical output)
 	useColor := stdoutIsTTY()
 	renderTreeView(os.Stdout, graph, repoDir, useColor, showAll)
-
-	return nil
-}
-
-func RunNext(nextOpts NextOptions, opts GlobalOptions) error {
-	peek := nextOpts.Peek
-
-	if !peek {
-		if err := requireWritable(opts, "next"); err != nil {
-			return err
-		}
-	}
-	epicID := nextOpts.EpicID
-
-	dir, err := ergoDir(opts)
-	if err != nil {
-		return err
-	}
-
-	if peek {
-		// Just read and show, don't claim
-		graph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
-
-		ready := readyTasks(graph, epicID, opts.As, kindTask)
-		if len(ready) == 0 {
-			// Exit code 3 if no ready task
-			os.Exit(3)
-		}
-
-		chosen := ready[0]
-		if opts.JSON {
-			return writeJSON(os.Stdout, map[string]interface{}{
-				"id":     chosen.ID,
-				"epic":   chosen.EpicID,
-				"worker": string(chosen.Worker),
-				"state":  chosen.State,
-				"title":  titleForBody(chosen.Body),
-				"body":   chosen.Body,
-			})
-		}
-
-		// Print ID on first line, then title+body
-		fmt.Println(chosen.ID)
-		fmt.Println(chosen.Body)
-		return nil
-	}
-
-	// Atomic claim
-	lockPath := filepath.Join(dir, "lock")
-	eventsPath := filepath.Join(dir, "events.jsonl")
-	var body string
-	var chosen *Task
-	agentID := resolveAgentID(opts)
-	var now time.Time
-
-	err = withLock(lockPath, syscall.LOCK_EX, opts.LockTimeout, func() error {
-		graph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
-
-		ready := readyTasks(graph, epicID, opts.As, kindTask)
-		if len(ready) == 0 {
-			return errors.New("no ready tasks")
-		}
-
-		task := ready[0]
-		chosen = task
-		body = task.Body
-		now = time.Now().UTC()
-
-		claimEvent, err := newEvent("claim", now, ClaimEvent{
-			ID:      task.ID,
-			AgentID: agentID,
-			TS:      formatTime(now),
-		})
-		if err != nil {
-			return err
-		}
-
-		stateEvent, err := newEvent("state", now, StateEvent{
-			ID:       task.ID,
-			NewState: stateDoing,
-			TS:       formatTime(now),
-		})
-		if err != nil {
-			return err
-		}
-
-		return appendEvents(eventsPath, []Event{claimEvent, stateEvent})
-	})
-
-	if err != nil {
-		if err.Error() == "no ready tasks" {
-			// Exit code 3 if no ready task
-			os.Exit(3)
-		}
-		return err
-	}
-
-	if opts.JSON {
-		if chosen == nil {
-			return errors.New("internal error: missing chosen task")
-		}
-		return writeJSON(os.Stdout, map[string]interface{}{
-			"id":         chosen.ID,
-			"epic":       chosen.EpicID,
-			"worker":     string(chosen.Worker),
-			"state":      stateDoing,
-			"title":      titleForBody(body),
-			"body":       body,
-			"agent_id":   agentID,
-			"claimed_at": formatTime(now),
-		})
-	}
-
-	// Print ID on first line, then title+body
-	fmt.Println(chosen.ID)
-	fmt.Println(body)
 
 	return nil
 }
@@ -619,6 +628,7 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 			UpdatedAt: formatTime(task.UpdatedAt),
 			Deps:      task.Deps,
 			RDeps:     task.RDeps,
+			Title:     task.Title,
 			Body:      task.Body,
 			Results:   buildResultOutputItems(task.Results, repoDir),
 		})
@@ -632,7 +642,7 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 		if claimed == "" {
 			claimed = "-"
 		}
-		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", task.ID, task.State, epic, claimed, titleForBody(task.Body))
+		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", task.ID, task.State, epic, claimed, task.Title)
 		return nil
 	}
 	fmt.Printf("id: %s\n", task.ID)
@@ -671,6 +681,12 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 
 	// --- GLAMOUR RENDERING START ---
 	isTTY := stdoutIsTTY()
+	if task.Title != "" {
+		fmt.Println(task.Title)
+		if task.Body != "" {
+			fmt.Println()
+		}
+	}
 	if isTTY && task.Body != "" {
 		r, _ := glamour.NewTermRenderer(
 			glamour.WithAutoStyle(),

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -40,6 +41,7 @@ func replayEvents(events []Event) (*Graph, error) {
 				EpicID:    data.EpicID,
 				IsEpic:    event.Type == "new_epic",
 				State:     data.State,
+				Title:     data.Title,
 				Body:      data.Body,
 				Worker:    taskWorker,
 				CreatedAt: createdAt,
@@ -47,6 +49,7 @@ func replayEvents(events []Event) (*Graph, error) {
 			}
 			graph.Tasks[data.ID] = task
 			graph.Meta[data.ID] = &TaskMeta{
+				CreatedTitle:     data.Title,
 				CreatedBody:      data.Body,
 				CreatedState:     data.State,
 				CreatedWorker:    taskWorker,
@@ -141,6 +144,25 @@ func replayEvents(events []Event) (*Graph, error) {
 			if meta != nil {
 				meta.LastWorkerAt = ts
 			}
+		case "title":
+			var data TitleUpdateEvent
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				return nil, err
+			}
+			task, ok := graph.Tasks[data.ID]
+			if !ok {
+				continue
+			}
+			ts, err := parseTime(data.TS)
+			if err != nil {
+				return nil, err
+			}
+			task.Title = data.Title
+			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
+			meta := graph.Meta[data.ID]
+			if meta != nil {
+				meta.LastTitleAt = ts
+			}
 		case "body":
 			var data BodyUpdateEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
@@ -230,7 +252,53 @@ func replayEvents(events []Event) (*Graph, error) {
 		task.RDeps = sortedKeys(graph.RDeps[id])
 	}
 
+	applyLegacyTitleMigration(graph)
+
 	return graph, nil
+}
+
+func applyLegacyTitleMigration(graph *Graph) {
+	for _, task := range graph.Tasks {
+		if strings.TrimSpace(task.Title) != "" {
+			continue
+		}
+		title, body := deriveTitleAndBodyFromLegacy(task.Body)
+		task.Title = title
+		task.Body = body
+	}
+}
+
+func deriveTitleAndBodyFromLegacy(body string) (string, string) {
+	lines := strings.Split(body, "\n")
+	for i, raw := range lines {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" || isLegacyHeading(trimmed) {
+			continue
+		}
+		title := trimmed
+		if i+1 >= len(lines) {
+			return title, ""
+		}
+		return title, strings.Join(lines[i+1:], "\n")
+	}
+	if strings.TrimSpace(body) == "" {
+		return "(untitled)", ""
+	}
+	return "(untitled)", body
+}
+
+func isLegacyHeading(line string) bool {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false
+	}
+	if !strings.HasPrefix(line, "#") {
+		return false
+	}
+	for len(line) > 0 && line[0] == '#' {
+		line = strings.TrimPrefix(line, "#")
+	}
+	return strings.TrimSpace(line) != ""
 }
 
 func compactEvents(graph *Graph) ([]Event, error) {
@@ -241,12 +309,14 @@ func compactEvents(graph *Graph) ([]Event, error) {
 		meta := graph.Meta[task.ID]
 		createdAt := task.CreatedAt
 		createdState := task.State
+		createdTitle := task.Title
 		createdBody := task.Body
 		createdWorker := task.Worker
 		createdEpicID := task.EpicID
 		var lastStateAt time.Time
 		var lastClaimAt time.Time
 		var lastWorkerAt time.Time
+		var lastTitleAt time.Time
 		var lastBodyAt time.Time
 		var lastEpicAt time.Time
 		if meta != nil {
@@ -255,6 +325,9 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			}
 			if meta.CreatedState != "" {
 				createdState = meta.CreatedState
+			}
+			if meta.CreatedTitle != "" {
+				createdTitle = meta.CreatedTitle
 			}
 			if meta.CreatedBody != "" {
 				createdBody = meta.CreatedBody
@@ -268,6 +341,7 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			lastStateAt = meta.LastStateAt
 			lastClaimAt = meta.LastClaimAt
 			lastWorkerAt = meta.LastWorkerAt
+			lastTitleAt = meta.LastTitleAt
 			lastBodyAt = meta.LastBodyAt
 			lastEpicAt = meta.LastEpicAt
 		}
@@ -277,6 +351,7 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			UUID:      task.UUID,
 			EpicID:    createdEpicID,
 			State:     createdState,
+			Title:     createdTitle,
 			Body:      createdBody,
 			Worker:    string(createdWorker),
 			CreatedAt: formatTime(createdAt),
@@ -290,6 +365,19 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			return nil, err
 		}
 		events = append(events, event)
+
+		if task.Title != createdTitle || (!lastTitleAt.IsZero() && lastTitleAt.After(createdAt)) {
+			ts := pickTime(lastTitleAt, task.UpdatedAt)
+			titleEvent, err := newEvent("title", ts, TitleUpdateEvent{
+				ID:    task.ID,
+				Title: task.Title,
+				TS:    formatTime(ts),
+			})
+			if err != nil {
+				return nil, err
+			}
+			events = append(events, titleEvent)
+		}
 
 		if task.Body != createdBody || (!lastBodyAt.IsZero() && lastBodyAt.After(createdAt)) {
 			ts := pickTime(lastBodyAt, task.UpdatedAt)
