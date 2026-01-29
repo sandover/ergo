@@ -12,12 +12,12 @@ COMMANDS
   list [--epic <id>] [--ready|--blocked] [--epics]
                                           list tasks (default: all)
                                           --epics shows epic summaries too
-                                          --as applies only with --ready/--blocked. use --json for agents.
   show <id>                               show epic or task details. respects --json.
 
-  claim [<id>] [--epic <id>]             (atomic) claim oldest READY task, set doing, print title+body
+  claim [<id>] [--epic <id>] [--agent <id>]
+                                          (atomic) claim oldest READY task, set doing, print title+body
                                           or claim a specific task by id.
-                                          filters: --epic and --as apply. exit code 3 if none.
+                                          filters: --epic applies. exit code 3 if none.
 
   set <id> key=value [key=value ...]      update fields (see KEYS). rejects empty title.
   dep <A> <B>                             A depends on B (B blocks A).
@@ -31,7 +31,6 @@ COMMANDS
 
 GLOBAL FLAGS
   --dir <path>                            discovery start dir (or explicit .ergo dir)
-  --as <any|agent|human>                  filter READY/BLOCKED and claim (default: any)
   --agent <id>                            claim identity (default: username@hostname)
   --json                                  JSON output (default: text), recommended for agents
   --readonly                              block commands that write
@@ -39,7 +38,7 @@ GLOBAL FLAGS
   -V, --version                           print version
 
 READY DEFINITION (tasks only)
-  state=todo, unclaimed, worker matches --as, all task deps done|canceled,
+  state=todo, unclaimed, all task deps done|canceled,
   and all epic-deps of the task's epic are complete.
 
 BLOCKED DEFINITION (tasks only)

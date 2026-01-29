@@ -372,6 +372,39 @@ func TestSet_MultipleFields(t *testing.T) {
 	}
 }
 
+func TestClaim_WithAgentFlag(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+
+	agentID := "gpt-5-2-codex@brandon-mbp"
+	_, _, code = runErgo(t, dir, "", "claim", taskID, "--agent", agentID)
+	if code != 0 {
+		t.Fatalf("claim failed: exit %d", code)
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+
+	var task map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
+		t.Fatalf("failed to parse show output: %v", err)
+	}
+
+	if task["claimed_by"] != agentID {
+		t.Errorf("expected claimed_by=%q, got %v", agentID, task["claimed_by"])
+	}
+	if task["state"] != "doing" {
+		t.Errorf("expected state=doing, got %v", task["state"])
+	}
+}
+
 // TestTitleAndBodyStoredCorrectly verifies that title and body are stored separately.
 func TestTitleAndBodyStoredCorrectly(t *testing.T) {
 	dir := setupErgo(t)

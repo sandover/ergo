@@ -104,7 +104,7 @@ ergo dep MNOPQR GHIJKL
 ergo --json list --ready
 
 # Claim a task
-ergo claim GHIJKL --as agent
+ergo claim GHIJKL --agent gpt-5-2-codex@my-macbook
 
 # Set properties of a task, like marking it "done"
 printf '%s' '{"state":"done"}' | ergo set GHIJKL

@@ -29,22 +29,7 @@ func init() {
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&globalOpts.StartDir, "dir", "", "Run in a specific directory")
 	rootCmd.PersistentFlags().BoolVar(&globalOpts.ReadOnly, "readonly", false, "Run in read-only mode")
-
-	// --as flag needs custom parsing for validation, but for now we can bind to string and validate in PreRun
-	var asStr string
-	rootCmd.PersistentFlags().StringVar(&asStr, "as", "any", "Filter/act as worker type (any|agent|human)")
-
-	// We need to hook into PreRun to parse 'as' into globalOpts.As
-	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		w, err := ergo.ParseWorker(asStr)
-		if err != nil {
-			return err
-		}
-		globalOpts.As = w
-		return nil
-	}
-
-	rootCmd.PersistentFlags().StringVar(&globalOpts.AgentID, "agent", "", "Agent ID for claims (default: hostname)")
+	rootCmd.PersistentFlags().StringVar(&globalOpts.AgentID, "agent", "", "Agent ID for claims (default: username@hostname)")
 	rootCmd.PersistentFlags().BoolVarP(&globalOpts.Quiet, "quiet", "q", false, "Suppress output")
 	rootCmd.PersistentFlags().BoolVarP(&globalOpts.Verbose, "verbose", "v", false, "Verbose output")
 	rootCmd.PersistentFlags().BoolVar(&globalOpts.JSON, "json", false, "Output JSON")

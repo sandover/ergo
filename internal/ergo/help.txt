@@ -17,7 +17,7 @@
                                           --epics shows only epics
   show <id>                               show epic or task details
 
-  claim [<id>] [--epic <id>] [--state <doing|error|blocked>]
+  claim [<id>] [--epic <id>] [--state <doing|error|blocked>] [--agent <id>]
                                           claim oldest READY task (no id), or claim a specific task
                                           uses --agent for identity; exit 3 if no READY tasks
 
@@ -30,7 +30,6 @@
 
 {{HEADER}}GLOBAL FLAGS{{RESET}}
   --dir <path>                            discovery start dir (or explicit .ergo dir)
-  --as <any|agent|human>                  filter READY/BLOCKED and claim (default: any)
   --agent <id>                            claim identity (default: username@hostname)
   --json                                  JSON output (default: text)
   --readonly                              block commands that write
@@ -40,6 +39,7 @@
 
 {{HEADER}}FOR AGENTS{{RESET}}
   {{BOLD}}ALWAYS use '--json' arg to read structured output.
+  {{BOLD}}ALWAYS pass --agent when claiming (suggested: model@host).
   {{BOLD}}ALWAYS use printf for JSON input (not heredocs, which break in some terms).
   Before using, first run `ergo quickstart` for complete reference and workflow.
 

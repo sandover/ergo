@@ -125,24 +125,31 @@ var claimCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		state, _ := cmd.Flags().GetString("state")
 		epicID, _ := cmd.Flags().GetString("epic")
+		agentID, _ := cmd.Flags().GetString("agent")
+
+		opts := globalOpts
+		if agentID != "" {
+			opts.AgentID = agentID
+		}
 
 		if len(args) == 0 {
 			if state != "" {
 				return errors.New("--state requires an explicit task id")
 			}
-			return ergo.RunClaimOldestReady(epicID, globalOpts)
+			return ergo.RunClaimOldestReady(epicID, opts)
 		}
 
 		if epicID != "" {
 			return errors.New("--epic is only supported when claiming oldest-ready (no task id)")
 		}
-		return ergo.RunClaim(args[0], state, globalOpts)
+		return ergo.RunClaim(args[0], state, opts)
 	},
 }
 
 func init() {
 	claimCmd.Flags().String("state", "", "Set state after claim (default: doing)")
 	claimCmd.Flags().String("epic", "", "Filter by epic ID (oldest-ready only)")
+	claimCmd.Flags().String("agent", "", "Claim identity (suggested: model@host)")
 }
 
 // -- set --

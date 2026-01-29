@@ -12,15 +12,15 @@
 {{HEADER}}2. AGENT WORKFLOW{{RESET}}
 
 {{COMMENT}}Recommended agent loop:{{RESET}}
-{{COMMENT}}  1. ergo --json claim --as agent         (claim oldest ready work){{RESET}}
+{{COMMENT}}  1. ergo --json claim --agent gpt-5-2-codex@brandon-mbp   (claim oldest ready work){{RESET}}
 {{COMMENT}}  2. do the work (write project files: docs/, src/){{RESET}}
 {{COMMENT}}  3. printf '{...}' | ergo set <id>       (attach results & mark done){{RESET}}
 
-{{CMD}}ergo --json claim --as agent{{RESET}}
+{{CMD}}ergo --json claim --agent gpt-5-2-codex@brandon-mbp{{RESET}}
 {{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
 
 {{COMMENT}}Or claim a specific task:{{RESET}}
-{{CMD}}ergo claim ABCDEF{{RESET}}
+{{CMD}}ergo claim ABCDEF --agent gpt-5-2-codex@brandon-mbp{{RESET}}
 {{CMD}}ergo claim ABCDEF --state blocked{{RESET}}
 
 {{HEADER}}3. CREATE WORK (JSON stdin){{RESET}}
@@ -96,4 +96,5 @@
 
 {{COMMENT}}- dep: task->task or epic->epic only.{{RESET}}
 {{COMMENT}}- cycles: forbidden (rejected by dep).{{RESET}}
-{{COMMENT}}- human: worker=human tasks ignored by 'claim' unless --as human.{{RESET}}
+{{COMMENT}}- worker is advisory; claim does not filter by worker.{{RESET}}
+{{COMMENT}}- recommended agent id format: model@host (not enforced).{{RESET}}

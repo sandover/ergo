@@ -156,7 +156,7 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 			return err
 		}
 
-		ready := readyTasks(graph, epicID, opts.As, kindTask)
+		ready := readyTasks(graph, epicID, kindTask)
 		if len(ready) == 0 {
 			return errors.New("no ready tasks")
 		}
@@ -533,9 +533,6 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	}
 
 	// Filter by worker only if --ready or --blocked is set
-	if opts.As != workerAny && (readyOnly || blockedOnly) {
-		tasksOnly = filterTasksByWorker(tasksOnly, opts.As)
-	}
 
 	// Apply Active Set filtering (default behavior)
 	// If --all is NOT set, and we aren't targeting specific states via --ready/--blocked,

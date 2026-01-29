@@ -49,16 +49,6 @@ func ParseWorker(value string) (Worker, error) {
 	}
 }
 
-func isWorkerAllowed(taskWorker Worker, as Worker) bool {
-	if taskWorker == "" {
-		taskWorker = workerAny
-	}
-	if as == "" || as == workerAny {
-		return true
-	}
-	return taskWorker == workerAny || taskWorker == as
-}
-
 func parseKind(value string) (Kind, error) {
 	switch strings.TrimSpace(strings.ToLower(value)) {
 	case "", "any":
@@ -189,7 +179,6 @@ func validateDepSelf(from, to string) error {
 type GlobalOptions struct {
 	StartDir string
 	ReadOnly bool
-	As       Worker
 	AgentID  string
 	Quiet    bool
 	Verbose  bool

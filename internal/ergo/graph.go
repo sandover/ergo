@@ -483,7 +483,7 @@ func compactEvents(graph *Graph) ([]Event, error) {
 	return events, nil
 }
 
-func readyTasks(graph *Graph, epicID string, as Worker, kind Kind) []*Task {
+func readyTasks(graph *Graph, epicID string, kind Kind) []*Task {
 	tasks := listTasks(graph, epicID, true, false, true)
 	if len(tasks) == 0 {
 		return nil
@@ -492,9 +492,6 @@ func readyTasks(graph *Graph, epicID string, as Worker, kind Kind) []*Task {
 	if len(tasks) == 0 {
 		return nil
 	}
-	if as != "" && as != workerAny {
-		tasks = filterTasksByWorker(tasks, as)
-	}
 	sort.Slice(tasks, func(i, j int) bool {
 		if tasks[i].CreatedAt.Equal(tasks[j].CreatedAt) {
 			return tasks[i].ID < tasks[j].ID
@@ -502,19 +499,6 @@ func readyTasks(graph *Graph, epicID string, as Worker, kind Kind) []*Task {
 		return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
 	})
 	return tasks
-}
-
-func filterTasksByWorker(tasks []*Task, as Worker) []*Task {
-	if as == "" || as == workerAny {
-		return tasks
-	}
-	filtered := tasks[:0]
-	for _, task := range tasks {
-		if isWorkerAllowed(task.Worker, as) {
-			filtered = append(filtered, task)
-		}
-	}
-	return filtered
 }
 
 func filterTasksByKind(tasks []*Task, kind Kind) []*Task {
