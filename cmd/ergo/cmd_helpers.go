@@ -21,9 +21,7 @@ func exitErr(err error, opts *ergo.GlobalOptions) {
 		} else if errors.Is(err, ergo.ErrNoErgoDir) {
 			fmt.Fprintln(os.Stderr, "hint: run `ergo init` in your repo")
 		} else if errors.Is(err, ergo.ErrLockBusy) {
-			fmt.Fprintln(os.Stderr, "hint: another process is writing; retry or pass `--lock-timeout 30s`")
-		} else if errors.Is(err, ergo.ErrLockTimeout) {
-			fmt.Fprintln(os.Stderr, "hint: lock wait timed out; retry or increase `--lock-timeout`")
+			fmt.Fprintln(os.Stderr, "hint: another process is writing; retry")
 		} else if strings.Contains(err.Error(), "require human") {
 			fmt.Fprintln(os.Stderr, "hint: run `ergo ready --as human` and ask the human to handle decision tasks")
 		} else if strings.HasPrefix(err.Error(), "readonly:") {

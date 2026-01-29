@@ -35,7 +35,6 @@ GLOBAL FLAGS
   --agent <id>                            claim identity (default: username@hostname)
   --json                                  JSON output (default: text), recommended for agents
   --readonly                              block commands that write
-  --lock-timeout <duration>               default 30s; 0 = fail fast
   -h, --help                              show help
   -V, --version                           print version
 

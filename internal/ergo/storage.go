@@ -138,7 +138,7 @@ func writeEventsFile(path string, events []Event) error {
 func writeLinkEvent(dir string, opts GlobalOptions, eventType, from, to string) error {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := filepath.Join(dir, "events.jsonl")
-	return withLock(lockPath, syscall.LOCK_EX, opts.LockTimeout, func() error {
+	return withLock(lockPath, syscall.LOCK_EX, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -188,7 +188,7 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 		worker = workerAny
 	}
 	var output createOutput
-	err := withLock(lockPath, syscall.LOCK_EX, opts.LockTimeout, func() error {
+	err := withLock(lockPath, syscall.LOCK_EX, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -369,7 +369,7 @@ func writeResultEvent(dir string, opts GlobalOptions, taskID, summary, relPath s
 	eventsPath := filepath.Join(dir, "events.jsonl")
 	repoDir := filepath.Dir(dir)
 
-	return withLock(lockPath, syscall.LOCK_EX, opts.LockTimeout, func() error {
+	return withLock(lockPath, syscall.LOCK_EX, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err

@@ -145,16 +145,33 @@ func TestConcurrentClaimNoDoubles(t *testing.T) {
 		wg.Add(1)
 		go func(agentNum int) {
 			defer wg.Done()
-			stdout, _, exitCode := runTestErgoWithExit(ergo, dir, "", "claim", "--agent", fmt.Sprintf("agent-%d", agentNum))
-			if exitCode == 0 && stdout != "" {
-				// Extract ID from output (first line or first field)
-				id := extractTaskID(stdout)
-				if id != "" {
-					claimedIDs <- id
+			agentID := fmt.Sprintf("agent-%d", agentNum)
+
+			// Retry on lock busy (with fail-fast locking, agents may lose the race)
+			const maxRetries = 3
+			for attempt := 0; attempt < maxRetries; attempt++ {
+				stdout, _, exitCode := runTestErgoWithExit(ergo, dir, "", "claim", "--agent", agentID)
+				if exitCode == 0 && stdout != "" {
+					// Successfully claimed
+					id := extractTaskID(stdout)
+					if id != "" {
+						claimedIDs <- id
+					}
+					return
+				} else if exitCode == 1 && attempt < maxRetries-1 {
+					// Lock busy, retry
+					continue
+				} else if exitCode == 3 {
+					// No ready tasks, acceptable
+					return
+				} else if exitCode != 1 {
+					// Other error
+					errors <- fmt.Errorf("%s: unexpected exit %d", agentID, exitCode)
+					return
 				}
-			} else if exitCode != 3 { // exit 3 = no ready tasks, acceptable
-				errors <- fmt.Errorf("agent-%d: unexpected exit %d", agentNum, exitCode)
 			}
+			// Exhausted retries on lock busy
+			errors <- fmt.Errorf("%s: lock busy after %d retries", agentID, maxRetries)
 		}(i)
 	}
 

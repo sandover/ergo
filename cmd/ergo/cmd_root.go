@@ -29,7 +29,6 @@ func init() {
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&globalOpts.StartDir, "dir", "", "Run in a specific directory")
 	rootCmd.PersistentFlags().BoolVar(&globalOpts.ReadOnly, "readonly", false, "Run in read-only mode")
-	rootCmd.PersistentFlags().DurationVar(&globalOpts.LockTimeout, "lock-timeout", ergo.DefaultLockTimeout, "Lock wait timeout")
 
 	// --as flag needs custom parsing for validation, but for now we can bind to string and validate in PreRun
 	var asStr string

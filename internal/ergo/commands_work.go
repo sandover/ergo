@@ -149,7 +149,7 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 	var now time.Time
 	agentID := resolveAgentID(opts)
 
-	err = withLock(lockPath, syscall.LOCK_EX, opts.LockTimeout, func() error {
+	err = withLock(lockPath, syscall.LOCK_EX, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -243,7 +243,7 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 		}
 	}
 
-	return withLock(lockPath, syscall.LOCK_EX, opts.LockTimeout, func() error {
+	return withLock(lockPath, syscall.LOCK_EX, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -724,7 +724,7 @@ func RunCompact(opts GlobalOptions) error {
 	}
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := filepath.Join(dir, "events.jsonl")
-	return withLock(lockPath, syscall.LOCK_EX, opts.LockTimeout, func() error {
+	return withLock(lockPath, syscall.LOCK_EX, func() error {
 		events, err := readEvents(eventsPath)
 		if err != nil {
 			return err

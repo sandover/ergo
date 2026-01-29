@@ -39,45 +39,19 @@ func sortedMapKeys(items map[string]map[string]struct{}) []string {
 	return keys
 }
 
-func withLock(path string, lockType int, timeout time.Duration, fn func() error) error {
+func withLock(path string, lockType int, fn func() error) error {
 	fd, err := syscall.Open(path, syscall.O_RDONLY, 0)
 	if err != nil {
 		return err
 	}
 	defer syscall.Close(fd)
 
-	tryLock := func() error {
-		return syscall.Flock(fd, lockType|syscall.LOCK_NB)
-	}
-	isWouldBlock := func(err error) bool {
-		return errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN)
-	}
-
-	if timeout == 0 {
-		if err := tryLock(); err != nil {
-			if isWouldBlock(err) {
-				return ErrLockBusy
-			}
-			return err
+	// Fail-fast: non-blocking lock attempt only
+	if err := syscall.Flock(fd, lockType|syscall.LOCK_NB); err != nil {
+		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+			return ErrLockBusy
 		}
-	} else {
-		var deadline time.Time
-		if timeout > 0 {
-			deadline = time.Now().Add(timeout)
-		}
-		for {
-			if err := tryLock(); err == nil {
-				break
-			} else if isWouldBlock(err) {
-				if !deadline.IsZero() && time.Now().After(deadline) {
-					return ErrLockTimeout
-				}
-				time.Sleep(50 * time.Millisecond)
-				continue
-			} else {
-				return err
-			}
-		}
+		return err
 	}
 	defer func() {
 		_ = syscall.Flock(fd, syscall.LOCK_UN)

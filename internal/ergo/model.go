@@ -90,9 +90,8 @@ func isEpic(task *Task) bool {
 }
 
 var (
-	ErrNoErgoDir   = errors.New("no .ergo directory found")
-	ErrLockBusy    = errors.New("lock busy")
-	ErrLockTimeout = errors.New("lock timeout")
+	ErrNoErgoDir = errors.New("no .ergo directory found")
+	ErrLockBusy  = errors.New("lock busy")
 )
 
 var validStates = map[string]struct{}{
@@ -188,17 +187,14 @@ func validateDepSelf(from, to string) error {
 }
 
 type GlobalOptions struct {
-	StartDir    string
-	ReadOnly    bool
-	LockTimeout time.Duration
-	As          Worker
-	AgentID     string
-	Quiet       bool
-	Verbose     bool
-	JSON        bool
+	StartDir string
+	ReadOnly bool
+	As       Worker
+	AgentID  string
+	Quiet    bool
+	Verbose  bool
+	JSON     bool
 }
-
-const DefaultLockTimeout = 30 * time.Second
 
 type Task struct {
 	ID        string

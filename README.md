@@ -51,10 +51,6 @@ Once the plan is solid, tell your agent(s), "implement this plan" and they'll st
 
 ### `ergo list`
 
-```bash
-ergo list --all
-```
-
 ![Example output of ergo list](docs/img/ergo-list-screenshot.jpg)
 
 Legend:
@@ -78,8 +74,9 @@ ergo show GQUJPG
 
 ## Usage (Agents)
 
-Agents read with `--json` and write by piping JSON to stdin (title and body are separate fields).
-Legacy archives without a title are auto-migrated by deriving title from the first non-empty, non-heading body line.
+For most commands, agents read and write JSON to `ergo` via stdin. The `printf` style is robust even in unusual terminals like VSCode & Cursor.
+
+Agents (and humans) should run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
 
 ### Plan Creation
 
@@ -92,37 +89,27 @@ echo '{"title":"User login","body":"Let users sign in with email+pw"}' | ergo ne
 echo '{"title":"Password hashing","body":"Use bcrypt with cost=12","epic":"ABCDEF"}' | ergo new task
 # => returns a new task ID, e.g. GHIJKL
 
-# Add a task with a multi-line body (prefer printf style for this)
+# Add a task with a multi-line body
 printf '%s' '{"title":"Choose session duration","body":"Decide between 1h and 24h access tokens.\nWeigh security vs UX tradeoffs.","epic":"ABCDEF","worker":"human"}' | ergo new task
 # => returns e.g. MNOPQR
 
-# Add dependencies between tasks
+# Set dependency relationship between tasks
 ergo dep MNOPQR GHIJKL
-
-# Read the list of all tasks
-ergo --json list --all
 ```
 
 ### Execution
 
 ```bash
 # Find actionable work
-ergo --json list --ready --as agent
+ergo --json list --ready
 
-# Claim oldest ready task (atomic)
-ergo --json claim --as agent
+# Claim a task
+ergo claim GHIJKL --as agent
 
-# Claim a specific task
-ergo claim GHIJKL
-
-# Inspect a task
-ergo --json show GHIJKL
-
-# Update a task
+# Set properties of a task, like marking it "done"
 printf '%s' '{"state":"done"}' | ergo set GHIJKL
 ```
 
-Run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
 
 
 ## Data Representation
@@ -144,8 +131,7 @@ All state lives in `.ergo/` at your repo root:
 **Concurrency safety:**
 - All writes acquire an exclusive `flock(2)` on `.ergo/lock` before appending.
 - `ergo claim` is atomic: read → find oldest READY → claim → write, all under lock.
-- Multiple agents can safely race to claim work; exactly one wins, others retry.
-- Lock timeout is configurable (`--lock-timeout 5s`); default 30s, `0` = fail fast.
+- Multiple agents can safely race to claim work; exactly one wins, others fail fast and should retry.
 
 **State reconstruction:**
 On each command, ergo replays `events.jsonl` to build current state in memory quickly (100 tasks: ~3ms, 1000 tasks: ~15ms) and guarantees consistency. Run `ergo compact` to collapse history if the log grows large. Verify: `go test -bench=. -benchmem`
