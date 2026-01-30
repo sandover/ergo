@@ -34,20 +34,21 @@
   -V, --version                           print version
 
 {{HEADER}}JSON INPUT FIELDS (all strings){{RESET}}
-    title           required for new, optional for set
-    body            optional details (omit if empty)
-    epic            epic ID or "" to unassign
-    worker          (tasks only) any|agent|human
-    state           (tasks only) todo|doing|done|blocked|canceled|error
-                    doing/error require claim; todo/done/canceled clear claim
-    claim           (tasks only) agent ID or "" to unclaim
-                    claim implies state=doing (unless state provided)
-                    state=doing/error on unclaimed requires --agent unless claim is set
-    result_path     file path (requires result_summary)
-    result_summary  one-liner (requires result_path)
+  title           required for new, optional for set
+  body            optional details (omit if empty)
+  epic            epic ID or "" to unassign
+  worker          (tasks only) any|agent|human
+  state           (tasks only) todo|doing|done|blocked|canceled|error
+                  doing/error require claim; todo/done/canceled clear claim
+  claim           (tasks only) agent ID or "" to unclaim
+                  claim implies state=doing (unless state provided)
+                  state=doing/error on unclaimed requires --agent unless claim is set
+  result_path     file path (requires result_summary)
+  result_summary  one-liner (requires result_path)
 
 {{HEADER}}FOR AGENTS{{RESET}}
-  {{BOLD}}ALWAYS use '--json' arg to read structured output.
-  {{BOLD}}ALWAYS pass --agent when claiming (use the agent's own identity: <model>@<hostname>, e.g. haiku@agent-host)
-  {{BOLD}}ALWAYS use printf for multiline input (not heredocs, which break in some terms).
+  ALWAYS use '--json' arg to read structured output.
+  ALWAYS pass --agent when claiming (use the agent's own identity: <model>@<hostname>, e.g. haiku@agent-host)
+  ALWAYS end work by setting a terminal state (done/blocked/error/canceled) and attaching results when applicable.
+  ALWAYS use printf for multiline input (not heredocs, which break in some terms).
   Before using ergo, first run `ergo quickstart` for complete reference and workflow.

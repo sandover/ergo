@@ -1,5 +1,11 @@
 version: '3'
 
+env:
+  # Keep Go build artifacts and module downloads inside the repo so local runs
+  # don't need the global Go cache dirs (useful in sandboxed environments).
+  GOCACHE: '{{.TASKFILE_DIR}}/.gocache/go-build'
+  GOMODCACHE: '{{.TASKFILE_DIR}}/.gocache/go-mod'
+
 vars:
   VERSION:
     sh: git describe --tags --always --dirty
@@ -7,63 +13,104 @@ vars:
 
 tasks:
   default:
+    desc: Install ergo globally (alias for 'task install')
+    silent: true
     cmds:
       - task: install
 
   install:
     desc: Install ergo globally to $GOPATH/bin
+    silent: true
     cmds:
+      - printf '%s\n' "[install] go install ./cmd/ergo"
       - go install -ldflags "-X main.version={{.VERSION}}" ./cmd/ergo
-      - echo "Installed ergo {{.VERSION}}"
+      - |
+        set -euo pipefail
+        bin="$(go env GOBIN)"
+        if [[ -z "${bin}" ]]; then
+          gopath="$(go env GOPATH | cut -d: -f1)"
+          bin="${gopath}/bin"
+        fi
+        printf '%s\n' "Installed ergo {{.VERSION}} to ${bin}/ergo"
 
   build:
     desc: Build binary locally to ./bin/ergo
+    silent: true
     cmds:
+      - printf '%s\n' "[build] bin/ergo"
       - mkdir -p bin
       - go build -ldflags "-X main.version={{.VERSION}}" -o bin/ergo ./cmd/ergo
+      - printf '%s\n' "Built bin/ergo {{.VERSION}}"
 
   run:
     desc: Run ergo from source (pass args like 'task run -- list')
+    silent: true
     cmds:
-      - go run ./cmd/ergo {{.CLI_ARGS}}
+      - |
+        set -euo pipefail
+        args="{{.CLI_ARGS}}"
+        if [[ -n "${args}" ]]; then
+          printf '%s\n' "[run] ergo ${args}"
+        else
+          printf '%s\n' "[run] ergo (no args)"
+        fi
+        go run ./cmd/ergo {{.CLI_ARGS}}
 
   test:
     desc: Run all tests with race detection
+    silent: true
     cmds:
+      - printf '%s\n' "[test] go test -race ./..."
       - go test -race ./...
 
   cover:
     desc: Run tests with coverage report
+    silent: true
     cmds:
+      - printf '%s\n' "[cover] go test -race -coverprofile=coverage.out ./..."
       - go test -race -coverprofile=coverage.out ./...
-      - go tool cover -func=coverage.out
+      - printf '%s\n' "[cover] go tool cover -func=coverage.out (total)"
+      - go tool cover -func=coverage.out | tail -n 1
 
   bench:
     desc: Run performance benchmarks
+    silent: true
     cmds:
+      - printf '%s\n' "[bench] go test -bench=. -benchmem ./..."
       - go test -bench=. -benchmem ./...
 
   fmt:
     desc: Format all Go code
+    silent: true
     cmds:
-      - gofmt -w .
+      - printf '%s\n' "[fmt] gofmt -w (go list ./...)"
+      - |
+        set -euo pipefail
+        # Avoid formatting third-party sources now that we use a repo-local GOMODCACHE.
+        gofmt -w $(go list -f '{{"{{"}}.Dir{{"}}"}}' ./... | sort -u)
 
   vet:
     desc: Run go vet
+    silent: true
     cmds:
+      - printf '%s\n' "[vet] go vet ./..."
       - go vet ./...
 
   lint:
     desc: Run golangci-lint (pinned version)
+    silent: true
     cmds:
-      - go run github.com/golangci/golangci-lint/cmd/golangci-lint@{{.GOLANGCI_LINT_VERSION}} run ./...
+      - GOLANGCI_LINT_VERSION={{.GOLANGCI_LINT_VERSION}} ./scripts/golangci-lint.sh run ./...
 
   ci:
     desc: Run CI parity checks (tidy, lint, test)
+    silent: true
     cmds:
       - GOLANGCI_LINT_VERSION={{.GOLANGCI_LINT_VERSION}} ./scripts/ci.sh
 
   clean:
     desc: Remove build artifacts and temporary files
+    silent: true
     cmds:
+      - printf '%s\n' "[clean] rm -rf bin/ dist/ coverage.out"
       - rm -rf bin/ dist/ coverage.out

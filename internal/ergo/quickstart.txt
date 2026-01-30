@@ -21,6 +21,7 @@ Recommended loop:
   2) Do the work (write project files: docs/, src/, ...)
   3) Attach results and set state:
      {{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
+     Always do this before you stop; do not leave tasks claimed or stuck in `doing`.
 
 Common variants:
   - Claim a specific task by ID:
