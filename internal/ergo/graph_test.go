@@ -19,7 +19,6 @@ func TestReplayEvents_StateTransitions(t *testing.T) {
 			State:     stateTodo,
 			Title:     "Task 1",
 			Body:      "Task 1",
-			Worker:    "any",
 			CreatedAt: formatTime(now),
 		}),
 		mustNewEvent("state", now.Add(time.Second), StateEvent{
@@ -58,7 +57,6 @@ func TestReplayEvents_Claims(t *testing.T) {
 			State:     stateTodo,
 			Title:     "Task 1",
 			Body:      "Task 1",
-			Worker:    "any",
 			CreatedAt: formatTime(now),
 		}),
 		mustNewEvent("claim", now.Add(time.Second), ClaimEvent{
@@ -94,7 +92,6 @@ func TestReplayEvents_Dependencies(t *testing.T) {
 			State:     stateTodo,
 			Title:     "Task 1",
 			Body:      "Task 1",
-			Worker:    "any",
 			CreatedAt: formatTime(now),
 		}),
 		mustNewEvent("new_task", now, NewTaskEvent{
@@ -103,7 +100,6 @@ func TestReplayEvents_Dependencies(t *testing.T) {
 			State:     stateTodo,
 			Title:     "Task 2",
 			Body:      "Task 2",
-			Worker:    "any",
 			CreatedAt: formatTime(now),
 		}),
 		mustNewEvent("link", now, LinkEvent{
@@ -291,7 +287,6 @@ func TestStateClearsClaim(t *testing.T) {
 					State:     stateDoing,
 					Title:     "Test",
 					Body:      "Test",
-					Worker:    "any",
 					CreatedAt: formatTime(now),
 				}),
 				mustNewEvent("claim", now, ClaimEvent{ID: "T1", AgentID: "agent-1", TS: formatTime(now)}),
@@ -321,7 +316,6 @@ func TestLegacyTitleMigration(t *testing.T) {
 			State:     stateTodo,
 			Title:     "",
 			Body:      "Title line\nDetails line",
-			Worker:    "any",
 			CreatedAt: formatTime(now),
 		}),
 		mustNewEvent("new_task", now, NewTaskEvent{
@@ -330,7 +324,6 @@ func TestLegacyTitleMigration(t *testing.T) {
 			State:     stateTodo,
 			Title:     "",
 			Body:      "# Heading\n\nActual title\nDetails",
-			Worker:    "any",
 			CreatedAt: formatTime(now),
 		}),
 	}

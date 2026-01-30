@@ -31,10 +31,6 @@ func replayEvents(events []Event) (*Graph, error) {
 			if err != nil {
 				return nil, err
 			}
-			taskWorker, err := ParseWorker(data.Worker)
-			if err != nil {
-				return nil, err
-			}
 			task := &Task{
 				ID:        data.ID,
 				UUID:      data.UUID,
@@ -43,7 +39,6 @@ func replayEvents(events []Event) (*Graph, error) {
 				State:     data.State,
 				Title:     data.Title,
 				Body:      data.Body,
-				Worker:    taskWorker,
 				CreatedAt: createdAt,
 				UpdatedAt: createdAt,
 			}
@@ -52,7 +47,6 @@ func replayEvents(events []Event) (*Graph, error) {
 				CreatedTitle:     data.Title,
 				CreatedBody:      data.Body,
 				CreatedState:     data.State,
-				CreatedWorker:    taskWorker,
 				CreatedEpicID:    data.EpicID,
 				CreatedEpicIDSet: true,
 				CreatedAt:        createdAt,
@@ -120,29 +114,6 @@ func replayEvents(events []Event) (*Graph, error) {
 			}
 			if graph.Deps[data.FromID] != nil {
 				delete(graph.Deps[data.FromID], data.ToID)
-			}
-		case "worker":
-			var data WorkerEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
-			}
-			task, ok := graph.Tasks[data.ID]
-			if !ok {
-				continue
-			}
-			ts, err := parseTime(data.TS)
-			if err != nil {
-				return nil, err
-			}
-			taskWorker, err := ParseWorker(data.Worker)
-			if err != nil {
-				return nil, err
-			}
-			task.Worker = taskWorker
-			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
-			meta := graph.Meta[data.ID]
-			if meta != nil {
-				meta.LastWorkerAt = ts
 			}
 		case "title":
 			var data TitleUpdateEvent
@@ -311,11 +282,9 @@ func compactEvents(graph *Graph) ([]Event, error) {
 		createdState := task.State
 		createdTitle := task.Title
 		createdBody := task.Body
-		createdWorker := task.Worker
 		createdEpicID := task.EpicID
 		var lastStateAt time.Time
 		var lastClaimAt time.Time
-		var lastWorkerAt time.Time
 		var lastTitleAt time.Time
 		var lastBodyAt time.Time
 		var lastEpicAt time.Time
@@ -332,15 +301,11 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			if meta.CreatedBody != "" {
 				createdBody = meta.CreatedBody
 			}
-			if meta.CreatedWorker != "" {
-				createdWorker = meta.CreatedWorker
-			}
 			if meta.CreatedEpicIDSet {
 				createdEpicID = meta.CreatedEpicID
 			}
 			lastStateAt = meta.LastStateAt
 			lastClaimAt = meta.LastClaimAt
-			lastWorkerAt = meta.LastWorkerAt
 			lastTitleAt = meta.LastTitleAt
 			lastBodyAt = meta.LastBodyAt
 			lastEpicAt = meta.LastEpicAt
@@ -353,7 +318,6 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			State:     createdState,
 			Title:     createdTitle,
 			Body:      createdBody,
-			Worker:    string(createdWorker),
 			CreatedAt: formatTime(createdAt),
 		}
 		eventType := "new_task"
@@ -403,19 +367,6 @@ func compactEvents(graph *Graph) ([]Event, error) {
 				return nil, err
 			}
 			events = append(events, epicEvent)
-		}
-
-		if (task.Worker != createdWorker || (!lastWorkerAt.IsZero() && lastWorkerAt.After(createdAt))) && task.Worker != "" {
-			ts := pickTime(lastWorkerAt, task.UpdatedAt)
-			workerEvent, err := newEvent("worker", ts, WorkerEvent{
-				ID:     task.ID,
-				Worker: string(task.Worker),
-				TS:     formatTime(ts),
-			})
-			if err != nil {
-				return nil, err
-			}
-			events = append(events, workerEvent)
 		}
 
 		if task.ClaimedBy != "" {

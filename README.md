@@ -62,7 +62,6 @@ Legend:
 - `✓` done
 - `✗` canceled
 - `⚠` error
-- `[h]` human-only task
 - `@agent-id` claimed by
 - `⧗ …` blocked by (dependency summary)
 
@@ -92,7 +91,7 @@ echo '{"title":"Password hashing","body":"Use bcrypt with cost=12","epic":"ABCDE
 # => returns a new task ID, e.g. GHIJKL
 
 # Add a task with a multi-line body
-printf '%s' '{"title":"Choose session duration","body":"Decide between 1h and 24h access tokens.\nWeigh security vs UX tradeoffs.","epic":"ABCDEF","worker":"human"}' | ergo new task
+printf '%s' '{"title":"Choose session duration","body":"Decide between 1h and 24h access tokens.\nWeigh security vs UX tradeoffs.","epic":"ABCDEF"}' | ergo new task
 # => returns e.g. MNOPQR
 
 # Set dependency relationship between tasks

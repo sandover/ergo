@@ -203,9 +203,8 @@ func TestBuildSetEvents_EventOrdering(t *testing.T) {
 
 	// State must come last per spec
 	updates := map[string]string{
-		"worker": "human",
-		"state":  "doing",
-		"claim":  "agent-1",
+		"state": "doing",
+		"claim": "agent-1",
 	}
 
 	events, _, err := buildSetEvents("T1", task, updates, "test-agent", now, bodyResolver)

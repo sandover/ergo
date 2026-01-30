@@ -29,15 +29,15 @@
 {{HEADER}}GLOBAL FLAGS{{RESET}}
   --dir <path>                            discovery start (or .ergo path)
   --agent <identity>                      identity for claim and implicit set
-  --json                                  JSON output (default: text)
+  --json                                  JSON output (required for agents)
   -h, --help                              show help
   -V, --version                           print version
 
 {{HEADER}}JSON INPUT FIELDS (all strings){{RESET}}
+  Unknown keys are rejected.
   title           required for new, optional for set
   body            optional details (omit if empty)
   epic            epic ID or "" to unassign
-  worker          (tasks only) any|agent|human
   state           (tasks only) todo|doing|done|blocked|canceled|error
                   doing/error require claim; todo/done/canceled clear claim
   claim           (tasks only) agent ID or "" to unclaim

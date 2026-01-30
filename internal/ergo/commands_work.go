@@ -104,7 +104,6 @@ func RunClaim(id string, opts GlobalOptions) error {
 		return writeJSON(os.Stdout, map[string]interface{}{
 			"id":         task.ID,
 			"epic":       task.EpicID,
-			"worker":     string(task.Worker),
 			"state":      task.State,
 			"title":      task.Title,
 			"body":       task.Body,
@@ -190,7 +189,6 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 		return writeJSON(os.Stdout, map[string]interface{}{
 			"id":         chosen.ID,
 			"epic":       chosen.EpicID,
-			"worker":     string(chosen.Worker),
 			"state":      stateDoing,
 			"title":      chosen.Title,
 			"body":       chosen.Body,
@@ -246,13 +244,10 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 			return fmt.Errorf("unknown task id %s", id)
 		}
 
-		// Epics cannot have state, worker, or claim
+		// Epics cannot have state or claim
 		if isEpic(task) {
 			if _, hasState := updates["state"]; hasState {
 				return errors.New("epics do not have state")
-			}
-			if _, hasWorker := updates["worker"]; hasWorker {
-				return errors.New("epics do not have workers")
 			}
 			if _, hasClaim := updates["claim"]; hasClaim {
 				return errors.New("epics cannot be claimed")
@@ -356,24 +351,6 @@ func buildSetEvents(id string, task *Task, updates map[string]string, agentID st
 			events = append(events, event)
 		}
 		delete(remainingUpdates, "epic")
-	}
-
-	// Handle worker
-	if workerStr, ok := remainingUpdates["worker"]; ok {
-		worker, err := ParseWorker(workerStr)
-		if err != nil {
-			return nil, nil, err
-		}
-		event, err := newEvent("worker", now, WorkerEvent{
-			ID:     id,
-			Worker: string(worker),
-			TS:     formatTime(now),
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		events = append(events, event)
-		delete(remainingUpdates, "worker")
 	}
 
 	// Handle claim
@@ -523,8 +500,6 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 		}
 	}
 
-	// Filter by worker only if --ready or --blocked is set
-
 	// Apply Active Set filtering (default behavior)
 	// If --all is NOT set, and we aren't targeting specific states via --ready/--blocked,
 	// hide done and canceled tasks.
@@ -605,7 +580,6 @@ func buildTaskShowOutput(task *Task, meta *TaskMeta, repoDir string) taskShowOut
 		UUID:      task.UUID,
 		EpicID:    task.EpicID,
 		State:     task.State,
-		Worker:    string(task.Worker),
 		ClaimedBy: task.ClaimedBy,
 		ClaimedAt: claimedAt,
 		CreatedAt: formatTime(task.CreatedAt),
@@ -629,7 +603,6 @@ func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
 		fmt.Printf("epic: %s\n", task.EpicID)
 	}
 	fmt.Printf("state: %s\n", task.State)
-	fmt.Printf("worker: %s\n", task.Worker)
 	if task.ClaimedBy != "" {
 		fmt.Printf("claimed_by: %s\n", task.ClaimedBy)
 		if claimedAt != "" {

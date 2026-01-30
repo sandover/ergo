@@ -302,7 +302,7 @@ func TestCompact_PreservesShowJSON(t *testing.T) {
 	}
 
 	// Mutate T1 across multiple dimensions.
-	_, stderr, code := runErgo(t, dir, `{"claim":"agent-1","state":"doing","worker":"human","body":"T1\\n\\n## v2\\nmore"}`, "set", t1)
+	_, stderr, code := runErgo(t, dir, `{"claim":"agent-1","state":"doing","body":"T1\\n\\n## v2\\nmore"}`, "set", t1)
 	if code != 0 {
 		t.Fatalf("set %s failed: exit %d stderr=%q", t1, code, stderr)
 	}
@@ -388,7 +388,7 @@ func TestSet_MultipleFields(t *testing.T) {
 
 	// Update multiple fields in one call
 	_, _, code = runErgo(t, dir,
-		`{"title":"Updated title","worker":"agent","state":"doing","claim":"agent-1"}`,
+		`{"title":"Updated title","state":"doing","claim":"agent-1"}`,
 		"set", taskID)
 	if code != 0 {
 		t.Fatalf("set failed: exit %d", code)
@@ -410,9 +410,6 @@ func TestSet_MultipleFields(t *testing.T) {
 	}
 	if task["state"] != "doing" {
 		t.Errorf("expected state=doing, got %v", task["state"])
-	}
-	if task["worker"] != "agent" {
-		t.Errorf("expected worker=agent, got %v", task["worker"])
 	}
 	if task["claimed_by"] != "agent-1" {
 		t.Errorf("expected claimed_by=agent-1, got %v", task["claimed_by"])
@@ -511,7 +508,7 @@ func TestSetOutputsTaskID(t *testing.T) {
 	}
 }
 
-// TestSetRejectsEpicState verifies that epics cannot have state/worker/claim set.
+// TestSetRejectsEpicState verifies that epics cannot have state/claim set.
 func TestSetRejectsEpicState(t *testing.T) {
 	dir := setupErgo(t)
 
@@ -528,7 +525,6 @@ func TestSetRejectsEpicState(t *testing.T) {
 		wantErr string
 	}{
 		{"state rejected", `{"state":"done"}`, "epics do not have state"},
-		{"worker rejected", `{"worker":"agent"}`, "epics do not have workers"},
 		{"claim rejected", `{"claim":"agent-1"}`, "epics cannot be claimed"},
 	}
 

@@ -12,6 +12,7 @@
 package ergo
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,12 +32,11 @@ import (
 //   - state=error requires claim
 //   - result_path and result_summary must be provided together
 type TaskInput struct {
-	Title  *string `json:"title,omitempty"`  // required for new; optional for set
-	Body   *string `json:"body,omitempty"`   // optional details (cannot be empty if provided)
-	Epic   *string `json:"epic,omitempty"`   // epic ID or "" to unassign
-	Worker *string `json:"worker,omitempty"` // any|agent|human
-	State  *string `json:"state,omitempty"`  // todo|doing|done|blocked|canceled|error
-	Claim  *string `json:"claim,omitempty"`  // agent ID or "" to unclaim
+	Title *string `json:"title,omitempty"` // required for new; optional for set
+	Body  *string `json:"body,omitempty"`  // optional details (cannot be empty if provided)
+	Epic  *string `json:"epic,omitempty"`  // epic ID or "" to unassign
+	State *string `json:"state,omitempty"` // todo|doing|done|blocked|canceled|error
+	Claim *string `json:"claim,omitempty"` // agent ID or "" to unclaim
 
 	// Result attachment (both required together)
 	ResultPath    *string `json:"result_path,omitempty"`    // path to result file
@@ -82,7 +82,7 @@ func readJSONFromStdin() ([]byte, error) {
 }
 
 // ParseTaskInput reads JSON from stdin and parses it into TaskInput.
-// Returns an error if stdin is empty or JSON is malformed.
+// Returns an error if stdin is empty, JSON is malformed, or unknown keys appear.
 func ParseTaskInput() (*TaskInput, *ValidationError) {
 	jsonBytes, err := readJSONFromStdin()
 	if err != nil {
@@ -99,10 +99,19 @@ func ParseTaskInput() (*TaskInput, *ValidationError) {
 	}
 
 	var input TaskInput
-	if err := json.Unmarshal(jsonBytes, &input); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
 		return nil, &ValidationError{
 			Error:   "parse_error",
 			Message: fmt.Sprintf("invalid JSON: %v", err),
+		}
+	}
+	// Ensure there's no trailing junk after the first JSON object.
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return nil, &ValidationError{
+			Error:   "parse_error",
+			Message: "invalid JSON: multiple JSON values provided",
 		}
 	}
 
@@ -143,13 +152,6 @@ func (t *TaskInput) validate(requireTitle bool, isEpic bool) *ValidationError {
 		invalid["body"] = "cannot be empty"
 	}
 
-	// Worker validation
-	if t.Worker != nil {
-		if _, err := ParseWorker(*t.Worker); err != nil {
-			invalid["worker"] = fmt.Sprintf("invalid value %q, expected: any, agent, human", *t.Worker)
-		}
-	}
-
 	// State validation
 	if t.State != nil {
 		if _, ok := validStates[*t.State]; !ok {
@@ -183,9 +185,6 @@ func (t *TaskInput) validate(requireTitle bool, isEpic bool) *ValidationError {
 	if isEpic {
 		if t.Epic != nil {
 			invalid["epic"] = "epics cannot be assigned to other epics"
-		}
-		if t.Worker != nil {
-			invalid["worker"] = "epics do not have workers"
 		}
 		if t.State != nil {
 			invalid["state"] = "epics do not have state (use epic-deps)"
@@ -223,9 +222,6 @@ func (t *TaskInput) ToKeyValueMap() map[string]string {
 	}
 	if t.Epic != nil {
 		m["epic"] = *t.Epic
-	}
-	if t.Worker != nil {
-		m["worker"] = *t.Worker
 	}
 	if t.State != nil {
 		m["state"] = *t.State
@@ -265,13 +261,4 @@ func (t *TaskInput) GetEpic() string {
 		return *t.Epic
 	}
 	return ""
-}
-
-// GetWorker returns worker or workerAny if not set.
-func (t *TaskInput) GetWorker() Worker {
-	if t.Worker != nil {
-		w, _ := ParseWorker(*t.Worker) // already validated
-		return w
-	}
-	return workerAny
 }

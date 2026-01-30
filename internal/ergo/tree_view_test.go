@@ -245,7 +245,6 @@ func TestFormatTreeLineTruncation(t *testing.T) {
 		"◐",                            // icon
 		task.ID,                        // id
 		"Test task",                    // title
-		"",                             // workerIndicator
 		[]string{"@" + task.ClaimedBy}, // annotations
 		"",                             // blockerAnnotation
 		task,                           // task

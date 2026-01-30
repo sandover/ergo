@@ -259,16 +259,13 @@ func writeLinkEvent(dir string, opts GlobalOptions, eventType, from, to string) 
 	})
 }
 
-func createTask(dir string, opts GlobalOptions, epicID string, isEpic bool, title, body string, worker Worker) (createOutput, error) {
+func createTask(dir string, opts GlobalOptions, epicID string, isEpic bool, title, body string) (createOutput, error) {
 	eventsPath := filepath.Join(dir, "events.jsonl")
 	lockPath := filepath.Join(dir, "lock")
-	return createTaskWithDir(dir, opts, lockPath, eventsPath, epicID, isEpic, title, body, worker)
+	return createTaskWithDir(dir, opts, lockPath, eventsPath, epicID, isEpic, title, body)
 }
 
-func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epicID string, isEpic bool, title, body string, worker Worker) (createOutput, error) {
-	if worker == "" {
-		worker = workerAny
-	}
+func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epicID string, isEpic bool, title, body string) (createOutput, error) {
 	var output createOutput
 	err := withLock(lockPath, syscall.LOCK_EX, func() error {
 		graph, err := loadGraph(dir)
@@ -300,7 +297,6 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 			State:     stateTodo,
 			Title:     title,
 			Body:      body,
-			Worker:    string(worker),
 			CreatedAt: formatTime(now),
 		}
 		if isEpic {
@@ -327,7 +323,6 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 			UUID:      uuid,
 			EpicID:    payload.EpicID,
 			State:     stateTodo,
-			Worker:    string(worker),
 			Title:     title,
 			Body:      body,
 			CreatedAt: payload.CreatedAt,

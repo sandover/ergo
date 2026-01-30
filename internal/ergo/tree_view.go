@@ -404,12 +404,6 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 	icon := stateIcon(task, node.isReady)
 	title := task.Title
 
-	// Worker indicator - compact, shown before title
-	workerIndicator := ""
-	if task.Worker == workerHuman && !task.IsEpic {
-		workerIndicator = "[h]"
-	}
-
 	// Annotations - keep minimal to reduce noise
 	var annotations []string
 
@@ -446,7 +440,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 	}
 
 	// Format with optional color
-	line := formatTreeLine(prefix, connector, icon, task.ID, title, workerIndicator, annotations, blockerAnnotation, task, node.isReady, useColor, termWidth)
+	line := formatTreeLine(prefix, connector, icon, task.ID, title, annotations, blockerAnnotation, task, node.isReady, useColor, termWidth)
 	fmt.Fprintln(w, line)
 
 	// Show result file URL on separate line for done tasks
@@ -695,9 +689,9 @@ func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useC
 }
 
 // formatTreeLine formats a tree line with optional color.
-// Visual hierarchy: icon → [h] → title → @claimer → [blocker column] → ID (right-aligned)
+// Visual hierarchy: icon → title → @claimer → [blocker column] → ID (right-aligned)
 // Ensures the line never exceeds termWidth by truncating content as needed.
-func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, annotations []string, blockerAnnotation string, task *Task, isReady bool, useColor bool, termWidth int) string {
+func formatTreeLine(prefix, connector, icon, id, title string, annotations []string, blockerAnnotation string, task *Task, isReady bool, useColor bool, termWidth int) string {
 	// Layout contract: ids are right-aligned at idStart.
 	minGap := idMinGap
 	rightMargin := idRightMargin
@@ -720,7 +714,7 @@ func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, 
 		annotationStr = "  " + strings.Join(annotations, "  ")
 	}
 
-	// Build base prefix (tree + icon + worker).
+	// Build base prefix (tree + icon).
 	var base strings.Builder
 	if useColor {
 		base.WriteString(colorDim)
@@ -736,16 +730,6 @@ func formatTreeLine(prefix, connector, icon, id, title, workerIndicator string, 
 			base.WriteString(stateColor(task))
 		}
 		base.WriteString(iconStr)
-		if useColor {
-			base.WriteString(colorReset)
-		}
-	}
-	if workerIndicator != "" {
-		if useColor {
-			base.WriteString(colorDim)
-		}
-		base.WriteString(workerIndicator)
-		base.WriteString(" ")
 		if useColor {
 			base.WriteString(colorReset)
 		}

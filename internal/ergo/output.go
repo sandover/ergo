@@ -15,7 +15,6 @@ type taskListItem struct {
 	State      string `json:"state"`
 	ClaimedBy  string `json:"claimed_by,omitempty"`
 	Title      string `json:"title"`
-	Worker     string `json:"worker,omitempty"`
 	Ready      bool   `json:"ready"`
 	Blocked    bool   `json:"blocked"`
 	HasResults bool   `json:"has_results,omitempty"`
@@ -37,7 +36,6 @@ type taskShowOutput struct {
 	UUID      string             `json:"uuid"`
 	EpicID    string             `json:"epic_id"`
 	State     string             `json:"state"`
-	Worker    string             `json:"worker"`
 	ClaimedBy string             `json:"claimed_by"`
 	ClaimedAt string             `json:"claimed_at"`
 	CreatedAt string             `json:"created_at"`
@@ -59,7 +57,6 @@ type createOutput struct {
 	UUID      string `json:"uuid"`
 	EpicID    string `json:"epic_id"`
 	State     string `json:"state"`
-	Worker    string `json:"worker"`
 	Title     string `json:"title"`
 	Body      string `json:"body"`
 	CreatedAt string `json:"created_at"`
@@ -121,7 +118,6 @@ func buildTaskListItems(tasks []*Task, graph *Graph, repoDir string) []taskListI
 			State:      task.State,
 			ClaimedBy:  task.ClaimedBy,
 			Title:      task.Title,
-			Worker:     string(task.Worker),
 			Ready:      isReady(task, graph),
 			Blocked:    isBlocked(task, graph),
 			HasResults: len(task.Results) > 0,

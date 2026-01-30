@@ -3,6 +3,7 @@
 package ergo
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -31,7 +32,7 @@ func TestTaskInput_ValidateForNewTask(t *testing.T) {
 		},
 		{
 			name:        "valid with all fields",
-			input:       TaskInput{Title: ptr("Do X"), Body: ptr("Do X now"), Epic: ptr("E1"), Worker: ptr("agent")},
+			input:       TaskInput{Title: ptr("Do X"), Body: ptr("Do X now"), Epic: ptr("E1")},
 			expectError: false,
 		},
 		{
@@ -69,12 +70,6 @@ func TestTaskInput_ValidateForNewTask(t *testing.T) {
 			input:       TaskInput{Title: ptr("title"), Body: ptr("   ")},
 			expectError: true,
 			invalidKeys: []string{"body"},
-		},
-		{
-			name:        "invalid worker",
-			input:       TaskInput{Title: ptr("X"), Body: ptr("X"), Worker: ptr("robot")},
-			expectError: true,
-			invalidKeys: []string{"worker"},
 		},
 		{
 			name:        "invalid state",
@@ -178,12 +173,6 @@ func TestTaskInput_ValidateForNewEpic(t *testing.T) {
 			invalidKeys: []string{"epic"},
 		},
 		{
-			name:        "epic cannot have worker",
-			input:       TaskInput{Title: ptr("X"), Body: ptr("X"), Worker: ptr("agent")},
-			expectError: true,
-			invalidKeys: []string{"worker"},
-		},
-		{
 			name:        "epic cannot have state",
 			input:       TaskInput{Title: ptr("X"), Body: ptr("X"), State: ptr("todo")},
 			expectError: true,
@@ -278,7 +267,6 @@ func TestTaskInput_ToKeyValueMap(t *testing.T) {
 		Title:         ptr("My Task"),
 		Body:          ptr("Description"),
 		Epic:          ptr("E1"),
-		Worker:        ptr("agent"),
 		State:         ptr("doing"),
 		Claim:         ptr("agent-1"),
 		ResultPath:    ptr("docs/x.md"),
@@ -291,7 +279,6 @@ func TestTaskInput_ToKeyValueMap(t *testing.T) {
 		"title":          "My Task",
 		"body":           "Description",
 		"epic":           "E1",
-		"worker":         "agent",
 		"state":          "doing",
 		"claim":          "agent-1",
 		"result.path":    "docs/x.md",
@@ -349,9 +336,9 @@ func TestValidationError_GoError(t *testing.T) {
 			err: ValidationError{
 				Message: "invalid input",
 				Missing: []string{"title"},
-				Invalid: map[string]string{"worker": "bad value"},
+				Invalid: map[string]string{"state": "bad value"},
 			},
-			contains: []string{"missing required: title", "worker: bad value"},
+			contains: []string{"missing required: title", "state: bad value"},
 		},
 	}
 
@@ -364,5 +351,54 @@ func TestValidationError_GoError(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestParseTaskInput_RejectsUnknownField(t *testing.T) {
+	restoreStdin := setStdin(t, `{"title":"X","worker":"human"}`)
+	defer restoreStdin()
+
+	_, err := ParseTaskInput()
+	if err == nil {
+		t.Fatal("expected parse error for unknown field, got nil")
+	}
+	if !strings.Contains(err.Message, "unknown field") {
+		t.Fatalf("expected unknown field error, got: %q", err.Message)
+	}
+}
+
+func TestParseTaskInput_RejectsMultipleJSONValues(t *testing.T) {
+	restoreStdin := setStdin(t, `{"title":"X"}{"title":"Y"}`)
+	defer restoreStdin()
+
+	_, err := ParseTaskInput()
+	if err == nil {
+		t.Fatal("expected parse error for multiple JSON values, got nil")
+	}
+	if !strings.Contains(err.Message, "multiple JSON values") {
+		t.Fatalf("expected multiple JSON values error, got: %q", err.Message)
+	}
+}
+
+func setStdin(t *testing.T, input string) func() {
+	t.Helper()
+	orig := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	if _, err := w.WriteString(input); err != nil {
+		_ = r.Close()
+		_ = w.Close()
+		t.Fatalf("write stdin: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		_ = r.Close()
+		t.Fatalf("close write pipe: %v", err)
+	}
+	os.Stdin = r
+	return func() {
+		_ = r.Close()
+		os.Stdin = orig
 	}
 }

@@ -1,4 +1,4 @@
-// Core domain types, constants, and parsing helpers for workers/kinds/state.
+// Core domain types, constants, and parsing helpers for kinds/state.
 package ergo
 
 import (
@@ -20,34 +20,7 @@ const (
 	dependsLinkType = "depends"
 )
 
-type Worker string
-
-const (
-	workerAny   Worker = "any"
-	workerAgent Worker = "agent"
-	workerHuman Worker = "human"
-)
-
 type Kind string
-
-const (
-	kindAny  Kind = "any"
-	kindTask Kind = "task"
-	kindEpic Kind = "epic"
-)
-
-func ParseWorker(value string) (Worker, error) {
-	switch strings.TrimSpace(strings.ToLower(value)) {
-	case "", "any":
-		return workerAny, nil
-	case "agent":
-		return workerAgent, nil
-	case "human":
-		return workerHuman, nil
-	default:
-		return "", fmt.Errorf("invalid worker %s (use any, agent, or human)", value)
-	}
-}
 
 func parseKind(value string) (Kind, error) {
 	switch strings.TrimSpace(strings.ToLower(value)) {
@@ -61,6 +34,12 @@ func parseKind(value string) (Kind, error) {
 		return "", fmt.Errorf("invalid kind %s (use any, task, or epic)", value)
 	}
 }
+
+const (
+	kindAny  Kind = "any"
+	kindTask Kind = "task"
+	kindEpic Kind = "epic"
+)
 
 func kindForTask(task *Task) Kind {
 	if task == nil {
@@ -192,7 +171,6 @@ type Task struct {
 	State     string
 	Title     string
 	Body      string
-	Worker    Worker
 	ClaimedBy string
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -205,13 +183,11 @@ type TaskMeta struct {
 	CreatedTitle     string
 	CreatedBody      string
 	CreatedState     string
-	CreatedWorker    Worker
 	CreatedEpicID    string
 	CreatedEpicIDSet bool
 	CreatedAt        time.Time
 	LastStateAt      time.Time
 	LastClaimAt      time.Time
-	LastWorkerAt     time.Time
 	LastTitleAt      time.Time
 	LastBodyAt       time.Time
 	LastEpicAt       time.Time
@@ -237,7 +213,6 @@ type NewTaskEvent struct {
 	State     string `json:"state"`
 	Title     string `json:"title"`
 	Body      string `json:"body"`
-	Worker    string `json:"worker"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -257,12 +232,6 @@ type ClaimEvent struct {
 	ID      string `json:"id"`
 	AgentID string `json:"agent_id"`
 	TS      string `json:"ts"`
-}
-
-type WorkerEvent struct {
-	ID     string `json:"id"`
-	Worker string `json:"worker"`
-	TS     string `json:"ts"`
 }
 
 type TitleUpdateEvent struct {

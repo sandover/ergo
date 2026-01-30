@@ -63,7 +63,6 @@ $ERGO set "$COMP_TASK" claim=sonnet@agent-host state=done
 $ERGO set "$COMP_TASK" result.path=docs/competitor-analysis.md result.summary="Competitor landscape documented"
 
 INTERVIEW_TASK=$($ERGO new task "User interviews (3 customers)" --epic "$DESIGN_EPIC")
-$ERGO set "$INTERVIEW_TASK" worker=human  # Human only - requires customer calls
 $ERGO set "$INTERVIEW_TASK" claim=human@agent-host state=doing
 
 DESIGN_TASK=$($ERGO new task "Write technical design doc" --epic "$DESIGN_EPIC")
@@ -91,7 +90,6 @@ TEST_TASK=$($ERGO new task "Write integration tests" --epic "$IMPL_EPIC")
 $ERGO dep "$TEST_TASK" "$API_TASK"
 
 SEC_TASK=$($ERGO new task "Security review" --epic "$IMPL_EPIC")
-$ERGO set "$SEC_TASK" worker=human  # Human only - requires expertise
 $ERGO dep "$SEC_TASK" "$API_TASK"
 
 # ============================================
@@ -105,7 +103,6 @@ $ERGO dep "$STAGING_TASK" "$UI_TASK"    # Need frontend complete
 $ERGO dep "$STAGING_TASK" "$TEST_TASK"  # Need tests passing
 
 QA_TASK=$($ERGO new task "QA sign-off" --epic "$LAUNCH_EPIC")
-$ERGO set "$QA_TASK" worker=human  # Human only - manual testing
 $ERGO dep "$QA_TASK" "$STAGING_TASK"
 
 NOTES_TASK=$($ERGO new task "Write release notes" --epic "$LAUNCH_EPIC")
@@ -116,7 +113,6 @@ $ERGO dep "$PROD_TASK" "$QA_TASK"
 $ERGO dep "$PROD_TASK" "$NOTES_TASK"
 
 SOCIAL_TASK=$($ERGO new task "Announce on social media" --epic "$LAUNCH_EPIC")
-$ERGO set "$SOCIAL_TASK" worker=human  # Human only - brand voice
 $ERGO dep "$SOCIAL_TASK" "$PROD_TASK"
 
 # ============================================

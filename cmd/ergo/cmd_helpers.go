@@ -29,8 +29,6 @@ func exitErr(err error, opts *ergo.GlobalOptions) {
 			fmt.Fprintln(os.Stderr, "hint: .ergo must be a directory; delete/rename the file and run `ergo init`")
 		} else if errors.Is(err, ergo.ErrLockBusy) {
 			fmt.Fprintln(os.Stderr, "hint: another process is writing; retry")
-		} else if strings.Contains(err.Error(), "require human") {
-			fmt.Fprintln(os.Stderr, "hint: mark the task worker=human and ask a human to claim it")
 		}
 	}
 	os.Exit(1)

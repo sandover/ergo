@@ -154,7 +154,6 @@ func TestResultEventReplay(t *testing.T) {
 		Title:     "Test task",
 		Body:      "",
 		State:     stateTodo,
-		Worker:    "any",
 		CreatedAt: nowStr,
 	})
 	result1Event, _ := newEvent("result", now.Add(time.Hour), ResultEvent{
@@ -210,7 +209,6 @@ func TestResultCompaction(t *testing.T) {
 				State:     stateDone,
 				Title:     "Test task",
 				Body:      "",
-				Worker:    workerAny,
 				CreatedAt: now,
 				UpdatedAt: now.Add(time.Hour),
 				Results: []Result{
@@ -280,7 +278,6 @@ func TestCompactionPreservesBodyUpdates(t *testing.T) {
 				State:     stateTodo,
 				Title:     "Fix npx caching - use @latest in docs",
 				Body:      "## Problem\nThe docs show `npx superconnect` which uses cached versions...",
-				Worker:    workerAny,
 				CreatedAt: now,
 				UpdatedAt: now.Add(time.Minute),
 			},

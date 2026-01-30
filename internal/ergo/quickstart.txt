@@ -1,5 +1,5 @@
 {{BOLD}}ergo quickstart{{RESET}}
-{{CYAN}}Complete reference manual. Optimized for agents & humans.{{RESET}}
+{{CYAN}}Complete reference manual. Optimized for agents and humans.{{RESET}}
 
 {{HEADER}}1. INITIALIZE{{RESET}}
 
@@ -11,34 +11,32 @@ Prints the active `.ergo/` path (useful when running with `--dir`).
 
 {{HEADER}}2. AGENT WORKFLOW{{RESET}}
 
-Agent identity (`--agent`):
-  - Use the agent's own identity: <model>@<hostname>
-  - Example: sonnet@agent-host
+Your identity is <model>@<hostname> (e.g. sonnet@agent-host).
 
-Recommended loop:
+Core loop:
   1) Claim oldest ready work:
      {{CMD}}ergo --json claim --agent sonnet@agent-host{{RESET}}
-  2) Do the work (write project files: docs/, src/, ...)
+  2) Do the work described in the task (write to project files)
   3) Attach results and set state:
      {{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
-     Always do this before you stop; do not leave tasks claimed or stuck in `doing`.
+     Never leave tasks stuck in `doing`. Always set a terminal state.
 
 Common variants:
   - Claim a specific task by ID:
     {{CMD}}ergo claim ABCDEF --agent sonnet@agent-host{{RESET}}
-  - Change state later (uses existing claim if present):
+  - Change state (uses existing claim if present):
     {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
 
 {{HEADER}}3. CREATE WORK (JSON stdin){{RESET}}
 
 Use `printf '%s'` for reliable JSON delivery. All fields are strings.
+Unknown keys are rejected.
 
 Create a task:
   {{CMD}}printf '%s' '{"title":"Login","body":"Implement signup","epic":"OFKSTE"}' | ergo new task{{RESET}}
 
-Create an epic:
+Create an epic (prints ID, e.g. OFKSTE):
   {{CMD}}printf '%s' '{"title":"Auth","body":"Signup/Login epic"}' | ergo new epic{{RESET}}
-  Prints ID (e.g. OFKSTE).
 
 Atomic create-and-claim (preferred for dynamic tasking):
   {{CMD}}printf '%s' '{"title":"Fix CVE","claim":"sonnet@agent-host"}' | ergo new task{{RESET}}
@@ -49,19 +47,17 @@ Atomic create-and-claim (preferred for dynamic tasking):
 Add dependency (A depends on B; B blocks A):
   {{CMD}}ergo dep TASK_A TASK_B{{RESET}}
 
-Find ready work:
+Find ready work (all deps done or canceled):
   {{CMD}}ergo list --ready{{RESET}}
-  Only tasks with ALL deps `done|canceled` are READY.
 
 {{HEADER}}5. UPDATE & FAILURES{{RESET}}
 
 Mark blocked (waiting on human/external):
   {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
 
-Mark error:
+Mark error (requires claim to show who failed):
   {{CMD}}printf '%s' '{"state":"error"}' | ergo set ABCDEF{{RESET}}
-  Requires a claim (agent-id) to show who failed.
-  If unclaimed, pass `--agent` (or set `claim` explicitly in JSON).
+  If unclaimed, pass --agent or set claim in JSON.
 
 {{HEADER}}6. ATTACH RESULTS{{RESET}}
 
@@ -72,30 +68,28 @@ Attach a result:
 
 Inspect results:
   {{CMD}}ergo show GHIJKL --json | jq '.results[]'{{RESET}}
-  Returns `{summary, path, file_url, sha256_at_attach, created_at, ...}`.
 
 {{HEADER}}7. EPIC HIERARCHIES{{RESET}}
 
-Epics are complete when all child tasks are `done|canceled`.
-Epics have no intrinsic state.
-Epic-to-epic dependencies block all tasks in the dependent epic.
+Epics complete when all children are done or canceled. They have no own state.
+Epic-to-epic deps block all tasks in the dependent epic.
 
 {{CMD}}ergo dep EPIC_A EPIC_B{{RESET}}
 
 {{HEADER}}REFERENCE: JSON OUTPUT SHAPES{{RESET}}
 
 Task (show --json):
-  {id, uuid, epic_id, state, worker, claimed_by, claimed_at, created_at, updated_at, title, body, deps[], rdeps[], results[]}
+  {id, uuid, epic_id, state, claimed_by, claimed_at, created_at,
+   updated_at, title, body, deps[], rdeps[], results[]}
 
 Epic (show --json):
   {epic: <task>, children: [<task>...]}
 
 {{HEADER}}REFERENCE: TITLE + BODY{{RESET}}
-Title and body are separate fields.
-Use JSON `title` for the task name; JSON `body` for details.
-Legacy: if title is missing, ergo derives it from the first non-empty non-heading line of body.
+Use `title` for the task name; `body` for details.
+If title is omitted, ergo derives it from the first line of body.
 
-Result (results[] item):
+Result shape (results[] item):
   {summary, path, file_url, sha256_at_attach, created_at}
 
 {{HEADER}}REFERENCE: STATE MACHINE{{RESET}}
@@ -108,13 +102,10 @@ Transitions:
   error    → todo, doing, canceled
 
 Invariants:
-  state=doing/error requires claim
-  for implicit claims, pass --agent (or set claim explicitly in JSON)
-  state=todo/done/canceled clears claim
+  doing/error require claim; pass --agent or set claim in JSON
+  todo/done/canceled clear claim
 
 {{HEADER}}REFERENCE: RULES{{RESET}}
 
-- dep: task->task or epic->epic only
-- cycles: forbidden (rejected by dep)
-- worker is advisory; claim does not filter by worker
-- recommended agent id format: <model>@<hostname> (agent's own model + host; not enforced)
+- deps: task-to-task or epic-to-epic only; cycles forbidden
+- agent ID format: <model>@<hostname> (recommended, not enforced)
