@@ -12,7 +12,7 @@
   show <id>                               show epic or task details
 
   list [--epic <id>] [--ready|--blocked] [--epics] [--all]
-                                          list active (non-terminal) tasks
+                                          list active tasks
                                           --all includes done and canceled
                                           --epics shows only epics
 
@@ -35,6 +35,7 @@
 
 {{HEADER}}JSON INPUT FIELDS (all strings){{RESET}}
   Unknown keys are rejected.
+  Epics only support: title, body
   title           required for new, optional for set
   body            optional details (omit if empty)
   epic            epic ID or "" to unassign
@@ -49,6 +50,6 @@
 {{HEADER}}FOR AGENTS{{RESET}}
   ALWAYS use --json for structured output.
   ALWAYS pass --agent when claiming (e.g. haiku@agent-host).
-  ALWAYS end with a terminal state (done/blocked/error/canceled) and result.
+  ALWAYS set done, blocked, error, or canceled when finished (never leave doing).
   ALWAYS use printf for multiline input (heredocs break in some terminals).
   Before starting, run 'ergo quickstart' for the complete reference.

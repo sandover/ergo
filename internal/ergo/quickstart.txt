@@ -19,7 +19,7 @@ Core loop:
   2) Do the work described in the task (write to project files)
   3) Attach results and set state:
      {{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
-     Never leave tasks stuck in `doing`. Always set a terminal state.
+     Never leave tasks in `doing`. Always set done, blocked, error, or canceled.
 
 Common variants:
   - Claim a specific task by ID:
@@ -63,7 +63,7 @@ Mark error (requires claim to show who failed):
 
 Results are pointers to project files (relative paths).
 
-Attach a result:
+Attach results (multiple calls accumulate, newest first):
   {{CMD}}printf '%s' '{"result_path":"docs/report.md","result_summary":"Final report"}' | ergo set GHIJKL{{RESET}}
 
 Inspect results:
