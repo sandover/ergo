@@ -24,6 +24,8 @@ Core loop:
 Common variants:
   - Claim a specific task by ID:
     {{CMD}}ergo claim ABCDEF --agent sonnet@agent-host{{RESET}}
+  - Claim oldest ready task within an epic:
+    {{CMD}}ergo claim --agent sonnet@agent-host --epic ABCDEF{{RESET}}
   - Change state (uses existing claim if present):
     {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
 

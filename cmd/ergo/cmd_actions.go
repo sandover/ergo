@@ -124,6 +124,7 @@ var claimCmd = &cobra.Command{
 	Args:  cobra.RangeArgs(0, 1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		agentID, _ := cmd.Flags().GetString("agent")
+		epicID, _ := cmd.Flags().GetString("epic")
 
 		opts := globalOpts
 		if agentID != "" {
@@ -131,7 +132,7 @@ var claimCmd = &cobra.Command{
 		}
 
 		if len(args) == 0 {
-			return ergo.RunClaimOldestReady(opts)
+			return ergo.RunClaimOldestReady(epicID, opts)
 		}
 		return ergo.RunClaim(args[0], opts)
 	},
@@ -139,6 +140,7 @@ var claimCmd = &cobra.Command{
 
 func init() {
 	claimCmd.Flags().String("agent", "", "Claim identity (required; suggested: model@host)")
+	claimCmd.Flags().String("epic", "", "Filter to tasks in this epic")
 }
 
 // -- set --

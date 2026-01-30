@@ -112,7 +112,7 @@ func TestRunClaimOldestReadyRequiresAgent(t *testing.T) {
 		t.Fatalf("failed to create .ergo dir: %v", err)
 	}
 	opts := GlobalOptions{StartDir: repoDir}
-	err := RunClaimOldestReady(opts)
+	err := RunClaimOldestReady("", opts)
 	if err == nil || !contains(err.Error(), "claim requires --agent") {
 		t.Fatalf("Expected claim requires --agent error, got %v", err)
 	}
@@ -247,6 +247,150 @@ func TestBuildSetEvents_TitleAndBody(t *testing.T) {
 	if events[1].Type != "body" {
 		t.Errorf("Expected second event to be body, got %s", events[1].Type)
 	}
+}
+
+// TestRunClaimOldestReady_EpicFilter verifies that claim respects epic filtering.
+func TestRunClaimOldestReady_EpicFilter(t *testing.T) {
+	dir := t.TempDir()
+	ergoDir := filepath.Join(dir, ".ergo")
+	if err := os.Mkdir(ergoDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create tasks in different epics
+	now := time.Now().UTC()
+	createdAt := formatTime(now)
+	events := []Event{}
+
+	// Epic E1 with task T1 (ready)
+	e1, _ := newEvent("new_epic", now, NewTaskEvent{
+		ID:        "E1",
+		UUID:      "uuid-e1",
+		State:     stateTodo,
+		Title:     "Epic 1",
+		CreatedAt: createdAt,
+	})
+	t1, _ := newEvent("new_task", now, NewTaskEvent{
+		ID:        "T1",
+		UUID:      "uuid-t1",
+		EpicID:    "E1",
+		State:     stateTodo,
+		Title:     "Task 1",
+		CreatedAt: createdAt,
+	})
+	events = append(events, e1, t1)
+
+	// Epic E2 with task T2 (ready)
+	e2, _ := newEvent("new_epic", now, NewTaskEvent{
+		ID:        "E2",
+		UUID:      "uuid-e2",
+		State:     stateTodo,
+		Title:     "Epic 2",
+		CreatedAt: createdAt,
+	})
+	t2, _ := newEvent("new_task", now, NewTaskEvent{
+		ID:        "T2",
+		UUID:      "uuid-t2",
+		EpicID:    "E2",
+		State:     stateTodo,
+		Title:     "Task 2",
+		CreatedAt: createdAt,
+	})
+	events = append(events, e2, t2)
+
+	// Task T3 with no epic (ready)
+	t3, _ := newEvent("new_task", now, NewTaskEvent{
+		ID:        "T3",
+		UUID:      "uuid-t3",
+		EpicID:    "",
+		State:     stateTodo,
+		Title:     "Task 3",
+		CreatedAt: createdAt,
+	})
+	events = append(events, t3)
+
+	eventsPath := filepath.Join(ergoDir, "events.jsonl")
+	if err := writeEventsFile(eventsPath, events); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("claim filters to specified epic", func(t *testing.T) {
+		opts := GlobalOptions{
+			StartDir: dir,
+			AgentID:  "test-agent",
+		}
+
+		// Claim from E2 should get T2
+		err := RunClaimOldestReady("E2", opts)
+		if err != nil {
+			t.Fatalf("claim failed: %v", err)
+		}
+
+		// Verify T2 was claimed
+		graph, _ := loadGraph(ergoDir)
+		if graph.Tasks["T2"].State != stateDoing {
+			t.Errorf("expected T2 to be doing, got %s", graph.Tasks["T2"].State)
+		}
+		if graph.Tasks["T2"].ClaimedBy != "test-agent" {
+			t.Errorf("expected T2 claimed by test-agent, got %s", graph.Tasks["T2"].ClaimedBy)
+		}
+		// T1 and T3 should still be todo
+		if graph.Tasks["T1"].State != stateTodo {
+			t.Errorf("expected T1 to remain todo, got %s", graph.Tasks["T1"].State)
+		}
+		if graph.Tasks["T3"].State != stateTodo {
+			t.Errorf("expected T3 to remain todo, got %s", graph.Tasks["T3"].State)
+		}
+	})
+
+	t.Run("claim without epic filter gets oldest ready", func(t *testing.T) {
+		// Reset T2
+		resetEvent, _ := newEvent("state", now, StateEvent{ID: "T2", NewState: stateTodo, TS: formatTime(now)})
+		unclaimEvent, _ := newEvent("unclaim", now, UnclaimEvent{ID: "T2", TS: formatTime(now)})
+		if err := appendEvents(eventsPath, []Event{resetEvent, unclaimEvent}); err != nil {
+			t.Fatal(err)
+		}
+
+		opts := GlobalOptions{
+			StartDir: dir,
+			AgentID:  "test-agent-2",
+		}
+
+		// Claim without epic should get T1 (oldest by ID)
+		err := RunClaimOldestReady("", opts)
+		if err != nil {
+			t.Fatalf("claim failed: %v", err)
+		}
+
+		graph, _ := loadGraph(ergoDir)
+		if graph.Tasks["T1"].State != stateDoing {
+			t.Errorf("expected T1 to be claimed, got state %s", graph.Tasks["T1"].State)
+		}
+		if graph.Tasks["T1"].ClaimedBy != "test-agent-2" {
+			t.Errorf("expected T1 claimed by test-agent-2, got %s", graph.Tasks["T1"].ClaimedBy)
+		}
+	})
+
+	t.Run("claim with non-existent epic returns no tasks", func(t *testing.T) {
+		opts := GlobalOptions{
+			StartDir: dir,
+			AgentID:  "test-agent-3",
+		}
+
+		// Claim from non-existent epic should succeed with no tasks message
+		err := RunClaimOldestReady("NONEXISTENT", opts)
+		if err != nil {
+			t.Errorf("expected no error for non-existent epic, got: %v", err)
+		}
+
+		// Verify no new claims
+		graph, _ := loadGraph(ergoDir)
+		for id, task := range graph.Tasks {
+			if task.ClaimedBy == "test-agent-3" {
+				t.Errorf("expected no task claimed by test-agent-3, but %s was claimed", id)
+			}
+		}
+	})
 }
 
 func contains(s, substr string) bool {

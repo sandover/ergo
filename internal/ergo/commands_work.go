@@ -120,7 +120,7 @@ func RunClaim(id string, opts GlobalOptions) error {
 	return nil
 }
 
-func RunClaimOldestReady(opts GlobalOptions) error {
+func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
@@ -142,7 +142,7 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 			return err
 		}
 
-		ready := readyTasks(graph, "", kindTask)
+		ready := readyTasks(graph, epicID, kindTask)
 		if len(ready) == 0 {
 			return errors.New("no ready tasks")
 		}
@@ -554,7 +554,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 
 	// Tree view (human-friendly hierarchical output)
 	useColor := stdoutIsTTY()
-	renderTreeView(os.Stdout, graph, repoDir, useColor, showAll)
+	renderTreeView(os.Stdout, graph, repoDir, useColor, showAll, readyOnly, blockedOnly)
 
 	return nil
 }

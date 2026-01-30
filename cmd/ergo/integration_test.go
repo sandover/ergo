@@ -602,3 +602,27 @@ func TestListJSONIncludesAllTasks(t *testing.T) {
 		t.Fatalf("failed to parse JSON with global --json: %v", err)
 	}
 }
+
+// TestListReadyExcludesCompletedTasks verifies --ready hides done/canceled tasks in human output.
+func TestListReadyExcludesCompletedTasks(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Ready task"}`, "new", "task")
+	readyID := strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Done task"}`, "new", "task")
+	doneID := strings.TrimSpace(stdout)
+	runErgo(t, dir, `{"state":"done"}`, "set", doneID)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--ready")
+	if code != 0 {
+		t.Fatalf("list --ready failed: exit %d", code)
+	}
+
+	if !strings.Contains(stdout, readyID) {
+		t.Errorf("expected ready task %s in output", readyID)
+	}
+	if strings.Contains(stdout, doneID) {
+		t.Errorf("did not expect done task %s in output", doneID)
+	}
+}

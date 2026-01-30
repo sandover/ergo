@@ -16,7 +16,8 @@
                                           --all includes done and canceled
                                           --epics shows only epics
 
-  claim [<id>] --agent <identity>         claim oldest ready task, or by ID
+  claim [<id>] --agent <identity> [--epic <id>]
+                                          claim oldest ready task, or by ID
                                           sets to "doing"; --agent required
 
   dep <A> <B>                             A depends on B (B blocks A)
