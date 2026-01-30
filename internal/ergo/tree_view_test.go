@@ -216,7 +216,7 @@ func TestRenderCollapsedEpic(t *testing.T) {
 
 	var buf bytes.Buffer
 	// showAll=false triggers collapsing of done epics
-	renderTreeView(&buf, graph, "/repo", false, false)
+	renderTreeView(&buf, graph, "/repo", false, false, false, false)
 
 	output := buf.String()
 	// Should show the checkmark icon and task count
@@ -226,6 +226,118 @@ func TestRenderCollapsedEpic(t *testing.T) {
 	if !strings.Contains(output, "[5 tasks]") {
 		t.Errorf("expected '[5 tasks]' in output, got: %s", output)
 	}
+}
+
+// TestFilterNodesByStatus verifies that --ready and --blocked filters work correctly.
+func TestFilterNodesByStatus(t *testing.T) {
+	// Create a graph with various task states
+	graph := &Graph{
+		Tasks: map[string]*Task{
+			"T1": {ID: "T1", State: stateTodo, ClaimedBy: ""},        // ready
+			"T2": {ID: "T2", State: stateDone, ClaimedBy: ""},        // done, not ready
+			"T3": {ID: "T3", State: stateCanceled, ClaimedBy: ""},    // canceled, not ready
+			"T4": {ID: "T4", State: stateDoing, ClaimedBy: "agent1"}, // doing, not ready
+			"T5": {ID: "T5", State: stateTodo, ClaimedBy: ""},        // blocked by T6
+			"T6": {ID: "T6", State: stateTodo, ClaimedBy: ""},        // ready
+			"T7": {ID: "T7", State: stateBlocked, ClaimedBy: ""},     // explicitly blocked
+		},
+		Deps: map[string]map[string]struct{}{
+			"T5": {"T6": {}}, // T5 depends on T6
+		},
+		RDeps: map[string]map[string]struct{}{},
+	}
+
+	t.Run("readyOnly filters out non-ready tasks", func(t *testing.T) {
+		nodes := []*treeNode{
+			{task: graph.Tasks["T1"]}, // ready
+			{task: graph.Tasks["T2"]}, // done, not ready
+			{task: graph.Tasks["T3"]}, // canceled, not ready
+			{task: graph.Tasks["T4"]}, // doing, not ready
+			{task: graph.Tasks["T5"]}, // blocked by T6, not ready
+			{task: graph.Tasks["T6"]}, // ready
+		}
+
+		filtered := filterNodesByStatus(nodes, graph, true, false)
+
+		// Should only have T1 and T6 (both ready)
+		if len(filtered) != 2 {
+			t.Fatalf("expected 2 ready tasks, got %d", len(filtered))
+		}
+		ids := []string{filtered[0].task.ID, filtered[1].task.ID}
+		if ids[0] != "T1" || ids[1] != "T6" {
+			t.Errorf("expected T1 and T6, got %v", ids)
+		}
+	})
+
+	t.Run("readyOnly excludes epics with no ready children", func(t *testing.T) {
+		nodes := []*treeNode{
+			{
+				task: &Task{ID: "E1", IsEpic: true},
+				children: []*treeNode{
+					{task: graph.Tasks["T2"]}, // done, not ready
+					{task: graph.Tasks["T3"]}, // canceled, not ready
+				},
+			},
+			{
+				task: &Task{ID: "E2", IsEpic: true},
+				children: []*treeNode{
+					{task: graph.Tasks["T1"]}, // ready
+					{task: graph.Tasks["T2"]}, // done, not ready
+				},
+			},
+		}
+
+		filtered := filterNodesByStatus(nodes, graph, true, false)
+
+		// Should only have E2 (has ready child T1), not E1
+		if len(filtered) != 1 {
+			t.Fatalf("expected 1 epic with ready children, got %d", len(filtered))
+		}
+		if filtered[0].task.ID != "E2" {
+			t.Errorf("expected E2, got %s", filtered[0].task.ID)
+		}
+		// E2 should have only T1 as child (T2 filtered out)
+		if len(filtered[0].children) != 1 {
+			t.Errorf("expected 1 child in E2, got %d", len(filtered[0].children))
+		}
+		if filtered[0].children[0].task.ID != "T1" {
+			t.Errorf("expected T1 as child, got %s", filtered[0].children[0].task.ID)
+		}
+	})
+
+	t.Run("blockedOnly filters to blocked tasks", func(t *testing.T) {
+		nodes := []*treeNode{
+			{task: graph.Tasks["T1"]}, // ready, not blocked
+			{task: graph.Tasks["T5"]}, // blocked by dep
+			{task: graph.Tasks["T7"]}, // explicitly blocked
+		}
+
+		filtered := filterNodesByStatus(nodes, graph, false, true)
+
+		// Should have T5 and T7 (both blocked)
+		if len(filtered) != 2 {
+			t.Fatalf("expected 2 blocked tasks, got %d", len(filtered))
+		}
+		ids := []string{filtered[0].task.ID, filtered[1].task.ID}
+		if ids[0] != "T5" || ids[1] != "T7" {
+			t.Errorf("expected T5 and T7, got %v", ids)
+		}
+	})
+
+	t.Run("no filter returns all nodes", func(t *testing.T) {
+		nodes := []*treeNode{
+			{task: graph.Tasks["T1"]},
+			{task: graph.Tasks["T2"]},
+			{task: graph.Tasks["T3"]},
+		}
+
+		filtered := filterNodesByStatus(nodes, graph, false, false)
+
+		// Should return all nodes unchanged
+		if len(filtered) != 3 {
+			t.Fatalf("expected 3 nodes (no filtering), got %d", len(filtered))
+		}
+	})
 }
 
 // TestFormatTreeLineTruncation verifies that long lines are truncated to prevent wrapping.
