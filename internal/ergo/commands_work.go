@@ -339,17 +339,18 @@ func buildSetEvents(id string, task *Task, updates map[string]string, agentID st
 
 	// Handle epic assignment
 	if epicID, ok := remainingUpdates["epic"]; ok {
-		if !isEpic(task) {
-			event, err := newEvent("epic", now, EpicAssignEvent{
-				ID:     id,
-				EpicID: epicID,
-				TS:     formatTime(now),
-			})
-			if err != nil {
-				return nil, nil, err
-			}
-			events = append(events, event)
+		if isEpic(task) {
+			return nil, nil, errors.New("epics cannot be assigned to other epics")
 		}
+		event, err := newEvent("epic", now, EpicAssignEvent{
+			ID:     id,
+			EpicID: epicID,
+			TS:     formatTime(now),
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		events = append(events, event)
 		delete(remainingUpdates, "epic")
 	}
 
@@ -594,52 +595,120 @@ func buildTaskShowOutput(task *Task, meta *TaskMeta, repoDir string) taskShowOut
 
 // printTaskDetails prints the human-readable show output for a single task.
 func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
-	claimedAt := claimedAtForTask(task, meta)
+	isTTY := stdoutIsTTY()
+	useColor := isTTY
 
-	// Metadata
-	fmt.Printf("id: %s\n", task.ID)
-	fmt.Printf("uuid: %s\n", task.UUID)
-	if task.EpicID != "" {
-		fmt.Printf("epic: %s\n", task.EpicID)
+	// Compute derived state
+	isReady := false // We don't have graph here, so can't compute properly
+	icon := stateIcon(task, isReady)
+	stateColor := stateColor(task)
+
+	// Header: [icon] ID · Title
+	if useColor {
+		fmt.Printf("%s%s%s %s", stateColor, icon, colorReset, colorBold)
+	} else {
+		fmt.Printf("%s ", icon)
 	}
-	fmt.Printf("state: %s\n", task.State)
-	if task.ClaimedBy != "" {
-		fmt.Printf("claimed_by: %s\n", task.ClaimedBy)
-		if claimedAt != "" {
-			fmt.Printf("claimed_at: %s\n", claimedAt)
+	fmt.Printf("%s", task.ID)
+	if task.Title != "" {
+		fmt.Printf(" · %s", task.Title)
+	}
+	if useColor {
+		fmt.Print(colorReset)
+	}
+	fmt.Println()
+
+	// Separator
+	if useColor {
+		fmt.Printf("%s%s%s\n", colorDim, strings.Repeat("─", 50), colorReset)
+	} else {
+		fmt.Println(strings.Repeat("─", 50))
+	}
+	fmt.Println()
+
+	// State
+	if useColor {
+		fmt.Printf("%sstate:%s %s%s%s\n", colorDim, colorReset, stateColor, task.State, colorReset)
+	} else {
+		fmt.Printf("state: %s\n", task.State)
+	}
+
+	// Epic
+	if task.EpicID != "" {
+		if useColor {
+			fmt.Printf("%sepic:%s  %s\n", colorDim, colorReset, task.EpicID)
+		} else {
+			fmt.Printf("epic:  %s\n", task.EpicID)
 		}
 	}
-	fmt.Printf("created_at: %s\n", formatTime(task.CreatedAt))
-	fmt.Printf("updated_at: %s\n", formatTime(task.UpdatedAt))
-	if len(task.Deps) > 0 {
-		fmt.Printf("deps: %s\n", strings.Join(task.Deps, ","))
+
+	// Claimed by
+	if task.ClaimedBy != "" {
+		if useColor {
+			fmt.Printf("%sclaim:%s %s\n", colorDim, colorReset, task.ClaimedBy)
+		} else {
+			fmt.Printf("claim: %s\n", task.ClaimedBy)
+		}
 	}
-	if len(task.RDeps) > 0 {
-		fmt.Printf("rdeps: %s\n", strings.Join(task.RDeps, ","))
+
+	fmt.Println()
+
+	// Timestamps (dim)
+	if useColor {
+		fmt.Printf("%s", colorDim)
+	}
+	fmt.Printf("created: %s\n", relativeTime(task.CreatedAt))
+	fmt.Printf("updated: %s\n", relativeTime(task.UpdatedAt))
+	if useColor {
+		fmt.Print(colorReset)
+	}
+
+	// Dependencies (if present, dim)
+	if len(task.Deps) > 0 || len(task.RDeps) > 0 {
+		fmt.Println()
+		if useColor {
+			fmt.Printf("%s", colorDim)
+		}
+		if len(task.Deps) > 0 {
+			fmt.Printf("deps:  %s\n", strings.Join(task.Deps, ", "))
+		}
+		if len(task.RDeps) > 0 {
+			fmt.Printf("rdeps: %s\n", strings.Join(task.RDeps, ", "))
+		}
+		if useColor {
+			fmt.Print(colorReset)
+		}
 	}
 
 	// Results
 	if len(task.Results) > 0 {
-		fmt.Printf("results: %d\n", len(task.Results))
-		for i, r := range task.Results {
+		fmt.Println()
+		fmt.Println("Results:")
+		for _, r := range task.Results {
 			fileURL := deriveFileURL(r.Path, repoDir)
-			fmt.Printf("  [%d] %s\n", i+1, r.Summary)
-			fmt.Printf("      path: %s\n", r.Path)
-			fmt.Printf("      file_url: %s\n", fileURL)
-			fmt.Printf("      sha256: %s\n", r.Sha256AtAttach)
-			fmt.Printf("      attached: %s\n", formatTime(r.CreatedAt))
+			if useColor {
+				fmt.Printf("  → %s%s%s", colorCyan, fileURL, colorReset)
+			} else {
+				fmt.Printf("  → %s", fileURL)
+			}
+			if useColor {
+				fmt.Printf(" %s— %s%s\n", colorDim, r.Summary, colorReset)
+			} else {
+				fmt.Printf(" — %s\n", r.Summary)
+			}
 		}
+	}
+
+	// Separator before content
+	fmt.Println()
+	if useColor {
+		fmt.Printf("%s%s%s\n", colorDim, strings.Repeat("─", 50), colorReset)
+	} else {
+		fmt.Println(strings.Repeat("─", 50))
 	}
 	fmt.Println()
 
-	// Title and body with glamour rendering
-	isTTY := stdoutIsTTY()
-	if task.Title != "" {
-		fmt.Println(task.Title)
-		if task.Body != "" {
-			fmt.Println()
-		}
-	}
+	// Body with glamour rendering
 	if isTTY && task.Body != "" {
 		r, _ := glamour.NewTermRenderer(
 			glamour.WithAutoStyle(),
@@ -654,9 +723,9 @@ func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
 				fmt.Println()
 			}
 		}
-	} else {
+	} else if task.Body != "" {
 		fmt.Print(task.Body)
-		if task.Body != "" && !strings.HasSuffix(task.Body, "\n") {
+		if !strings.HasSuffix(task.Body, "\n") {
 			fmt.Println()
 		}
 	}

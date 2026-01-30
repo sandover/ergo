@@ -139,6 +139,62 @@ func formatTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339Nano)
 }
 
+// relativeTime formats a timestamp as a human-readable relative duration.
+func relativeTime(t time.Time) string {
+	if t.IsZero() {
+		return "never"
+	}
+	now := time.Now().UTC()
+	diff := now.Sub(t.UTC())
+
+	if diff < 0 {
+		diff = -diff
+		return "in the future"
+	}
+
+	seconds := int(diff.Seconds())
+	minutes := seconds / 60
+	hours := minutes / 60
+	days := hours / 24
+
+	if seconds < 60 {
+		if seconds == 1 {
+			return "1 second ago"
+		}
+		return fmt.Sprintf("%d seconds ago", seconds)
+	}
+	if minutes < 60 {
+		if minutes == 1 {
+			return "1 minute ago"
+		}
+		return fmt.Sprintf("%d minutes ago", minutes)
+	}
+	if hours < 24 {
+		if hours == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", hours)
+	}
+	if days < 30 {
+		if days == 1 {
+			return "1 day ago"
+		}
+		return fmt.Sprintf("%d days ago", days)
+	}
+	if days < 365 {
+		months := days / 30
+		if months == 1 {
+			return "1 month ago"
+		}
+		return fmt.Sprintf("%d months ago", months)
+	}
+	years := days / 365
+	if years == 1 {
+		return "1 year ago"
+	}
+	return fmt.Sprintf("%d years ago", years)
+}
+
 func pickTime(candidate, fallback time.Time) time.Time {
 	if !candidate.IsZero() {
 		return candidate
