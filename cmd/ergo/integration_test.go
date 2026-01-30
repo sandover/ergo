@@ -381,7 +381,7 @@ func TestClaim_WithAgentFlag(t *testing.T) {
 	}
 	taskID := strings.TrimSpace(stdout)
 
-	agentID := "gpt-5-2-codex@brandon-mbp"
+	agentID := "sonnet@agent-host"
 	_, _, code = runErgo(t, dir, "", "claim", taskID, "--agent", agentID)
 	if code != 0 {
 		t.Fatalf("claim failed: exit %d", code)

@@ -48,6 +48,6 @@
 
 {{HEADER}}FOR AGENTS{{RESET}}
   {{BOLD}}ALWAYS use '--json' arg to read structured output.
-  {{BOLD}}ALWAYS pass --agent when claiming (suggested identity format: model@host, e.g. haiku-4-5@macbook)
+  {{BOLD}}ALWAYS pass --agent when claiming (use the agent's own identity: <model>@<hostname>, e.g. haiku@agent-host)
   {{BOLD}}ALWAYS use printf for multiline input (not heredocs, which break in some terms).
   Before using ergo, first run `ergo quickstart` for complete reference and workflow.

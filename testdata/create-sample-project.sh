@@ -59,12 +59,12 @@ cat > docs/competitor-analysis.md << 'EOF'
 - Agent-friendly JSON mode
 - Minimal footprint
 EOF
-$ERGO set "$COMP_TASK" claim=brandon state=done
+$ERGO set "$COMP_TASK" claim=sonnet@agent-host state=done
 $ERGO set "$COMP_TASK" result.path=docs/competitor-analysis.md result.summary="Competitor landscape documented"
 
 INTERVIEW_TASK=$($ERGO new task "User interviews (3 customers)" --epic "$DESIGN_EPIC")
 $ERGO set "$INTERVIEW_TASK" worker=human  # Human only - requires customer calls
-$ERGO set "$INTERVIEW_TASK" claim=brandon state=doing
+$ERGO set "$INTERVIEW_TASK" claim=human@agent-host state=doing
 
 DESIGN_TASK=$($ERGO new task "Write technical design doc" --epic "$DESIGN_EPIC")
 $ERGO dep "$DESIGN_TASK" "$REQ_TASK"  # Design doc needs requirements first
@@ -130,7 +130,7 @@ $ERGO set "$TYPO_TASK" claim=maya state=done
 
 # A canceled task
 DB_TASK=$($ERGO new task "Evaluate alternative database (decided against)")
-$ERGO set "$DB_TASK" claim=brandon state=canceled
+$ERGO set "$DB_TASK" claim=sonnet@agent-host state=canceled
 
 echo ""
 echo "✓ Sample project created in $FIXTURE_DIR"

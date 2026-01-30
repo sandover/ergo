@@ -12,15 +12,15 @@
 {{HEADER}}2. AGENT WORKFLOW{{RESET}}
 
 {{COMMENT}}Recommended agent loop:{{RESET}}
-{{COMMENT}}  1. ergo --json claim --agent gpt-5-2-codex@brandon-mbp   (claim oldest ready work){{RESET}}
+{{COMMENT}}  1. ergo --json claim --agent <model>@<hostname>   (claim oldest ready work){{RESET}}
 {{COMMENT}}  2. do the work (write project files: docs/, src/){{RESET}}
 {{COMMENT}}  3. printf '{...}' | ergo set <id>       (attach results & mark done){{RESET}}
 
-{{CMD}}ergo --json claim --agent gpt-5-2-codex@brandon-mbp{{RESET}}
+{{CMD}}ergo --json claim --agent sonnet@agent-host{{RESET}}
 {{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
 
 {{COMMENT}}Or claim a specific task:{{RESET}}
-{{CMD}}ergo claim ABCDEF --agent gpt-5-2-codex@brandon-mbp{{RESET}}
+{{CMD}}ergo claim ABCDEF --agent sonnet@agent-host{{RESET}}
 {{COMMENT}}Option: change state later (uses existing claim if present).{{RESET}}
 {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
 
@@ -33,7 +33,7 @@
 {{COMMENT}}prints ID (e.g. OFKSTE){{RESET}}
 
 {{COMMENT}}Atomic Create-and-Claim (preferred for dynamic tasking):{{RESET}}
-{{CMD}}printf '%s' '{"title":"Fix CVE","claim":"agent-1"}' | ergo new task{{RESET}}
+{{CMD}}printf '%s' '{"title":"Fix CVE","claim":"sonnet@agent-host"}' | ergo new task{{RESET}}
 {{COMMENT}}claim implies state=doing unless state is explicitly set.{{RESET}}
 
 {{HEADER}}4. DEPENDENCIES{{RESET}}
@@ -101,4 +101,4 @@
 {{COMMENT}}- dep: task->task or epic->epic only.{{RESET}}
 {{COMMENT}}- cycles: forbidden (rejected by dep).{{RESET}}
 {{COMMENT}}- worker is advisory; claim does not filter by worker.{{RESET}}
-{{COMMENT}}- recommended agent id format: model@host (not enforced).{{RESET}}
+{{COMMENT}}- recommended agent id format: <model>@<hostname> (agent's own model + host; not enforced).{{RESET}}
