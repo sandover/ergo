@@ -4,101 +4,116 @@
 {{HEADER}}1. INITIALIZE{{RESET}}
 
 {{CMD}}ergo init{{RESET}}
-{{COMMENT}}creates .ergo/ in current directory{{RESET}}
+Creates `.ergo/` in the current directory.
 
 {{CMD}}ergo where{{RESET}}
-{{COMMENT}}prints the active .ergo path{{RESET}}
+Prints the active `.ergo/` path (useful when running with `--dir`).
 
 {{HEADER}}2. AGENT WORKFLOW{{RESET}}
 
-{{COMMENT}}Recommended agent loop:{{RESET}}
-{{COMMENT}}  1. ergo --json claim --agent <model>@<hostname>   (claim oldest ready work){{RESET}}
-{{COMMENT}}  2. do the work (write project files: docs/, src/){{RESET}}
-{{COMMENT}}  3. printf '{...}' | ergo set <id>       (attach results & mark done){{RESET}}
+Agent identity (`--agent`):
+  - Use the agent's own identity: <model>@<hostname>
+  - Example: sonnet@agent-host
 
-{{CMD}}ergo --json claim --agent sonnet@agent-host{{RESET}}
-{{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
+Recommended loop:
+  1) Claim oldest ready work:
+     {{CMD}}ergo --json claim --agent sonnet@agent-host{{RESET}}
+  2) Do the work (write project files: docs/, src/, ...)
+  3) Attach results and set state:
+     {{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
 
-{{COMMENT}}Or claim a specific task:{{RESET}}
-{{CMD}}ergo claim ABCDEF --agent sonnet@agent-host{{RESET}}
-{{COMMENT}}Option: change state later (uses existing claim if present).{{RESET}}
-{{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
+Common variants:
+  - Claim a specific task by ID:
+    {{CMD}}ergo claim ABCDEF --agent sonnet@agent-host{{RESET}}
+  - Change state later (uses existing claim if present):
+    {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
 
 {{HEADER}}3. CREATE WORK (JSON stdin){{RESET}}
 
-{{COMMENT}}Use printf '%s' for reliable JSON delivery. All fields are strings.{{RESET}}
+Use `printf '%s'` for reliable JSON delivery. All fields are strings.
 
-{{CMD}}printf '%s' '{"title":"Login","body":"Implement signup","epic":"OFKSTE"}' | ergo new task{{RESET}}
-{{CMD}}printf '%s' '{"title":"Auth","body":"Signup/Login epic"}' | ergo new epic{{RESET}}
-{{COMMENT}}prints ID (e.g. OFKSTE){{RESET}}
+Create a task:
+  {{CMD}}printf '%s' '{"title":"Login","body":"Implement signup","epic":"OFKSTE"}' | ergo new task{{RESET}}
 
-{{COMMENT}}Atomic Create-and-Claim (preferred for dynamic tasking):{{RESET}}
-{{CMD}}printf '%s' '{"title":"Fix CVE","claim":"sonnet@agent-host"}' | ergo new task{{RESET}}
-{{COMMENT}}claim implies state=doing unless state is explicitly set.{{RESET}}
+Create an epic:
+  {{CMD}}printf '%s' '{"title":"Auth","body":"Signup/Login epic"}' | ergo new epic{{RESET}}
+  Prints ID (e.g. OFKSTE).
+
+Atomic create-and-claim (preferred for dynamic tasking):
+  {{CMD}}printf '%s' '{"title":"Fix CVE","claim":"sonnet@agent-host"}' | ergo new task{{RESET}}
+  `claim` implies `state=doing` unless `state` is explicitly set.
 
 {{HEADER}}4. DEPENDENCIES{{RESET}}
 
-{{COMMENT}}'dep A B' means A depends on B (B blocks A).{{RESET}}
-{{CMD}}ergo dep TASK_A TASK_B{{RESET}}
+Add dependency (A depends on B; B blocks A):
+  {{CMD}}ergo dep TASK_A TASK_B{{RESET}}
 
-{{CMD}}ergo list --ready{{RESET}}
-{{COMMENT}}only tasks with ALL deps done|canceled are READY.{{RESET}}
+Find ready work:
+  {{CMD}}ergo list --ready{{RESET}}
+  Only tasks with ALL deps `done|canceled` are READY.
 
 {{HEADER}}5. UPDATE & FAILURES{{RESET}}
 
-{{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
-{{COMMENT}}explicit block (waiting on human/external){{RESET}}
+Mark blocked (waiting on human/external):
+  {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
 
-{{CMD}}printf '%s' '{"state":"error"}' | ergo set ABCDEF{{RESET}}
-{{COMMENT}}requires claim (agent-id) to show who failed.{{RESET}}
-{{COMMENT}}if unclaimed, pass --agent (or set claim explicitly in JSON).{{RESET}}
+Mark error:
+  {{CMD}}printf '%s' '{"state":"error"}' | ergo set ABCDEF{{RESET}}
+  Requires a claim (agent-id) to show who failed.
+  If unclaimed, pass `--agent` (or set `claim` explicitly in JSON).
 
 {{HEADER}}6. ATTACH RESULTS{{RESET}}
 
-{{COMMENT}}Results are pointers to project files (relative paths).{{RESET}}
-{{CMD}}printf '%s' '{"result_path":"docs/report.md","result_summary":"Final report"}' | ergo set GHIJKL{{RESET}}
+Results are pointers to project files (relative paths).
 
-{{CMD}}ergo show GHIJKL --json | jq '.results[]'{{RESET}}
-{{COMMENT}}returns {path, file_url, sha256_at_attach, attached_at, ...}{{RESET}}
+Attach a result:
+  {{CMD}}printf '%s' '{"result_path":"docs/report.md","result_summary":"Final report"}' | ergo set GHIJKL{{RESET}}
+
+Inspect results:
+  {{CMD}}ergo show GHIJKL --json | jq '.results[]'{{RESET}}
+  Returns `{summary, path, file_url, sha256_at_attach, created_at, ...}`.
 
 {{HEADER}}7. EPIC HIERARCHIES{{RESET}}
 
-{{COMMENT}}Epics are complete when all child tasks are done|canceled.{{RESET}}
-{{COMMENT}}Epics have no state.{{RESET}}
-{{COMMENT}}Epic-to-Epic dependencies block all tasks in the dependent epic.{{RESET}}
+Epics are complete when all child tasks are `done|canceled`.
+Epics have no intrinsic state.
+Epic-to-epic dependencies block all tasks in the dependent epic.
 
 {{CMD}}ergo dep EPIC_A EPIC_B{{RESET}}
 
-{{HEADER}}REFERENCE: JSON OUTPUT SCHEMA{{RESET}}
+{{HEADER}}REFERENCE: JSON OUTPUT SHAPES{{RESET}}
 
-{{COMMENT}}Task (list/show):{{RESET}}
-{{COMMENT}}  {id, uuid, epic_id, state, worker, claimed_by, claimed_at, title, body, deps[], results[]}{{RESET}}
+Task (show --json):
+  {id, uuid, epic_id, state, worker, claimed_by, claimed_at, created_at, updated_at, title, body, deps[], rdeps[], results[]}
+
+Epic (show --json):
+  {epic: <task>, children: [<task>...]}
 
 {{HEADER}}REFERENCE: TITLE + BODY{{RESET}}
-{{COMMENT}}Title and body are separate fields.{{RESET}}
-{{COMMENT}}Use JSON title for the task name; JSON body for details.{{RESET}}
-{{COMMENT}}Legacy: if title is missing, ergo derives it from the first non-empty non-heading line of body.{{RESET}}
+Title and body are separate fields.
+Use JSON `title` for the task name; JSON `body` for details.
+Legacy: if title is missing, ergo derives it from the first non-empty non-heading line of body.
 
-{{COMMENT}}Result:{{RESET}}
-{{COMMENT}}  {summary, path, file_url, sha256_at_attach, attached_at}{{RESET}}
+Result (results[] item):
+  {summary, path, file_url, sha256_at_attach, created_at}
 
 {{HEADER}}REFERENCE: STATE MACHINE{{RESET}}
 
-{{COMMENT}}Transitions:{{RESET}}
-{{COMMENT}}  todo     → doing, done, blocked, canceled{{RESET}}
-{{COMMENT}}  doing    → todo, done, blocked, canceled, error{{RESET}}
-{{COMMENT}}  blocked  → todo, doing, done, canceled{{RESET}}
-{{COMMENT}}  done/can → todo (reopen){{RESET}}
-{{COMMENT}}  error    → todo, doing, canceled{{RESET}}
+Transitions:
+  todo     → doing, done, blocked, canceled
+  doing    → todo, done, blocked, canceled, error
+  blocked  → todo, doing, done, canceled
+  done/can → todo (reopen)
+  error    → todo, doing, canceled
 
-{{COMMENT}}Invariants:{{RESET}}
-{{COMMENT}}  state=doing/error requires claim.{{RESET}}
-{{COMMENT}}  for implicit claims, pass --agent (or set claim explicitly in JSON).{{RESET}}
-{{COMMENT}}  state=todo/done/canceled clears claim.{{RESET}}
+Invariants:
+  state=doing/error requires claim
+  for implicit claims, pass --agent (or set claim explicitly in JSON)
+  state=todo/done/canceled clears claim
 
 {{HEADER}}REFERENCE: RULES{{RESET}}
 
-{{COMMENT}}- dep: task->task or epic->epic only.{{RESET}}
-{{COMMENT}}- cycles: forbidden (rejected by dep).{{RESET}}
-{{COMMENT}}- worker is advisory; claim does not filter by worker.{{RESET}}
-{{COMMENT}}- recommended agent id format: <model>@<hostname> (agent's own model + host; not enforced).{{RESET}}
+- dep: task->task or epic->epic only
+- cycles: forbidden (rejected by dep)
+- worker is advisory; claim does not filter by worker
+- recommended agent id format: <model>@<hostname> (agent's own model + host; not enforced)
