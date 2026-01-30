@@ -29,15 +29,10 @@ func RunInit(args []string, opts GlobalOptions) error {
 	}
 	eventsPath := filepath.Join(target, "events.jsonl")
 	lockPath := filepath.Join(target, "lock")
-	if _, err := os.Stat(eventsPath); err == nil {
-		return fmt.Errorf("%s already exists", eventsPath)
-	} else if !errors.Is(err, os.ErrNotExist) {
+	if err := ensureFileExists(eventsPath, 0644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(eventsPath, []byte{}, 0644); err != nil {
-		return err
-	}
-	if err := os.WriteFile(lockPath, []byte{}, 0644); err != nil {
+	if err := ensureFileExists(lockPath, 0644); err != nil {
 		return err
 	}
 	if opts.JSON {

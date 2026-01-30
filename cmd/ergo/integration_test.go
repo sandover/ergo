@@ -87,6 +87,20 @@ func setupErgo(t *testing.T) string {
 	return dir
 }
 
+func setupErgoWithEventsOnly(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	ergoDir := filepath.Join(dir, ".ergo")
+	if err := os.MkdirAll(ergoDir, 0755); err != nil {
+		t.Fatalf("failed to create .ergo: %v", err)
+	}
+	eventsPath := filepath.Join(ergoDir, "events.jsonl")
+	if err := os.WriteFile(eventsPath, []byte{}, 0644); err != nil {
+		t.Fatalf("failed to create events.jsonl: %v", err)
+	}
+	return dir
+}
+
 func TestNewTask_HappyPath(t *testing.T) {
 	dir := setupErgo(t)
 	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
@@ -97,6 +111,39 @@ func TestNewTask_HappyPath(t *testing.T) {
 	taskID := strings.TrimSpace(stdout)
 	if len(taskID) != 6 {
 		t.Errorf("expected 6-char task ID, got %q", taskID)
+	}
+}
+
+func TestInit_RepairsMissingLock(t *testing.T) {
+	dir := setupErgoWithEventsOnly(t)
+
+	_, _, code := runErgo(t, dir, "", "init")
+	if code != 0 {
+		t.Fatalf("init failed with exit code %d", code)
+	}
+
+	lockPath := filepath.Join(dir, ".ergo", "lock")
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Fatalf("expected lock file to exist: %v", err)
+	}
+}
+
+func TestNewTask_RepairsMissingLock(t *testing.T) {
+	dir := setupErgoWithEventsOnly(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("expected exit 0 when lock is missing, got %d", code)
+	}
+
+	taskID := strings.TrimSpace(stdout)
+	if len(taskID) != 6 {
+		t.Errorf("expected 6-char task ID, got %q", taskID)
+	}
+
+	lockPath := filepath.Join(dir, ".ergo", "lock")
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Fatalf("expected lock file to exist after new: %v", err)
 	}
 }
 

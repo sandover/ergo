@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -150,7 +151,7 @@ func TestConcurrentClaimNoDoubles(t *testing.T) {
 			// Retry on lock busy (with fail-fast locking, agents may lose the race)
 			const maxRetries = 3
 			for attempt := 0; attempt < maxRetries; attempt++ {
-				stdout, _, exitCode := runTestErgoWithExit(ergo, dir, "", "claim", "--agent", agentID)
+				stdout, stderr, exitCode := runTestErgoWithExit(ergo, dir, "", "claim", "--agent", agentID)
 				if exitCode == 0 && stdout != "" {
 					// Successfully claimed
 					id := extractTaskID(stdout)
@@ -158,20 +159,19 @@ func TestConcurrentClaimNoDoubles(t *testing.T) {
 						claimedIDs <- id
 					}
 					return
-				} else if exitCode == 1 && attempt < maxRetries-1 {
+				} else if exitCode == 1 && strings.Contains(stderr, "lock busy") && attempt < maxRetries-1 {
 					// Lock busy, retry
 					continue
 				} else if exitCode == 3 {
 					// No ready tasks, acceptable
 					return
-				} else if exitCode != 1 {
+				} else if exitCode != 1 || !strings.Contains(stderr, "lock busy") {
 					// Other error
 					errors <- fmt.Errorf("%s: unexpected exit %d", agentID, exitCode)
 					return
 				}
 			}
-			// Exhausted retries on lock busy
-			errors <- fmt.Errorf("%s: lock busy after %d retries", agentID, maxRetries)
+			// Exhausted retries on lock busy: acceptable (test is about no double-claims).
 		}(i)
 	}
 

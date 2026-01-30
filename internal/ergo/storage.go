@@ -1,8 +1,17 @@
 // Data directory discovery and event storage helpers.
+//
+// Key responsibilities:
+// - `.ergo/` discovery (`resolveErgoDir`, `ergoDir`)
+// - Append-only JSONL event log I/O (`readEvents`, `appendEvents`, `writeEventsFile`)
+//
+// Resilience:
+// - `readEvents` tolerates a truncated final line (when the file doesn't end in '\n').
+// - Parse errors include file+line and hints for common corruption (e.g. git conflicts).
 package ergo
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -18,31 +27,39 @@ const (
 	dataDirName = ".ergo"
 )
 
-func findDataDir(start string) (string, bool) {
+func resolveErgoDir(start string) (string, error) {
 	current := start
 	for {
 		candidate := filepath.Join(current, dataDirName)
 		info, err := os.Stat(candidate)
-		if err == nil && info.IsDir() {
-			return candidate, true
+		if err == nil {
+			if info.IsDir() {
+				return candidate, nil
+			}
+			return "", fmt.Errorf("%s exists but is not a directory", candidate)
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return "", err
 		}
 		if current == filepath.Dir(current) {
-			return "", false
+			break
 		}
 		current = filepath.Dir(current)
 	}
-}
 
-func resolveErgoDir(start string) (string, error) {
-	ergoDir, ok := findDataDir(start)
-	if ok {
-		return ergoDir, nil
-	}
 	if filepath.Base(start) == dataDirName {
-		if info, err := os.Stat(start); err == nil && info.IsDir() {
-			return start, nil
+		info, err := os.Stat(start)
+		if err == nil {
+			if info.IsDir() {
+				return start, nil
+			}
+			return "", fmt.Errorf("%s exists but is not a directory", start)
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return "", err
 		}
 	}
+
 	return "", fmt.Errorf("%w (run ergo init)", ErrNoErgoDir)
 }
 
@@ -78,23 +95,77 @@ func readEvents(path string) ([]Event, error) {
 	}
 	defer file.Close()
 
+	const maxEventLineBytes = 10 * 1024 * 1024
+
+	endsWithNewline := false
+	if info, err := file.Stat(); err == nil && info.Size() > 0 {
+		last := make([]byte, 1)
+		if _, err := file.ReadAt(last, info.Size()-1); err == nil {
+			endsWithNewline = last[0] == '\n'
+		}
+	}
+
 	var events []Event
 	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
+	scanner.Buffer(make([]byte, 0, 64*1024), maxEventLineBytes)
+	var pending []byte
+	pendingNo := 0
+	currentNo := 0
+
+	processLine := func(lineNo int, line []byte) error {
+		trimmed := bytes.TrimSpace(line)
+		if len(trimmed) == 0 {
+			return nil
 		}
 		var event Event
-		if err := json.Unmarshal(line, &event); err != nil {
-			return nil, err
+		if err := json.Unmarshal(trimmed, &event); err != nil {
+			return formatEventsParseError(path, lineNo, trimmed, err)
 		}
 		events = append(events, event)
+		return nil
+	}
+
+	for scanner.Scan() {
+		currentNo++
+		line := append([]byte(nil), scanner.Bytes()...) // copy (scanner buffer is reused)
+		if pending != nil {
+			if err := processLine(pendingNo, pending); err != nil {
+				return nil, err
+			}
+		}
+		pending = line
+		pendingNo = currentNo
 	}
 	if err := scanner.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			return nil, fmt.Errorf("%s: event line too long (> %d bytes); events.jsonl may be corrupted (e.g. missing newlines)", path, maxEventLineBytes)
+		}
 		return nil, err
 	}
+
+	if pending != nil {
+		// Tolerate a truncated final line (common after crashes or partial writes).
+		// Only ignore when the file does not end in '\n'.
+		if err := processLine(pendingNo, pending); err != nil {
+			if !endsWithNewline {
+				return events, nil
+			}
+			return nil, err
+		}
+	}
 	return events, nil
+}
+
+func formatEventsParseError(path string, lineNo int, line []byte, cause error) error {
+	snippet := string(line)
+	if len(snippet) > 160 {
+		snippet = snippet[:160] + "…"
+	}
+	trimmed := bytes.TrimSpace(line)
+	if bytes.HasPrefix(trimmed, []byte("<<<<<<<")) || bytes.HasPrefix(trimmed, []byte("=======")) || bytes.HasPrefix(trimmed, []byte(">>>>>>>")) {
+		return fmt.Errorf("%s:%d: git conflict markers in events log (resolve then run `ergo compact`): %s", path, lineNo, snippet)
+	}
+	return fmt.Errorf("%s:%d: invalid JSON in events log (run `ergo compact` after fixing): %s (%v)", path, lineNo, snippet, cause)
 }
 
 func appendEvents(path string, events []Event) error {
@@ -103,17 +174,17 @@ func appendEvents(path string, events []Event) error {
 		return err
 	}
 	defer file.Close()
-	writer := bufio.NewWriter(file)
 	for _, event := range events {
 		data, err := json.Marshal(event)
 		if err != nil {
 			return err
 		}
-		if _, err := writer.Write(append(data, '\n')); err != nil {
+		line := append(data, '\n')
+		if err := writeAll(file, line); err != nil {
 			return err
 		}
 	}
-	return writer.Flush()
+	return nil
 }
 
 func writeEventsFile(path string, events []Event) error {
@@ -133,6 +204,17 @@ func writeEventsFile(path string, events []Event) error {
 		}
 	}
 	return writer.Flush()
+}
+
+func writeAll(w *os.File, data []byte) error {
+	for len(data) > 0 {
+		n, err := w.Write(data)
+		if err != nil {
+			return err
+		}
+		data = data[n:]
+	}
+	return nil
 }
 
 func writeLinkEvent(dir string, opts GlobalOptions, eventType, from, to string) error {

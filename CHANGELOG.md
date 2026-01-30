@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-01-30
+
+### Fixed
+- `init` is idempotent and now repairs missing `.ergo/lock` or `.ergo/events.jsonl` when `.ergo/` already exists.
+- `new`/`set`/other write commands auto-create missing `.ergo/lock` on demand.
+- Event log parsing tolerates a truncated final line and reports corruption with file+line context (including git conflict marker hints).
+
+### Tests
+- Reduce flakiness in concurrent-claim tests by retrying only on actual lock contention.
+
 ## [0.7.1] - 2026-01-30
 
 ### Documentation
