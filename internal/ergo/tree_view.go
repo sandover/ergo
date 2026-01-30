@@ -85,6 +85,8 @@ func renderTreeView(w io.Writer, graph *Graph, repoDir string, useColor bool, sh
 	renderSummary(w, stats, useColor)
 }
 
+// filterNodesByReady keeps only ready tasks and epics with ready children.
+// Call this only when --ready is requested.
 func filterNodesByReady(nodes []*treeNode, graph *Graph) []*treeNode {
 	filtered := make([]*treeNode, 0, len(nodes))
 	for _, node := range nodes {

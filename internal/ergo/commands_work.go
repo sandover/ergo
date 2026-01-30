@@ -485,7 +485,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 
 	// Get tasks - includeAll=true so we get everything, then filter
 	// We need all tasks for tree view hierarchy and JSON output
-	tasks := listTasks(graph, epicID, readyOnly, true)
+	tasks := listTasks(graph, epicID, readyOnly)
 
 	// Filter out epics from tasks list (tasks should only be tasks, not epics)
 	var tasksOnly []*Task
