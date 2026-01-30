@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-01-30
+
+### Changed
+- **BREAKING:** Remove `worker` from the domain model, CLI I/O, and tree rendering.
+- **BREAKING:** Remove `list --blocked` flag; use `list` or `list --ready`.
+- JSON stdin parsing is strict (unknown keys rejected) and enforces single-value input.
+- `claim` supports `--epic` filtering when claiming oldest ready work.
+
+### Fixed
+- `list --ready` no longer shows completed tasks in human output.
+
+### Tests
+- Add coverage for epic-filtered claiming and strict JSON parsing edge cases.
+
 ## [0.7.2] - 2026-01-30
 
 ### Fixed
@@ -219,7 +233,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/sandover/ergo/compare/v0.7.2...v0.8.0
+[0.7.2]: https://github.com/sandover/ergo/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/sandover/ergo/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/sandover/ergo/compare/v0.5.8...v0.7.0
 [0.6.0]: https://github.com/sandover/ergo/compare/v0.5.8...v0.6.0

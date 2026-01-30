@@ -148,7 +148,6 @@ func relativeTime(t time.Time) string {
 	diff := now.Sub(t.UTC())
 
 	if diff < 0 {
-		diff = -diff
 		return "in the future"
 	}
 
