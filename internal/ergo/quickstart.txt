@@ -76,30 +76,12 @@ Epic-to-epic deps block all tasks in the dependent epic.
 
 {{CMD}}ergo dep EPIC_A EPIC_B{{RESET}}
 
-{{HEADER}}REFERENCE: JSON OUTPUT SHAPES{{RESET}}
-
-Task (show --json):
-  {id, uuid, epic_id, state, claimed_by, claimed_at, created_at,
-   updated_at, title, body, deps[], rdeps[], results[]}
-
-Epic (show --json):
-  {epic: <task>, children: [<task>...]}
-
 {{HEADER}}REFERENCE: TITLE + BODY{{RESET}}
 Use `title` for the task name; `body` for details.
-If title is omitted, ergo derives it from the first line of body.
-
-Result shape (results[] item):
-  {summary, path, file_url, sha256_at_attach, created_at}
+Title is required for new tasks/epics. Legacy tasks without titles are auto-derived on load.
 
 {{HEADER}}REFERENCE: STATE MACHINE{{RESET}}
-
-Transitions:
-  todo     → doing, done, blocked, canceled
-  doing    → todo, done, blocked, canceled, error
-  blocked  → todo, doing, done, canceled
-  done/can → todo (reopen)
-  error    → todo, doing, canceled
+States: todo, doing, blocked, error, done, canceled
 
 Invariants:
   doing/error require claim; pass --agent or set claim in JSON

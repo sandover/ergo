@@ -22,19 +22,6 @@ const (
 
 type Kind string
 
-func parseKind(value string) (Kind, error) {
-	switch strings.TrimSpace(strings.ToLower(value)) {
-	case "", "any":
-		return kindAny, nil
-	case "task", "tasks":
-		return kindTask, nil
-	case "epic", "epics":
-		return kindEpic, nil
-	default:
-		return "", fmt.Errorf("invalid kind %s (use any, task, or epic)", value)
-	}
-}
-
 const (
 	kindAny  Kind = "any"
 	kindTask Kind = "task"

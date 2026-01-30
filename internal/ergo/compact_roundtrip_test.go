@@ -499,7 +499,7 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 
 	for i := 0; i < steps; i++ {
 		ts := now(len(events))
-		switch r.Intn(10) {
+		switch r.Intn(9) {
 		case 0: // new epic
 			epicID := fmt.Sprintf("E%d", nextEpic)
 			nextEpic++
