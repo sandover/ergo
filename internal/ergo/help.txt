@@ -4,7 +4,7 @@
   ergo <command> [args] [global flags]   (Global flags can appear anywhere.)
 
 {{HEADER}}COMMANDS{{RESET}}
-  init [dir]                              create .ergo/ in dir (default: current dir)
+  init [dir]                              create .ergo/ in dir (default: .)
 
   new epic                                create epic from JSON stdin (prints ID)
   new task                                create task from JSON stdin (prints ID)
@@ -12,23 +12,23 @@
   show <id>                               show epic or task details
 
   list [--epic <id>] [--ready|--blocked] [--epics] [--all]
-                                          list active tasks (todo/doing/blocked/error)
-                                          --all shows everything (including done/canceled)
+                                          list active (non-terminal) tasks
+                                          --all includes done and canceled
                                           --epics shows only epics
 
-  claim [<id>] --agent <identity>         claim oldest ready task, or claim task by id.
-                                          Sets state to "doing". --agent required.
+  claim [<id>] --agent <identity>         claim oldest ready task, or by ID
+                                          sets to "doing"; --agent required
 
-  dep <A> <B>                             add dependency: A depends on B (B blocks A)
+  dep <A> <B>                             A depends on B (B blocks A)
   dep rm <A> <B>                          remove dependency
 
   where                                   print active .ergo directory path
-  compact                                 rewrite log to current state (drops history)
+  compact                                 collapse log to current state
   quickstart                              complete reference manual
 
 {{HEADER}}GLOBAL FLAGS{{RESET}}
-  --dir <path>                            discovery start dir (or explicit .ergo dir)
-  --agent <identity>                      claim identity (req. for claim/implicit set)
+  --dir <path>                            discovery start (or .ergo path)
+  --agent <identity>                      identity for claim and implicit set
   --json                                  JSON output (default: text)
   -h, --help                              show help
   -V, --version                           print version
@@ -42,13 +42,13 @@
                   doing/error require claim; todo/done/canceled clear claim
   claim           (tasks only) agent ID or "" to unclaim
                   claim implies state=doing (unless state provided)
-                  state=doing/error on unclaimed requires --agent unless claim is set
+                  state=doing/error on unclaimed needs --agent or claim
   result_path     file path (requires result_summary)
   result_summary  one-liner (requires result_path)
 
 {{HEADER}}FOR AGENTS{{RESET}}
-  ALWAYS use '--json' arg to read structured output.
-  ALWAYS pass --agent when claiming (use the agent's own identity: <model>@<hostname>, e.g. haiku@agent-host)
-  ALWAYS end work by setting a terminal state (done/blocked/error/canceled) and attaching results when applicable.
-  ALWAYS use printf for multiline input (not heredocs, which break in some terms).
-  Before using ergo, first run `ergo quickstart` for complete reference and workflow.
+  ALWAYS use --json for structured output.
+  ALWAYS pass --agent when claiming (e.g. haiku@agent-host).
+  ALWAYS end with a terminal state (done/blocked/error/canceled) and result.
+  ALWAYS use printf for multiline input (heredocs break in some terminals).
+  Before starting, run 'ergo quickstart' for the complete reference.
