@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-01-30
+
+### Changed
+- **BREAKING:** Removed `--lock-timeout`; locking is now fail-fast.
+- **BREAKING:** Removed `--readonly` flag and read-only guardrails.
+- `claim`: simplify flow and provenance in CLI output.
+- `show`: display epic children in output.
+
+### Documentation
+- Add file headers for navigation.
+
+### Refactor
+- Extract helpers in `show` command.
+
 ## [0.6.0] - 2026-01-29
 
 ### Changed
@@ -186,7 +200,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/sandover/ergo/compare/v0.5.8...v0.7.0
 [0.6.0]: https://github.com/sandover/ergo/compare/v0.5.8...v0.6.0
 [0.5.8]: https://github.com/sandover/ergo/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/sandover/ergo/compare/v0.5.6...v0.5.7

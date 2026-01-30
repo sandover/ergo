@@ -178,7 +178,6 @@ func validateDepSelf(from, to string) error {
 
 type GlobalOptions struct {
 	StartDir string
-	ReadOnly bool
 	AgentID  string
 	Quiet    bool
 	Verbose  bool

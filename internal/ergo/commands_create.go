@@ -16,9 +16,6 @@ import (
 )
 
 func RunInit(args []string, opts GlobalOptions) error {
-	if err := requireWritable(opts, "init"); err != nil {
-		return err
-	}
 	dir := "."
 	if len(args) > 0 {
 		dir = args[0]
@@ -57,9 +54,6 @@ func RunInit(args []string, opts GlobalOptions) error {
 }
 
 func RunNew(args []string, opts GlobalOptions) error {
-	if err := requireWritable(opts, "new"); err != nil {
-		return err
-	}
 	if len(args) != 1 {
 		return errors.New("usage: echo '{\"title\":\"...\"}' | ergo new task|epic")
 	}

@@ -26,8 +26,6 @@ func exitErr(err error, opts *ergo.GlobalOptions) {
 			fmt.Fprintln(os.Stderr, "hint: another process is writing; retry")
 		} else if strings.Contains(err.Error(), "require human") {
 			fmt.Fprintln(os.Stderr, "hint: mark the task worker=human and ask a human to claim it")
-		} else if strings.HasPrefix(err.Error(), "readonly:") {
-			fmt.Fprintln(os.Stderr, "hint: remove `--readonly` (or switch to a read-only command)")
 		}
 	}
 	os.Exit(1)

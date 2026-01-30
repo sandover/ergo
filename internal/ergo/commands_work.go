@@ -29,10 +29,6 @@ type ListOptions struct {
 }
 
 func RunSet(id string, opts GlobalOptions) error {
-	if err := requireWritable(opts, "set"); err != nil {
-		return err
-	}
-
 	if id == "" {
 		return errors.New("usage: echo '{\"state\":\"done\"}' | ergo set <id>")
 	}
@@ -73,9 +69,6 @@ func RunSet(id string, opts GlobalOptions) error {
 }
 
 func RunClaim(id string, opts GlobalOptions) error {
-	if err := requireWritable(opts, "claim"); err != nil {
-		return err
-	}
 	if id == "" {
 		return errors.New("usage: ergo claim <id>")
 	}
@@ -129,10 +122,6 @@ func RunClaim(id string, opts GlobalOptions) error {
 }
 
 func RunClaimOldestReady(opts GlobalOptions) error {
-	if err := requireWritable(opts, "claim"); err != nil {
-		return err
-	}
-
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
@@ -477,9 +466,6 @@ func identityBodyResolver(value string) (string, error) {
 }
 
 func RunDep(args []string, opts GlobalOptions) error {
-	if err := requireWritable(opts, "dep"); err != nil {
-		return err
-	}
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
@@ -772,9 +758,6 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 }
 
 func RunCompact(opts GlobalOptions) error {
-	if err := requireWritable(opts, "compact"); err != nil {
-		return err
-	}
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
