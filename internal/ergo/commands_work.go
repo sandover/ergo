@@ -23,7 +23,6 @@ import (
 type ListOptions struct {
 	EpicID      string
 	ReadyOnly   bool
-	BlockedOnly bool
 	ShowEpics   bool
 	ShowAll     bool
 }
@@ -470,13 +469,8 @@ func RunDep(args []string, opts GlobalOptions) error {
 func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	epicID := listOpts.EpicID
 	readyOnly := listOpts.ReadyOnly
-	blockedOnly := listOpts.BlockedOnly
 	showEpics := listOpts.ShowEpics
 	showAll := listOpts.ShowAll
-
-	if readyOnly && blockedOnly {
-		return errors.New("cannot use both --ready and --blocked")
-	}
 
 	dir, err := ergoDir(opts)
 	if err != nil {
@@ -491,7 +485,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 
 	// Get tasks - includeAll=true so we get everything, then filter
 	// We need all tasks for tree view hierarchy and JSON output
-	tasks := listTasks(graph, epicID, readyOnly, blockedOnly, true)
+	tasks := listTasks(graph, epicID, readyOnly, true)
 
 	// Filter out epics from tasks list (tasks should only be tasks, not epics)
 	var tasksOnly []*Task
@@ -502,9 +496,9 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	}
 
 	// Apply Active Set filtering (default behavior)
-	// If --all is NOT set, and we aren't targeting specific states via --ready/--blocked,
+	// If --all is NOT set, and we aren't targeting specific states via --ready,
 	// hide done and canceled tasks.
-	if !showAll && !readyOnly && !blockedOnly {
+	if !showAll && !readyOnly {
 		var active []*Task
 		for _, task := range tasksOnly {
 			if task.State != stateDone && task.State != stateCanceled {
@@ -542,7 +536,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	}
 
 	// If --epics only, show simple epic list instead of tree
-	if showEpics && epicID == "" && !readyOnly && !blockedOnly {
+	if showEpics && epicID == "" && !readyOnly {
 		for _, epic := range epics {
 			fmt.Printf("%s  %s\n", epic.ID, epic.Title)
 		}
@@ -554,7 +548,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 
 	// Tree view (human-friendly hierarchical output)
 	useColor := stdoutIsTTY()
-	renderTreeView(os.Stdout, graph, repoDir, useColor, showAll, readyOnly, blockedOnly)
+	renderTreeView(os.Stdout, graph, repoDir, useColor, showAll, readyOnly)
 
 	return nil
 }

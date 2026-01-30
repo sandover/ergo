@@ -62,13 +62,13 @@ type treeNode struct {
 }
 
 // renderTreeView outputs tasks in a hierarchical tree format.
-func renderTreeView(w io.Writer, graph *Graph, repoDir string, useColor bool, showAll bool, readyOnly bool, blockedOnly bool) {
+func renderTreeView(w io.Writer, graph *Graph, repoDir string, useColor bool, showAll bool, readyOnly bool) {
 	// Build tree structure: epics contain their tasks, and epics nest by dependency
 	roots := buildTree(graph)
 
-	// Apply ready/blocked filters first (drop epics with no matching children).
-	if readyOnly || blockedOnly {
-		roots = filterNodesByStatus(roots, graph, readyOnly, blockedOnly)
+	// Apply ready filter first (drop epics with no matching children).
+	if readyOnly {
+		roots = filterNodesByReady(roots, graph)
 	} else if !showAll {
 		// Compute derived state for epics and filter/collapse unless --all
 		roots = filterAndCollapseNodes(roots)
@@ -85,27 +85,21 @@ func renderTreeView(w io.Writer, graph *Graph, repoDir string, useColor bool, sh
 	renderSummary(w, stats, useColor)
 }
 
-func filterNodesByStatus(nodes []*treeNode, graph *Graph, readyOnly bool, blockedOnly bool) []*treeNode {
-	if !readyOnly && !blockedOnly {
-		return nodes
-	}
+func filterNodesByReady(nodes []*treeNode, graph *Graph) []*treeNode {
 	filtered := make([]*treeNode, 0, len(nodes))
 	for _, node := range nodes {
 		if node == nil || node.task == nil {
 			continue
 		}
 		if node.task.IsEpic {
-			node.children = filterNodesByStatus(node.children, graph, readyOnly, blockedOnly)
+			node.children = filterNodesByReady(node.children, graph)
 			if len(node.children) == 0 {
 				continue
 			}
 			filtered = append(filtered, node)
 			continue
 		}
-		if readyOnly && !isReady(node.task, graph) {
-			continue
-		}
-		if blockedOnly && !isBlocked(node.task, graph) {
+		if !isReady(node.task, graph) {
 			continue
 		}
 		filtered = append(filtered, node)

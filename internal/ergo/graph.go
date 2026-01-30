@@ -435,7 +435,7 @@ func compactEvents(graph *Graph) ([]Event, error) {
 }
 
 func readyTasks(graph *Graph, epicID string, kind Kind) []*Task {
-	tasks := listTasks(graph, epicID, true, false, true)
+	tasks := listTasks(graph, epicID, true, true)
 	if len(tasks) == 0 {
 		return nil
 	}
@@ -465,21 +465,17 @@ func filterTasksByKind(tasks []*Task, kind Kind) []*Task {
 	return filtered
 }
 
-func listTasks(graph *Graph, epicID string, readyOnly, blockedOnly, includeAll bool) []*Task {
+func listTasks(graph *Graph, epicID string, readyOnly, includeAll bool) []*Task {
 	var tasks []*Task
 	for _, task := range graph.Tasks {
 		if epicID != "" && task.EpicID != epicID {
 			continue
 		}
 		ready := isReady(task, graph)
-		blocked := isBlocked(task, graph)
 		if readyOnly && !ready {
 			continue
 		}
-		if blockedOnly && !blocked {
-			continue
-		}
-		if !includeAll && !ready && !blocked {
+		if !includeAll && !ready {
 			continue
 		}
 		tasks = append(tasks, task)

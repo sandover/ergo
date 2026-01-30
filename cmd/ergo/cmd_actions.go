@@ -81,13 +81,11 @@ var listCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		epicID, _ := cmd.Flags().GetString("epic")
 		readyOnly, _ := cmd.Flags().GetBool("ready")
-		blockedOnly, _ := cmd.Flags().GetBool("blocked")
 		showEpics, _ := cmd.Flags().GetBool("epics")
 		showAll, _ := cmd.Flags().GetBool("all")
 		return ergo.RunList(ergo.ListOptions{
 			EpicID:      epicID,
 			ReadyOnly:   readyOnly,
-			BlockedOnly: blockedOnly,
 			ShowEpics:   showEpics,
 			ShowAll:     showAll,
 		}, globalOpts)
@@ -97,7 +95,6 @@ var listCmd = &cobra.Command{
 func init() {
 	listCmd.Flags().String("epic", "", "Filter by epic ID")
 	listCmd.Flags().Bool("ready", false, "Show only ready tasks")
-	listCmd.Flags().Bool("blocked", false, "Show only blocked tasks")
 	listCmd.Flags().Bool("epics", false, "Show only epics")
 	listCmd.Flags().Bool("all", false, "Show all tasks (including canceled/done)")
 }

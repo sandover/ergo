@@ -11,7 +11,7 @@
   set <id>                                update task/epic from JSON stdin
   show <id>                               show epic or task details
 
-  list [--epic <id>] [--ready|--blocked] [--epics] [--all]
+  list [--epic <id>] [--ready] [--epics] [--all]
                                           list active tasks
                                           --all includes done and canceled
                                           --epics shows only epics

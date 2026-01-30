@@ -216,7 +216,7 @@ func TestRenderCollapsedEpic(t *testing.T) {
 
 	var buf bytes.Buffer
 	// showAll=false triggers collapsing of done epics
-	renderTreeView(&buf, graph, "/repo", false, false, false, false)
+	renderTreeView(&buf, graph, "/repo", false, false, false)
 
 	output := buf.String()
 	// Should show the checkmark icon and task count
@@ -228,8 +228,8 @@ func TestRenderCollapsedEpic(t *testing.T) {
 	}
 }
 
-// TestFilterNodesByStatus verifies that --ready and --blocked filters work correctly.
-func TestFilterNodesByStatus(t *testing.T) {
+// TestFilterNodesByReady verifies that --ready filtering works correctly.
+func TestFilterNodesByReady(t *testing.T) {
 	// Create a graph with various task states
 	graph := &Graph{
 		Tasks: map[string]*Task{
@@ -247,9 +247,9 @@ func TestFilterNodesByStatus(t *testing.T) {
 		RDeps: map[string]map[string]struct{}{},
 	}
 
-	t.Run("readyOnly filters out non-ready tasks", func(t *testing.T) {
-		nodes := []*treeNode{
-			{task: graph.Tasks["T1"]}, // ready
+		t.Run("readyOnly filters out non-ready tasks", func(t *testing.T) {
+			nodes := []*treeNode{
+				{task: graph.Tasks["T1"]}, // ready
 			{task: graph.Tasks["T2"]}, // done, not ready
 			{task: graph.Tasks["T3"]}, // canceled, not ready
 			{task: graph.Tasks["T4"]}, // doing, not ready
@@ -257,7 +257,7 @@ func TestFilterNodesByStatus(t *testing.T) {
 			{task: graph.Tasks["T6"]}, // ready
 		}
 
-		filtered := filterNodesByStatus(nodes, graph, true, false)
+			filtered := filterNodesByReady(nodes, graph)
 
 		// Should only have T1 and T6 (both ready)
 		if len(filtered) != 2 {
@@ -269,9 +269,9 @@ func TestFilterNodesByStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("readyOnly excludes epics with no ready children", func(t *testing.T) {
-		nodes := []*treeNode{
-			{
+		t.Run("readyOnly excludes epics with no ready children", func(t *testing.T) {
+			nodes := []*treeNode{
+				{
 				task: &Task{ID: "E1", IsEpic: true},
 				children: []*treeNode{
 					{task: graph.Tasks["T2"]}, // done, not ready
@@ -287,7 +287,7 @@ func TestFilterNodesByStatus(t *testing.T) {
 			},
 		}
 
-		filtered := filterNodesByStatus(nodes, graph, true, false)
+			filtered := filterNodesByReady(nodes, graph)
 
 		// Should only have E2 (has ready child T1), not E1
 		if len(filtered) != 1 {
@@ -305,40 +305,7 @@ func TestFilterNodesByStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("blockedOnly filters to blocked tasks", func(t *testing.T) {
-		nodes := []*treeNode{
-			{task: graph.Tasks["T1"]}, // ready, not blocked
-			{task: graph.Tasks["T5"]}, // blocked by dep
-			{task: graph.Tasks["T7"]}, // explicitly blocked
-		}
-
-		filtered := filterNodesByStatus(nodes, graph, false, true)
-
-		// Should have T5 and T7 (both blocked)
-		if len(filtered) != 2 {
-			t.Fatalf("expected 2 blocked tasks, got %d", len(filtered))
-		}
-		ids := []string{filtered[0].task.ID, filtered[1].task.ID}
-		if ids[0] != "T5" || ids[1] != "T7" {
-			t.Errorf("expected T5 and T7, got %v", ids)
-		}
-	})
-
-	t.Run("no filter returns all nodes", func(t *testing.T) {
-		nodes := []*treeNode{
-			{task: graph.Tasks["T1"]},
-			{task: graph.Tasks["T2"]},
-			{task: graph.Tasks["T3"]},
-		}
-
-		filtered := filterNodesByStatus(nodes, graph, false, false)
-
-		// Should return all nodes unchanged
-		if len(filtered) != 3 {
-			t.Fatalf("expected 3 nodes (no filtering), got %d", len(filtered))
-		}
-	})
-}
+	}
 
 // TestFormatTreeLineTruncation verifies that long lines are truncated to prevent wrapping.
 func TestFormatTreeLineTruncation(t *testing.T) {
