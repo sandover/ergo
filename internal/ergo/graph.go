@@ -11,10 +11,11 @@ import (
 
 func replayEvents(events []Event) (*Graph, error) {
 	graph := &Graph{
-		Tasks: map[string]*Task{},
-		Deps:  map[string]map[string]struct{}{},
-		RDeps: map[string]map[string]struct{}{},
-		Meta:  map[string]*TaskMeta{},
+		Tasks:      map[string]*Task{},
+		Deps:       map[string]map[string]struct{}{},
+		RDeps:      map[string]map[string]struct{}{},
+		Meta:       map[string]*TaskMeta{},
+		Tombstones: map[string]TombstoneInfo{},
 	}
 
 	for _, event := range events {
@@ -23,6 +24,9 @@ func replayEvents(events []Event) (*Graph, error) {
 			var data NewTaskEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
 				return nil, err
+			}
+			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
+				continue
 			}
 			if _, exists := graph.Tasks[data.ID]; exists {
 				return nil, fmt.Errorf("duplicate task id %s", data.ID)
@@ -56,6 +60,9 @@ func replayEvents(events []Event) (*Graph, error) {
 			if err := json.Unmarshal(event.Data, &data); err != nil {
 				return nil, err
 			}
+			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
+				continue
+			}
 			task, ok := graph.Tasks[data.ID]
 			if !ok {
 				continue
@@ -79,6 +86,9 @@ func replayEvents(events []Event) (*Graph, error) {
 			if err := json.Unmarshal(event.Data, &data); err != nil {
 				return nil, err
 			}
+			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
+				continue
+			}
 			task, ok := graph.Tasks[data.ID]
 			if !ok {
 				continue
@@ -97,6 +107,12 @@ func replayEvents(events []Event) (*Graph, error) {
 			if err := json.Unmarshal(event.Data, &data); err != nil {
 				return nil, err
 			}
+			if _, tombstoned := graph.Tombstones[data.FromID]; tombstoned {
+				continue
+			}
+			if _, tombstoned := graph.Tombstones[data.ToID]; tombstoned {
+				continue
+			}
 			if data.Type != dependsLinkType {
 				continue
 			}
@@ -109,6 +125,12 @@ func replayEvents(events []Event) (*Graph, error) {
 			if err := json.Unmarshal(event.Data, &data); err != nil {
 				return nil, err
 			}
+			if _, tombstoned := graph.Tombstones[data.FromID]; tombstoned {
+				continue
+			}
+			if _, tombstoned := graph.Tombstones[data.ToID]; tombstoned {
+				continue
+			}
 			if data.Type != dependsLinkType {
 				continue
 			}
@@ -119,6 +141,9 @@ func replayEvents(events []Event) (*Graph, error) {
 			var data TitleUpdateEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
 				return nil, err
+			}
+			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
+				continue
 			}
 			task, ok := graph.Tasks[data.ID]
 			if !ok {
@@ -139,6 +164,9 @@ func replayEvents(events []Event) (*Graph, error) {
 			if err := json.Unmarshal(event.Data, &data); err != nil {
 				return nil, err
 			}
+			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
+				continue
+			}
 			task, ok := graph.Tasks[data.ID]
 			if !ok {
 				continue
@@ -157,6 +185,9 @@ func replayEvents(events []Event) (*Graph, error) {
 			var data EpicAssignEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
 				return nil, err
+			}
+			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
+				continue
 			}
 			task, ok := graph.Tasks[data.ID]
 			if !ok {
@@ -177,15 +208,31 @@ func replayEvents(events []Event) (*Graph, error) {
 			if err := json.Unmarshal(event.Data, &data); err != nil {
 				return nil, err
 			}
+			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
+				continue
+			}
 			task, ok := graph.Tasks[data.ID]
 			if !ok {
 				continue
 			}
 			task.ClaimedBy = ""
+		case "tombstone":
+			var data TombstoneEvent
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				return nil, err
+			}
+			ts, err := parseTime(data.TS)
+			if err != nil {
+				return nil, err
+			}
+			applyTombstone(graph, data.ID, TombstoneInfo{AgentID: data.AgentID, At: ts})
 		case "result":
 			var data ResultEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
 				return nil, err
+			}
+			if _, tombstoned := graph.Tombstones[data.TaskID]; tombstoned {
+				continue
 			}
 			task, ok := graph.Tasks[data.TaskID]
 			if !ok {
@@ -226,6 +273,24 @@ func replayEvents(events []Event) (*Graph, error) {
 	applyLegacyTitleMigration(graph)
 
 	return graph, nil
+}
+
+func applyTombstone(graph *Graph, id string, info TombstoneInfo) {
+	if graph == nil {
+		return
+	}
+	graph.Tombstones[id] = info
+	delete(graph.Tasks, id)
+	delete(graph.Meta, id)
+	delete(graph.Deps, id)
+	for from, deps := range graph.Deps {
+		if _, ok := deps[id]; ok {
+			delete(deps, id)
+			if len(deps) == 0 {
+				delete(graph.Deps, from)
+			}
+		}
+	}
 }
 
 func applyLegacyTitleMigration(graph *Graph) {

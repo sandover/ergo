@@ -1,5 +1,8 @@
 // Cobra command wiring for ergo subcommands.
-// Maps CLI verbs to internal ergo.RunX implementations and flags.
+// Purpose: bind CLI verbs/flags to internal ergo.RunX implementations.
+// Exports: none.
+// Role: CLI composition layer for user-facing commands.
+// Invariants: flags must match help/quickstart documentation.
 package main
 
 import (
@@ -31,6 +34,8 @@ func init() {
 	rootCmd.AddCommand(whereCmd)
 	// ergo compact
 	rootCmd.AddCommand(compactCmd)
+	// ergo prune
+	rootCmd.AddCommand(pruneCmd)
 	// ergo quickstart
 	rootCmd.AddCommand(quickstartCmd)
 	// ergo version
@@ -84,10 +89,10 @@ var listCmd = &cobra.Command{
 		showEpics, _ := cmd.Flags().GetBool("epics")
 		showAll, _ := cmd.Flags().GetBool("all")
 		return ergo.RunList(ergo.ListOptions{
-			EpicID:      epicID,
-			ReadyOnly:   readyOnly,
-			ShowEpics:   showEpics,
-			ShowAll:     showAll,
+			EpicID:    epicID,
+			ReadyOnly: readyOnly,
+			ShowEpics: showEpics,
+			ShowAll:   showAll,
 		}, globalOpts)
 	},
 }
@@ -183,6 +188,21 @@ var compactCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return ergo.RunCompact(globalOpts)
 	},
+}
+
+// -- prune --
+var pruneCmd = &cobra.Command{
+	Use:   "prune",
+	Short: "Prune closed work (dry-run by default)",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		confirm, _ := cmd.Flags().GetBool("yes")
+		return ergo.RunPrune(confirm, globalOpts)
+	},
+}
+
+func init() {
+	pruneCmd.Flags().Bool("yes", false, "Apply prune (default is dry-run)")
 }
 
 // -- quickstart --

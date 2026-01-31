@@ -112,7 +112,22 @@ ergo claim GHIJKL --agent sonnet@agent-host
 printf '%s' '{"state":"done"}' | ergo set GHIJKL
 ```
 
+## Keeping plans tidy
 
+`ergo prune` removes `done`/`canceled` tasks and empty epics. Defaults to dry-run.
+
+```bash
+# See what would be removed (no writes)
+ergo prune
+
+# Apply the prune
+ergo prune --yes
+
+# Physically remove pruned history from the log
+ergo compact
+```
+
+Prune only removes tasks in `done` or `canceled`, then prunes any now-empty epics. It never removes `todo`, `blocked`, `doing`, or `error` tasks.
 
 ## Data Representation
 

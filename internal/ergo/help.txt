@@ -24,6 +24,8 @@
   dep rm <A> <B>                          remove dependency
 
   where                                   print active .ergo directory path
+  prune [--yes] [--json]                  remove done/canceled tasks + empty epics
+                                          default dry-run; run with --yes to apply
   compact                                 collapse log to current state
   quickstart                              complete reference manual
 

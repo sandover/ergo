@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestReadEvents_AllowsValidFinalLineWithoutNewline(t *testing.T) {
@@ -84,5 +85,38 @@ func TestReadEvents_ConflictMarkersHint(t *testing.T) {
 	msg := strings.ToLower(err.Error())
 	if !strings.Contains(msg, "conflict") {
 		t.Fatalf("expected conflict hint, got: %q", msg)
+	}
+}
+
+func TestReadEvents_TombstoneRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "events.jsonl")
+	now := time.Now().UTC()
+
+	events := []Event{
+		mustNewEvent("new_task", now, NewTaskEvent{
+			ID:        "T1",
+			UUID:      "uuid-1",
+			State:     stateTodo,
+			Title:     "Task 1",
+			Body:      "Task 1",
+			CreatedAt: formatTime(now),
+		}),
+		mustNewEvent("tombstone", now.Add(time.Second), TombstoneEvent{
+			ID:      "T1",
+			AgentID: "agent-1",
+			TS:      formatTime(now.Add(time.Second)),
+		}),
+	}
+
+	if err := appendEvents(path, events); err != nil {
+		t.Fatalf("appendEvents: %v", err)
+	}
+	read, err := readEvents(path)
+	if err != nil {
+		t.Fatalf("readEvents: %v", err)
+	}
+	if _, err := replayEvents(read); err != nil {
+		t.Fatalf("replayEvents: %v", err)
 	}
 }

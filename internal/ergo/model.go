@@ -181,10 +181,16 @@ type TaskMeta struct {
 }
 
 type Graph struct {
-	Tasks map[string]*Task
-	Deps  map[string]map[string]struct{}
-	RDeps map[string]map[string]struct{}
-	Meta  map[string]*TaskMeta
+	Tasks      map[string]*Task
+	Deps       map[string]map[string]struct{}
+	RDeps      map[string]map[string]struct{}
+	Meta       map[string]*TaskMeta
+	Tombstones map[string]TombstoneInfo
+}
+
+type TombstoneInfo struct {
+	AgentID string
+	At      time.Time
 }
 
 type Event struct {
@@ -242,6 +248,14 @@ type EpicAssignEvent struct {
 type UnclaimEvent struct {
 	ID string `json:"id"`
 	TS string `json:"ts"`
+}
+
+// TombstoneEvent marks an entity as deleted in the event log.
+// Interpretation is handled during replay.
+type TombstoneEvent struct {
+	ID      string `json:"id"`
+	AgentID string `json:"agent_id,omitempty"`
+	TS      string `json:"ts"`
 }
 
 // ResultEvent records a result attachment in the event log.

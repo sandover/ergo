@@ -1,4 +1,8 @@
-// JSON output shapes and list-item formatting helpers.
+// JSON output shapes and formatting helpers.
+// Purpose: define stable output schemas for CLI JSON responses.
+// Exports: writeJSON, buildTaskListItems, buildResultOutputItems (and output structs).
+// Role: serialization layer between in-memory models and CLI output.
+// Invariants: JSON keys remain stable; `writeJSON` emits a single object/array per call.
 package ergo
 
 import (
@@ -60,6 +64,12 @@ type createOutput struct {
 	Title     string `json:"title"`
 	Body      string `json:"body"`
 	CreatedAt string `json:"created_at"`
+}
+
+type pruneOutput struct {
+	Kind      string   `json:"kind"`
+	DryRun    bool     `json:"dry_run"`
+	PrunedIDs []string `json:"pruned_ids"`
 }
 
 type whereOutput struct {

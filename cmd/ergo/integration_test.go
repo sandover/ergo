@@ -1,6 +1,8 @@
-// Integration tests for JSON input flow.
-// These test the end-to-end wiring (stdin → validation → events → output)
-// rather than individual functions (covered by unit tests).
+// CLI integration tests for end-to-end command behavior.
+// Purpose: validate stdin→validation→events→output wiring across commands.
+// Exports: none.
+// Role: verifies user-visible behavior including prune/compact semantics.
+// Invariants: tests avoid timing assumptions; outputs follow public contracts.
 package main
 
 import (
@@ -12,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -99,6 +102,20 @@ func setupErgoWithEventsOnly(t *testing.T) string {
 		t.Fatalf("failed to create events.jsonl: %v", err)
 	}
 	return dir
+}
+
+func countEventLines(t *testing.T, dir string) int {
+	t.Helper()
+	path := filepath.Join(dir, ".ergo", "events.jsonl")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read events.jsonl: %v", err)
+	}
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" {
+		return 0
+	}
+	return strings.Count(trimmed, "\n") + 1
 }
 
 func TestNewTask_HappyPath(t *testing.T) {
@@ -227,6 +244,350 @@ func TestSet_InvalidTransition(t *testing.T) {
 	errMsg := strings.ToLower(stderr)
 	if !strings.Contains(errMsg, "transition") && !strings.Contains(errMsg, "invalid") {
 		t.Errorf("expected error about invalid transition, got: %q", stderr)
+	}
+}
+
+func TestPrune_DefaultIsDryRun(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Task A"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskID)
+	if code != 0 {
+		t.Fatalf("set state=done failed: exit %d", code)
+	}
+
+	before := countEventLines(t, dir)
+	stdout, _, code = runErgo(t, dir, "", "prune")
+	if code != 0 {
+		t.Fatalf("prune dry-run failed: exit %d", code)
+	}
+	after := countEventLines(t, dir)
+	if before != after {
+		t.Fatalf("expected dry-run to avoid writes (lines %d -> %d)", before, after)
+	}
+	if !strings.Contains(stdout, "dry-run") || !strings.Contains(stdout, "run: ergo prune --yes") {
+		t.Fatalf("expected dry-run output to explain how to run with --yes, got: %q", stdout)
+	}
+
+	_, _, code = runErgo(t, dir, "", "show", taskID)
+	if code != 0 {
+		t.Fatalf("expected task to remain after dry-run")
+	}
+}
+
+func TestPrune_JSONDryRun(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Task A"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskID)
+	if code != 0 {
+		t.Fatalf("set state=done failed: exit %d", code)
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "prune", "--json")
+	if code != 0 {
+		t.Fatalf("prune --json dry-run failed: exit %d", code)
+	}
+	var out struct {
+		Kind      string   `json:"kind"`
+		DryRun    bool     `json:"dry_run"`
+		PrunedIDs []string `json:"pruned_ids"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("failed to parse prune json: %v", err)
+	}
+	if out.Kind != "prune" || !out.DryRun {
+		t.Fatalf("expected kind=prune dry_run=true, got %+v", out)
+	}
+	if len(out.PrunedIDs) != 1 || out.PrunedIDs[0] != taskID {
+		t.Fatalf("expected pruned_ids to include %s, got %v", taskID, out.PrunedIDs)
+	}
+}
+
+func TestPrune_YesWrites(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Task A"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskID)
+	if code != 0 {
+		t.Fatalf("set state=done failed: exit %d", code)
+	}
+
+	_, _, code = runErgo(t, dir, "", "prune", "--yes")
+	if code != 0 {
+		t.Fatalf("prune --yes failed: exit %d", code)
+	}
+
+	_, _, code = runErgo(t, dir, "", "show", taskID)
+	if code == 0 {
+		t.Fatalf("expected pruned task to be gone after prune --yes")
+	}
+}
+
+func TestPrune_RemovesDepsAndErrorsOnPrunedIDs(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Task A"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskA := strings.TrimSpace(stdout)
+	stdout, _, code = runErgo(t, dir, `{"title":"Task B"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskB := strings.TrimSpace(stdout)
+
+	_, _, code = runErgo(t, dir, "", "dep", taskA, taskB)
+	if code != 0 {
+		t.Fatalf("dep failed: exit %d", code)
+	}
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskB)
+	if code != 0 {
+		t.Fatalf("set state=done failed: exit %d", code)
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "show", taskA, "--json")
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+	var before map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &before); err != nil {
+		t.Fatalf("failed to parse show output: %v", err)
+	}
+	if deps, ok := before["deps"].([]interface{}); !ok || len(deps) != 1 || deps[0] != taskB {
+		t.Fatalf("expected deps to include %s, got %v", taskB, before["deps"])
+	}
+
+	_, _, code = runErgo(t, dir, "", "prune", "--yes")
+	if code != 0 {
+		t.Fatalf("prune --yes failed: exit %d", code)
+	}
+
+	_, stderr, code := runErgo(t, dir, "", "show", taskB)
+	if code == 0 || !strings.Contains(stderr, "pruned") {
+		t.Fatalf("expected show to fail with pruned error, got code=%d stderr=%q", code, stderr)
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "show", taskA, "--json")
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+	var after map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &after); err != nil {
+		t.Fatalf("failed to parse show output: %v", err)
+	}
+	if deps, ok := after["deps"]; ok {
+		if deps == nil {
+			return
+		}
+		if list, ok := deps.([]interface{}); ok {
+			if len(list) != 0 {
+				t.Fatalf("expected deps to be empty after prune, got %v", deps)
+			}
+		} else {
+			t.Fatalf("expected deps to be empty after prune, got %v", deps)
+		}
+	} else {
+		t.Fatalf("expected deps field after prune")
+	}
+}
+
+func TestPrune_PrunesEmptyEpicsAndPreservesActiveTasks(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Epic 1"}`, "new", "epic")
+	if code != 0 {
+		t.Fatalf("new epic failed: exit %d", code)
+	}
+	epic1 := strings.TrimSpace(stdout)
+	stdout, _, code = runErgo(t, dir, `{"title":"Epic 2"}`, "new", "epic")
+	if code != 0 {
+		t.Fatalf("new epic failed: exit %d", code)
+	}
+	epic2 := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, `{"title":"Task Done","epic":"`+epic1+`"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskDone := strings.TrimSpace(stdout)
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskDone)
+	if code != 0 {
+		t.Fatalf("set state=done failed: exit %d", code)
+	}
+
+	stdout, _, code = runErgo(t, dir, `{"title":"Task Active","epic":"`+epic2+`"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskActive := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, `{"title":"Blocked"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskBlocked := strings.TrimSpace(stdout)
+	_, _, code = runErgo(t, dir, `{"state":"blocked"}`, "set", taskBlocked)
+	if code != 0 {
+		t.Fatalf("set state=blocked failed: exit %d", code)
+	}
+
+	_, _, code = runErgo(t, dir, "", "prune", "--yes")
+	if code != 0 {
+		t.Fatalf("prune --yes failed: exit %d", code)
+	}
+
+	_, stderr, code := runErgo(t, dir, "", "show", epic1)
+	if code == 0 || !strings.Contains(stderr, "pruned") {
+		t.Fatalf("expected epic1 to be pruned, got code=%d stderr=%q", code, stderr)
+	}
+	_, _, code = runErgo(t, dir, "", "show", epic2)
+	if code != 0 {
+		t.Fatalf("expected epic2 to remain")
+	}
+
+	_, stderr, code = runErgo(t, dir, "", "show", taskDone)
+	if code == 0 || !strings.Contains(stderr, "pruned") {
+		t.Fatalf("expected taskDone to be pruned, got code=%d stderr=%q", code, stderr)
+	}
+	_, _, code = runErgo(t, dir, "", "show", taskActive)
+	if code != 0 {
+		t.Fatalf("expected taskActive to remain")
+	}
+	_, _, code = runErgo(t, dir, "", "show", taskBlocked)
+	if code != 0 {
+		t.Fatalf("expected taskBlocked to remain")
+	}
+}
+
+func TestPrune_CompactRemovesHistory(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Task A"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskID)
+	if code != 0 {
+		t.Fatalf("set state=done failed: exit %d", code)
+	}
+	_, _, code = runErgo(t, dir, "", "prune", "--yes")
+	if code != 0 {
+		t.Fatalf("prune --yes failed: exit %d", code)
+	}
+
+	_, stderr, code := runErgo(t, dir, "", "show", taskID)
+	if code == 0 || !strings.Contains(stderr, "pruned") {
+		t.Fatalf("expected pre-compact pruned error, got code=%d stderr=%q", code, stderr)
+	}
+
+	_, _, code = runErgo(t, dir, "", "compact")
+	if code != 0 {
+		t.Fatalf("compact failed: exit %d", code)
+	}
+
+	_, stderr, code = runErgo(t, dir, "", "show", taskID)
+	if code == 0 || strings.Contains(stderr, "pruned") {
+		t.Fatalf("expected post-compact not-found error, got code=%d stderr=%q", code, stderr)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".ergo", "events.jsonl"))
+	if err != nil {
+		t.Fatalf("failed to read events.jsonl: %v", err)
+	}
+	if strings.Contains(string(data), "tombstone") || strings.Contains(string(data), taskID) {
+		t.Fatalf("expected compacted log to remove pruned history, got: %s", string(data))
+	}
+}
+
+func TestPrune_LockBusy(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Task A"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskID)
+	if code != 0 {
+		t.Fatalf("set state=done failed: exit %d", code)
+	}
+
+	lockPath := filepath.Join(dir, ".ergo", "lock")
+	lockFile, err := os.OpenFile(lockPath, os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("open lock file: %v", err)
+	}
+	defer lockFile.Close()
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatalf("failed to acquire lock: %v", err)
+	}
+	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+
+	before := countEventLines(t, dir)
+	_, stderr, code := runErgo(t, dir, "", "prune", "--yes")
+	if code == 0 || !strings.Contains(stderr, "lock busy") {
+		t.Fatalf("expected lock busy error, got code=%d stderr=%q", code, stderr)
+	}
+	after := countEventLines(t, dir)
+	if before != after {
+		t.Fatalf("expected no writes on lock busy (lines %d -> %d)", before, after)
+	}
+}
+
+func TestPrune_ConcurrentRuns(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Task A"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskID)
+	if code != 0 {
+		t.Fatalf("set state=done failed: exit %d", code)
+	}
+
+	type result struct {
+		stdout string
+		stderr string
+		code   int
+	}
+	results := make(chan result, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			out, errOut, exit := runErgo(t, dir, "", "prune", "--yes", "--json")
+			results <- result{stdout: out, stderr: errOut, code: exit}
+		}()
+	}
+	r1 := <-results
+	r2 := <-results
+
+	if r1.code != 0 && r2.code != 0 {
+		t.Fatalf("expected at least one prune to succeed, got codes %d and %d", r1.code, r2.code)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".ergo", "events.jsonl"))
+	if err != nil {
+		t.Fatalf("failed to read events.jsonl: %v", err)
+	}
+	tombstones := strings.Count(string(data), "tombstone")
+	if tombstones != 1 {
+		t.Fatalf("expected exactly one tombstone event, got %d (stdout1=%q stderr1=%q stdout2=%q stderr2=%q)", tombstones, r1.stdout, r1.stderr, r2.stdout, r2.stderr)
 	}
 }
 

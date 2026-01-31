@@ -1,10 +1,8 @@
-// Work commands: dep/list/claim/set/show/compact/where.
-//
-// The set command uses stdin-only JSON input:
-//
-//	echo '{"state":"done"}' | ergo set T-xyz
-//
-// See json_input.go for the unified TaskInput schema.
+// Work command implementations for user-facing CLI actions.
+// Purpose: implement list/show/claim/set/dep/compact/prune behavior and output.
+// Exports: RunSet, RunDep, RunClaim, RunShow, RunList, RunCompact, RunPrune (and helpers).
+// Role: command layer bridging CLI wiring to graph/storage operations.
+// Invariants: write operations acquire the lock; JSON output is stable when requested.
 package ergo
 
 import (
@@ -15,16 +13,17 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 	"time"
 
 	"github.com/charmbracelet/glamour"
 )
 
 type ListOptions struct {
-	EpicID      string
-	ReadyOnly   bool
-	ShowEpics   bool
-	ShowAll     bool
+	EpicID    string
+	ReadyOnly bool
+	ShowEpics bool
+	ShowAll   bool
 }
 
 func RunSet(id string, opts GlobalOptions) error {
@@ -238,6 +237,9 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 			return err
 		}
 
+		if _, ok := graph.Tombstones[id]; ok {
+			return prunedErr(id)
+		}
 		task, ok := graph.Tasks[id]
 		if !ok {
 			return fmt.Errorf("unknown task id %s", id)
@@ -741,6 +743,9 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
+	if _, ok := graph.Tombstones[id]; ok {
+		return prunedErr(id)
+	}
 	task, ok := graph.Tasks[id]
 	if !ok {
 		return fmt.Errorf("unknown task id %s", id)
@@ -817,8 +822,102 @@ func RunCompact(opts GlobalOptions) error {
 		if err := writeEventsFile(tmpPath, compacted); err != nil {
 			return err
 		}
-		return os.Rename(tmpPath, eventsPath)
+		if err := os.Rename(tmpPath, eventsPath); err != nil {
+			return err
+		}
+		return syncDir(dir)
 	})
+}
+
+func RunPrune(confirm bool, opts GlobalOptions) error {
+	dir, err := ergoDir(opts)
+	if err != nil {
+		return err
+	}
+
+	var plan PrunePlan
+	if confirm {
+		plan, err = RunPruneApply(dir, opts)
+	} else {
+		plan, err = RunPrunePlan(dir)
+	}
+	if err != nil {
+		return err
+	}
+
+	if opts.JSON {
+		return writeJSON(os.Stdout, pruneOutput{
+			Kind:      "prune",
+			DryRun:    !confirm,
+			PrunedIDs: plan.PrunedIDs,
+		})
+	}
+
+	printPruneSummary(confirm, plan.Items)
+	return nil
+}
+
+func printPruneSummary(confirm bool, items []PruneItem) {
+	taskCount, epicCount := countPruneItems(items)
+
+	if !confirm {
+		if len(items) == 0 {
+			fmt.Println("nothing to prune")
+		} else {
+			fmt.Printf("dry-run: would prune %s\n", formatPruneCount(taskCount, epicCount))
+			printPruneItems(items)
+			fmt.Println("run: ergo prune --yes")
+		}
+		return
+	}
+
+	if len(items) == 0 {
+		fmt.Println("nothing to prune")
+		return
+	}
+	fmt.Printf("pruned %s\n", formatPruneCount(taskCount, epicCount))
+	printPruneItems(items)
+}
+
+func countPruneItems(items []PruneItem) (tasks, epics int) {
+	for _, item := range items {
+		if item.IsEpic {
+			epics++
+		} else {
+			tasks++
+		}
+	}
+	return
+}
+
+func formatPruneCount(tasks, epics int) string {
+	switch {
+	case tasks > 0 && epics > 0:
+		return fmt.Sprintf("%d tasks, %d epics", tasks, epics)
+	case tasks > 0:
+		return fmt.Sprintf("%d tasks", tasks)
+	case epics > 0:
+		return fmt.Sprintf("%d epics", epics)
+	default:
+		return "0 items"
+	}
+}
+
+func printPruneItems(items []PruneItem) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tSTATE\tTITLE")
+	for _, item := range items {
+		state := item.State
+		if item.IsEpic {
+			state = "epic"
+		}
+		title := item.Title
+		if strings.TrimSpace(title) == "" {
+			title = "(no title)"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\n", item.ID, state, title)
+	}
+	_ = w.Flush()
 }
 
 func RunWhere(opts GlobalOptions) error {

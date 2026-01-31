@@ -61,7 +61,27 @@ Mark error (requires claim to show who failed):
   {{CMD}}printf '%s' '{"state":"error"}' | ergo set ABCDEF{{RESET}}
   If unclaimed, pass --agent or set claim in JSON.
 
-{{HEADER}}6. ATTACH RESULTS{{RESET}}
+{{HEADER}}6. PRUNE + COMPACT{{RESET}}
+
+`ergo prune` logically deletes completed work. Default is dry-run.
+
+What gets pruned:
+  - Tasks in `done` or `canceled`
+  - Epics with no remaining children
+
+What is preserved (never pruned):
+  - Tasks in `todo`, `blocked`, `doing`, or `error`
+  - Epics with active children
+
+Dry-run (preview):
+  {{CMD}}ergo prune{{RESET}}
+
+Apply:
+  {{CMD}}ergo prune --yes{{RESET}}
+
+`ergo compact` rewrites the log to physically remove pruned history.
+
+{{HEADER}}7. ATTACH RESULTS{{RESET}}
 
 Results are pointers to project files (relative paths).
 
@@ -71,7 +91,7 @@ Attach results (multiple calls accumulate, newest first):
 Inspect results:
   {{CMD}}ergo show GHIJKL --json | jq '.results[]'{{RESET}}
 
-{{HEADER}}7. EPIC HIERARCHIES{{RESET}}
+{{HEADER}}8. EPIC HIERARCHIES{{RESET}}
 
 Epics complete when all children are done or canceled. They have no own state.
 Epic-to-epic deps block all tasks in the dependent epic.

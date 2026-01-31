@@ -4,6 +4,8 @@ package ergo
 
 import (
 	"encoding/json"
+	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -122,6 +124,168 @@ func TestReplayEvents_Dependencies(t *testing.T) {
 	}
 	if len(graph.RDeps["T2"]) != 1 {
 		t.Errorf("Expected T2 to have 1 rdep, got %d", len(graph.RDeps["T2"]))
+	}
+}
+
+func TestReplayEvents_TombstoneParses(t *testing.T) {
+	now := time.Now().UTC()
+
+	events := []Event{
+		mustNewEvent("new_task", now, NewTaskEvent{
+			ID:        "T1",
+			UUID:      "uuid-1",
+			State:     stateTodo,
+			Title:     "Task 1",
+			Body:      "Task 1",
+			CreatedAt: formatTime(now),
+		}),
+		mustNewEvent("tombstone", now.Add(time.Second), TombstoneEvent{
+			ID:      "T1",
+			AgentID: "agent-1",
+			TS:      formatTime(now.Add(time.Second)),
+		}),
+	}
+
+	if _, err := replayEvents(events); err != nil {
+		t.Fatalf("replayEvents failed: %v", err)
+	}
+}
+
+func TestReplayEvents_TombstoneRemovesTaskAndDeps(t *testing.T) {
+	now := time.Now().UTC()
+
+	events := []Event{
+		mustNewEvent("new_task", now, NewTaskEvent{
+			ID:        "T1",
+			UUID:      "uuid-1",
+			State:     stateTodo,
+			Title:     "Task 1",
+			Body:      "Task 1",
+			CreatedAt: formatTime(now),
+		}),
+		mustNewEvent("new_task", now, NewTaskEvent{
+			ID:        "T2",
+			UUID:      "uuid-2",
+			State:     stateTodo,
+			Title:     "Task 2",
+			Body:      "Task 2",
+			CreatedAt: formatTime(now),
+		}),
+		mustNewEvent("link", now, LinkEvent{
+			FromID: "T1",
+			ToID:   "T2",
+			Type:   "depends",
+		}),
+		mustNewEvent("tombstone", now.Add(time.Second), TombstoneEvent{
+			ID:      "T2",
+			AgentID: "agent-1",
+			TS:      formatTime(now.Add(time.Second)),
+		}),
+	}
+
+	graph, err := replayEvents(events)
+	if err != nil {
+		t.Fatalf("replayEvents failed: %v", err)
+	}
+	if _, ok := graph.Tasks["T2"]; ok {
+		t.Fatalf("expected T2 to be tombstoned and removed")
+	}
+	if deps := graph.Deps["T1"]; len(deps) != 0 {
+		t.Fatalf("expected tombstoned deps to be dropped, got %v", deps)
+	}
+}
+
+func TestReplayEvents_TombstoneBeforeCreateWins(t *testing.T) {
+	now := time.Now().UTC()
+
+	events := []Event{
+		mustNewEvent("tombstone", now, TombstoneEvent{
+			ID:      "T1",
+			AgentID: "agent-1",
+			TS:      formatTime(now),
+		}),
+		mustNewEvent("new_task", now.Add(time.Second), NewTaskEvent{
+			ID:        "T1",
+			UUID:      "uuid-1",
+			State:     stateTodo,
+			Title:     "Task 1",
+			Body:      "Task 1",
+			CreatedAt: formatTime(now.Add(time.Second)),
+		}),
+	}
+
+	graph, err := replayEvents(events)
+	if err != nil {
+		t.Fatalf("replayEvents failed: %v", err)
+	}
+	if _, ok := graph.Tasks["T1"]; ok {
+		t.Fatalf("expected tombstone to block later create")
+	}
+	if _, ok := graph.Tombstones["T1"]; !ok {
+		t.Fatalf("expected tombstone to be recorded")
+	}
+}
+
+func TestReplayEvents_TombstoneRandomized(t *testing.T) {
+	r := rand.New(rand.NewSource(42))
+	base := time.Unix(1_700_000_000, 0).UTC()
+	now := func(i int) time.Time { return base.Add(time.Duration(i) * time.Second) }
+
+	var events []Event
+	tombstoned := map[string]struct{}{}
+
+	for i := 0; i < 50; i++ {
+		id := fmt.Sprintf("T%d", i+1)
+		ts := now(len(events))
+		events = append(events, mustNewEvent("new_task", ts, NewTaskEvent{
+			ID:        id,
+			UUID:      "uuid-" + id,
+			State:     stateTodo,
+			Title:     "Task " + id,
+			Body:      "Body " + id,
+			CreatedAt: formatTime(ts),
+		}))
+
+		if r.Intn(3) == 0 {
+			ts = now(len(events))
+			events = append(events, mustNewEvent("state", ts, StateEvent{
+				ID:       id,
+				NewState: stateDoing,
+				TS:       formatTime(ts),
+			}))
+		}
+
+		if r.Intn(4) == 0 {
+			ts = now(len(events))
+			events = append(events, mustNewEvent("tombstone", ts, TombstoneEvent{
+				ID:      id,
+				AgentID: "agent-1",
+				TS:      formatTime(ts),
+			}))
+			tombstoned[id] = struct{}{}
+
+			// Add post-tombstone noise to ensure replay ignores it.
+			ts = now(len(events))
+			events = append(events, mustNewEvent("title", ts, TitleUpdateEvent{
+				ID:    id,
+				Title: "ignored",
+				TS:    formatTime(ts),
+			}))
+		}
+	}
+
+	graph, err := replayEvents(events)
+	if err != nil {
+		t.Fatalf("replayEvents failed: %v", err)
+	}
+
+	for id := range tombstoned {
+		if _, ok := graph.Tasks[id]; ok {
+			t.Fatalf("expected tombstoned id %s to be absent", id)
+		}
+		if deps := graph.Deps[id]; len(deps) != 0 {
+			t.Fatalf("expected tombstoned id %s to have no deps, got %v", id, deps)
+		}
 	}
 }
 

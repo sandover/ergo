@@ -1,5 +1,8 @@
-// Tests for work command validation and event generation.
-// Focuses on claim/state invariants and buildSetEvents behavior.
+// Unit tests for work command validation and event generation.
+// Purpose: validate claim/state invariants and event-building logic.
+// Exports: none.
+// Role: coverage for command-layer helpers and validation paths.
+// Invariants: state transitions follow the state machine; claim requirements are enforced.
 package ergo
 
 import (

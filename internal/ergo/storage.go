@@ -1,12 +1,8 @@
-// Data directory discovery and event storage helpers.
-//
-// Key responsibilities:
-// - `.ergo/` discovery (`resolveErgoDir`, `ergoDir`)
-// - Append-only JSONL event log I/O (`readEvents`, `appendEvents`, `writeEventsFile`)
-//
-// Resilience:
-// - `readEvents` tolerates a truncated final line (when the file doesn't end in '\n').
-// - Parse errors include file+line and hints for common corruption (e.g. git conflicts).
+// Event log storage and .ergo discovery helpers.
+// Purpose: manage append-only JSONL persistence and repo-local storage discovery.
+// Exports: resolveErgoDir, ergoDir, readEvents, appendEvents, createTask.
+// Role: persistence layer used by commands and replay/compact paths.
+// Invariants: writes are append-only under lock; read tolerates a truncated final line.
 package ergo
 
 import (
@@ -203,7 +199,19 @@ func writeEventsFile(path string, events []Event) error {
 			return err
 		}
 	}
-	return writer.Flush()
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	return file.Sync()
+}
+
+func syncDir(path string) error {
+	dir, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 func writeAll(w *os.File, data []byte) error {
@@ -224,6 +232,12 @@ func writeLinkEvent(dir string, opts GlobalOptions, eventType, from, to string) 
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
+		}
+		if _, ok := graph.Tombstones[from]; ok {
+			return prunedErr(from)
+		}
+		if _, ok := graph.Tombstones[to]; ok {
+			return prunedErr(to)
 		}
 		fromItem, ok := graph.Tasks[from]
 		if !ok {
@@ -450,6 +464,9 @@ func writeResultEvent(dir string, opts GlobalOptions, taskID, summary, relPath s
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
+		}
+		if _, ok := graph.Tombstones[taskID]; ok {
+			return prunedErr(taskID)
 		}
 		task, ok := graph.Tasks[taskID]
 		if !ok {

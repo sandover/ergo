@@ -1,5 +1,8 @@
-// Shared helpers: sorting, locking, event building, ids, and time.
-// Keeps cross-cutting utilities small and reusable.
+// Shared helpers for core ergo operations.
+// Purpose: centralize small utilities for sorting, locking, ids, and error shaping.
+// Exports: sortedKeys, sortedMapKeys, withLock, ensureFileExists, prunedErr (and other helpers).
+// Role: low-level utility layer used across command and storage logic.
+// Invariants: lock acquisition is fail-fast; helpers avoid side effects beyond their contract.
 package ergo
 
 import (
@@ -137,6 +140,10 @@ func parseTime(value string) (time.Time, error) {
 
 func formatTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func prunedErr(id string) error {
+	return fmt.Errorf("id %s is pruned", id)
 }
 
 // relativeTime formats a timestamp as a human-readable relative duration.
