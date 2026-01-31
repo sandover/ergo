@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-01-31
+
 ### Added
 - `prune` command to remove closed work (logical delete). Default is dry-run; run with `--yes` to apply. Only `done`/`canceled` tasks are pruned, then any now-empty epics.
+- Human-friendly prune output with color, icons (✓ ✗ Ⓔ), and clear messaging matching `ergo list` style.
 
 ### Changed
 - Clarify retention story: `prune` is logical removal; `compact` physically rewrites the log.
