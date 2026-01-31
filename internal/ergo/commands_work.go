@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strings"
 	"syscall"
-	"text/tabwriter"
 	"time"
 
 	"github.com/charmbracelet/glamour"
@@ -858,66 +857,229 @@ func RunPrune(confirm bool, opts GlobalOptions) error {
 }
 
 func printPruneSummary(confirm bool, items []PruneItem) {
-	taskCount, epicCount := countPruneItems(items)
-
-	if !confirm {
-		if len(items) == 0 {
-			fmt.Println("nothing to prune")
-		} else {
-			fmt.Printf("dry-run: would prune %s\n", formatPruneCount(taskCount, epicCount))
-			printPruneItems(items)
-			fmt.Println("run: ergo prune --yes")
-		}
-		return
-	}
+	useColor := stdoutIsTTY()
+	termWidth := getTerminalWidth()
 
 	if len(items) == 0 {
-		fmt.Println("nothing to prune")
+		printPruneEmpty(useColor)
 		return
 	}
-	fmt.Printf("pruned %s\n", formatPruneCount(taskCount, epicCount))
-	printPruneItems(items)
-}
 
-func countPruneItems(items []PruneItem) (tasks, epics int) {
-	for _, item := range items {
-		if item.IsEpic {
-			epics++
-		} else {
-			tasks++
-		}
-	}
-	return
-}
-
-func formatPruneCount(tasks, epics int) string {
-	switch {
-	case tasks > 0 && epics > 0:
-		return fmt.Sprintf("%d tasks, %d epics", tasks, epics)
-	case tasks > 0:
-		return fmt.Sprintf("%d tasks", tasks)
-	case epics > 0:
-		return fmt.Sprintf("%d epics", epics)
-	default:
-		return "0 items"
+	if !confirm {
+		printPrunePreview(items, useColor, termWidth)
+	} else {
+		printPruneApplied(items, useColor)
 	}
 }
 
-func printPruneItems(items []PruneItem) {
-	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tSTATE\tTITLE")
+func printPruneEmpty(useColor bool) {
+	msg := "Nothing to prune."
+	if useColor {
+		fmt.Print(colorDim)
+	}
+	fmt.Print(msg)
+	if useColor {
+		fmt.Print(colorReset)
+	}
+	fmt.Println(" All work is still active.")
+}
+
+func printPrunePreview(items []PruneItem, useColor bool, termWidth int) {
+	stats := computePruneStats(items)
+	total := stats.done + stats.canceled + stats.epics
+
+	// Header - tells you exactly what this is
+	if useColor {
+		fmt.Print(colorBold)
+	}
+	fmt.Printf("Would remove %d items:\n", total)
+	if useColor {
+		fmt.Print(colorReset)
+	}
+	fmt.Println()
+
+	// Summary stats - breaks down what those items are
+	printPruneStats(stats, useColor)
+	fmt.Println()
+
+	// Item list
+	printPruneItemList(items, useColor, termWidth)
+	fmt.Println()
+
+	// Safety note and call to action
+	if useColor {
+		fmt.Print(colorDim)
+	}
+	fmt.Println("This is a preview. Active work (todo, doing, blocked, error) is never pruned.")
+	if useColor {
+		fmt.Print(colorReset)
+	}
+	fmt.Println("To apply: ergo prune --yes")
+}
+
+func printPruneApplied(items []PruneItem, useColor bool) {
+	stats := computePruneStats(items)
+	total := stats.done + stats.canceled + stats.epics
+
+	// Header
+	if useColor {
+		fmt.Print(colorBold)
+	}
+	fmt.Printf("Pruned %d items\n", total)
+	if useColor {
+		fmt.Print(colorReset)
+	}
+	fmt.Println()
+
+	// Summary stats only (no item list after apply)
+	printPruneStats(stats, useColor)
+}
+
+type pruneStats struct {
+	done     int
+	canceled int
+	epics    int
+}
+
+func computePruneStats(items []PruneItem) pruneStats {
+	var stats pruneStats
 	for _, item := range items {
-		state := item.State
 		if item.IsEpic {
-			state = "epic"
+			stats.epics++
+		} else if item.State == stateDone {
+			stats.done++
+		} else if item.State == stateCanceled {
+			stats.canceled++
 		}
+	}
+	return stats
+}
+
+func printPruneStats(stats pruneStats, useColor bool) {
+	if stats.done > 0 {
+		fmt.Print("  ")
+		if useColor {
+			fmt.Print(colorGreen)
+		}
+		fmt.Print(iconDone)
+		if useColor {
+			fmt.Print(colorReset)
+		}
+		fmt.Printf(" %d done tasks\n", stats.done)
+	}
+	if stats.canceled > 0 {
+		fmt.Print("  ")
+		if useColor {
+			fmt.Print(colorDim)
+		}
+		fmt.Print(iconCanceled)
+		if useColor {
+			fmt.Print(colorReset)
+		}
+		fmt.Printf(" %d canceled tasks\n", stats.canceled)
+	}
+	if stats.epics > 0 {
+		fmt.Print("  ")
+		fmt.Print(iconEpic)
+		fmt.Printf("  %d empty epics\n", stats.epics)
+	}
+}
+
+func printPruneItemList(items []PruneItem, useColor bool, termWidth int) {
+	// Layout: icon + title padded to fill, then right-aligned ID
+	idWidth := 6 // ergo IDs are 6 chars
+	minGap := 2
+	rightMargin := 2
+	idStart := termWidth - rightMargin - idWidth
+
+	for _, item := range items {
+		var line strings.Builder
+
+		// Icon with color
+		icon := pruneItemIcon(item)
+		if useColor {
+			line.WriteString(pruneItemColor(item))
+		}
+		line.WriteString(icon)
+		if useColor {
+			line.WriteString(colorReset)
+		}
+		line.WriteString(" ")
+
+		// Title
 		title := item.Title
 		if strings.TrimSpace(title) == "" {
 			title = "(no title)"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", item.ID, state, title)
+
+		// Calculate max title width
+		iconWidth := visibleLen(icon) + 1 // icon + space
+		maxTitleWidth := idStart - minGap - iconWidth
+		if maxTitleWidth < 10 {
+			maxTitleWidth = 10
+		}
+
+		// Truncate title if needed
+		if visibleLen(title) > maxTitleWidth {
+			title = truncateToWidth(title, maxTitleWidth)
+		}
+
+		// Apply dim color for canceled items
+		if useColor && item.State == stateCanceled {
+			line.WriteString(colorDim)
+		}
+		line.WriteString(title)
+		if useColor && item.State == stateCanceled {
+			line.WriteString(colorReset)
+		}
+
+		// Pad to ID column
+		currentWidth := iconWidth + visibleLen(title)
+		padding := idStart - currentWidth
+		if padding < minGap {
+			padding = minGap
+		}
+		line.WriteString(strings.Repeat(" ", padding))
+
+		// ID (dimmed)
+		if useColor {
+			line.WriteString(colorDim)
+		}
+		line.WriteString(item.ID)
+		if useColor {
+			line.WriteString(colorReset)
+		}
+
+		fmt.Println(line.String())
 	}
-	_ = w.Flush()
+}
+
+func pruneItemIcon(item PruneItem) string {
+	if item.IsEpic {
+		return iconEpic
+	}
+	switch item.State {
+	case stateDone:
+		return iconDone
+	case stateCanceled:
+		return iconCanceled
+	default:
+		return "?"
+	}
+}
+
+func pruneItemColor(item PruneItem) string {
+	if item.IsEpic {
+		return ""
+	}
+	switch item.State {
+	case stateDone:
+		return colorGreen
+	case stateCanceled:
+		return colorDim
+	default:
+		return ""
+	}
 }
 
 func RunWhere(opts GlobalOptions) error {

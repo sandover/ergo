@@ -269,8 +269,8 @@ func TestPrune_DefaultIsDryRun(t *testing.T) {
 	if before != after {
 		t.Fatalf("expected dry-run to avoid writes (lines %d -> %d)", before, after)
 	}
-	if !strings.Contains(stdout, "dry-run") || !strings.Contains(stdout, "run: ergo prune --yes") {
-		t.Fatalf("expected dry-run output to explain how to run with --yes, got: %q", stdout)
+	if !strings.Contains(stdout, "preview") || !strings.Contains(stdout, "To apply: ergo prune --yes") {
+		t.Fatalf("expected preview output to explain how to apply, got: %q", stdout)
 	}
 
 	_, _, code = runErgo(t, dir, "", "show", taskID)
