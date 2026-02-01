@@ -1,4 +1,8 @@
-// Init/task creation commands.
+// Purpose: Implement init and create commands for tasks/epics.
+// Exports: RunInit, RunNewTask, RunNewEpic.
+// Role: Command layer for creation workflows and repo initialization.
+// Invariants: Writes are append-only under lock; JSON stdin required for new.
+// Notes: New tasks start in todo state; epics cannot nest.
 //
 // Task and epic creation uses stdin-only JSON input:
 //
@@ -46,22 +50,6 @@ func RunInit(args []string, opts GlobalOptions) error {
 		fmt.Fprintln(os.Stderr, "Initialized ergo at", target)
 	}
 	return nil
-}
-
-func RunNew(args []string, opts GlobalOptions) error {
-	if len(args) != 1 {
-		return errors.New("usage: echo '{\"title\":\"...\"}' | ergo new task|epic")
-	}
-
-	subcommand := args[0]
-	switch subcommand {
-	case "epic":
-		return RunNewEpic(opts)
-	case "task":
-		return RunNewTask(opts)
-	default:
-		return fmt.Errorf("unknown subcommand: %s (use 'epic' or 'task')", subcommand)
-	}
 }
 
 func RunNewEpic(opts GlobalOptions) error {

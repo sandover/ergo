@@ -1,4 +1,8 @@
-// Stdin/stdout detection helpers for CLI behavior.
+// Purpose: Detect stdin/stdout terminal state for CLI behavior.
+// Exports: stdinIsPiped, stdoutIsTTY.
+// Role: I/O behavior toggles for rendering and input handling.
+// Invariants: Returns false on stat errors (conservative default).
+// Notes: Uses os.ModeCharDevice checks for portability.
 package ergo
 
 import (

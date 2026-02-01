@@ -1,8 +1,8 @@
-// Cobra command wiring for ergo subcommands.
-// Purpose: bind CLI verbs/flags to internal ergo.RunX implementations.
+// Purpose: Wire cobra subcommands to internal ergo.RunX implementations.
 // Exports: none.
 // Role: CLI composition layer for user-facing commands.
-// Invariants: flags must match help/quickstart documentation.
+// Invariants: Flags and command names align with help/quickstart docs.
+// Notes: init functions register commands and their flags.
 package main
 
 import (
@@ -74,9 +74,6 @@ var newEpicCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return ergo.RunNewEpic(globalOpts)
 	},
-}
-
-func init() {
 }
 
 // -- list --
@@ -155,9 +152,6 @@ var setCmd = &cobra.Command{
 	},
 }
 
-func init() {
-}
-
 // -- dep --
 var depCmd = &cobra.Command{
 	Use:   "dep <A> <B> | dep rm <A> <B>",
@@ -175,9 +169,6 @@ var whereCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return ergo.RunWhere(globalOpts)
 	},
-}
-
-func init() {
 }
 
 // -- compact --

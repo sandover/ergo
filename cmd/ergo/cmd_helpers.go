@@ -1,5 +1,8 @@
-// CLI helper utilities for error handling and output formatting.
-// Keeps Cobra execution paths thin and consistent.
+// Purpose: Provide CLI error formatting, hints, and version output.
+// Exports: none (package-private helpers).
+// Role: Shared error/exit utilities for the cmd package.
+// Invariants: exitErr always exits with code 1 after printing.
+// Notes: Hints depend on error classification and global options.
 package main
 
 import (

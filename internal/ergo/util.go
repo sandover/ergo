@@ -1,8 +1,8 @@
-// Shared helpers for core ergo operations.
-// Purpose: centralize small utilities for sorting, locking, ids, and error shaping.
-// Exports: sortedKeys, sortedMapKeys, withLock, ensureFileExists, prunedErr (and other helpers).
-// Role: low-level utility layer used across command and storage logic.
-// Invariants: lock acquisition is fail-fast; helpers avoid side effects beyond their contract.
+// Purpose: Provide shared helpers for IDs, locking, and time formatting.
+// Exports: none (package-internal helpers).
+// Role: Low-level utility layer used across command and storage logic.
+// Invariants: Lock acquisition is non-blocking; IDs are 6 characters.
+// Notes: Time formatting uses RFC3339Nano in UTC.
 package ergo
 
 import (

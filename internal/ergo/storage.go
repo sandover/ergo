@@ -1,8 +1,8 @@
-// Event log storage and .ergo discovery helpers.
-// Purpose: manage append-only JSONL persistence and repo-local storage discovery.
-// Exports: resolveErgoDir, ergoDir, readEvents, appendEvents, createTask.
-// Role: persistence layer used by commands and replay/compact paths.
-// Invariants: writes are append-only under lock; read tolerates a truncated final line.
+// Purpose: Manage .ergo discovery and append-only event storage.
+// Exports: ResultEvidence.
+// Role: Persistence layer used by commands and replay/compact paths.
+// Invariants: Writes are append-only under lock; read tolerates truncated final line.
+// Notes: Result paths are validated to remain within the repo.
 package ergo
 
 import (

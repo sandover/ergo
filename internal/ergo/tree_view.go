@@ -1,4 +1,8 @@
-// Tree view rendering for human-friendly list output.
+// Purpose: Render human-friendly task trees for list output.
+// Exports: none (package-internal rendering helpers).
+// Role: Presentation layer for list output.
+// Invariants: Layout uses visible width calculations; summary counts are consistent.
+// Notes: Color output depends on TTY detection.
 package ergo
 
 import (

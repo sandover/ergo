@@ -1,4 +1,8 @@
-// Core domain types, constants, and parsing helpers for kinds/state.
+// Purpose: Define core domain types, constants, and validation rules.
+// Exports: GlobalOptions, Task, Graph, Event, and related structs.
+// Role: Shared model and state machine definitions.
+// Invariants: validTransitions and claim invariants must be enforced.
+// Notes: Error values are stable sentinel constants.
 package ergo
 
 import (

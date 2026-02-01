@@ -1,8 +1,8 @@
-// Work command implementations for user-facing CLI actions.
-// Purpose: implement list/show/claim/set/dep/compact/prune behavior and output.
-// Exports: RunSet, RunDep, RunClaim, RunShow, RunList, RunCompact, RunPrune (and helpers).
-// Role: command layer bridging CLI wiring to graph/storage operations.
-// Invariants: write operations acquire the lock; JSON output is stable when requested.
+// Purpose: Implement list/show/claim/set/dep/compact/prune/where behaviors and output.
+// Exports: RunSet, RunDep, RunClaim, RunShow, RunList, RunCompact, RunPrune, RunWhere.
+// Role: Command layer bridging CLI wiring to graph/storage operations.
+// Invariants: Mutations acquire the lock; JSON output is stable when requested.
+// Notes: Read operations replay the event log to build current state.
 package ergo
 
 import (
@@ -62,7 +62,28 @@ func RunSet(id string, opts GlobalOptions) error {
 	}
 
 	agentID := opts.AgentID
-	return applySetUpdates(dir, opts, id, updates, agentID, false)
+	if err := applySetUpdates(dir, opts, id, updates, agentID, opts.JSON); err != nil {
+		return err
+	}
+
+	if opts.JSON {
+		graph, err := loadGraph(dir)
+		if err != nil {
+			return err
+		}
+		task := graph.Tasks[id]
+		if task == nil {
+			return fmt.Errorf("unknown task id %s", id)
+		}
+		return writeJSON(os.Stdout, setOutput{
+			Kind:          "set",
+			ID:            id,
+			UpdatedFields: buildUpdatedFields(input),
+			State:         task.State,
+			ClaimedBy:     task.ClaimedBy,
+		})
+	}
+	return nil
 }
 
 func RunClaim(id string, opts GlobalOptions) error {
@@ -170,7 +191,11 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 	if err != nil {
 		if err.Error() == "no ready tasks" {
 			if opts.JSON {
-				return writeJSON(os.Stdout, "No ready ergo tasks.")
+				return writeJSON(os.Stdout, map[string]string{
+					"kind":    "claim",
+					"status":  "no_ready",
+					"message": "No ready ergo tasks.",
+				})
 			}
 			fmt.Println("No ready ergo tasks.")
 			return nil
@@ -200,6 +225,35 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 		fmt.Println(chosen.Body)
 	}
 	return nil
+}
+
+func buildUpdatedFields(input *TaskInput) []string {
+	if input == nil {
+		return nil
+	}
+	var fields []string
+	if input.Title != nil {
+		fields = append(fields, "title")
+	}
+	if input.Body != nil {
+		fields = append(fields, "body")
+	}
+	if input.Epic != nil {
+		fields = append(fields, "epic")
+	}
+	if input.State != nil {
+		fields = append(fields, "state")
+	}
+	if input.Claim != nil {
+		fields = append(fields, "claim")
+	}
+	if input.ResultPath != nil {
+		fields = append(fields, "result_path")
+	}
+	if input.ResultSummary != nil {
+		fields = append(fields, "result_summary")
+	}
+	return fields
 }
 
 func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, agentID string, quiet bool) error {
@@ -456,12 +510,36 @@ func RunDep(args []string, opts GlobalOptions) error {
 
 	if len(args) == 2 {
 		// dep <A> <B>: A depends on B (B blocks A)
-		return writeLinkEvent(dir, opts, "link", args[0], args[1])
+		if err := writeLinkEvent(dir, opts, "link", args[0], args[1]); err != nil {
+			return err
+		}
+		if opts.JSON {
+			return writeJSON(os.Stdout, depOutput{
+				Kind:   "dep",
+				Action: "link",
+				FromID: args[0],
+				ToID:   args[1],
+				Type:   dependsLinkType,
+			})
+		}
+		return nil
 	}
 
 	if len(args) == 3 && args[0] == "rm" {
 		// dep rm <A> <B>: remove dependency
-		return writeLinkEvent(dir, opts, "unlink", args[1], args[2])
+		if err := writeLinkEvent(dir, opts, "unlink", args[1], args[2]); err != nil {
+			return err
+		}
+		if opts.JSON {
+			return writeJSON(os.Stdout, depOutput{
+				Kind:   "dep",
+				Action: "unlink",
+				FromID: args[1],
+				ToID:   args[2],
+				Type:   dependsLinkType,
+			})
+		}
+		return nil
 	}
 
 	return errors.New(usage)
@@ -804,7 +882,7 @@ func RunCompact(opts GlobalOptions) error {
 	}
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := filepath.Join(dir, "events.jsonl")
-	return withLock(lockPath, syscall.LOCK_EX, func() error {
+	if err := withLock(lockPath, syscall.LOCK_EX, func() error {
 		events, err := readEvents(eventsPath)
 		if err != nil {
 			return err
@@ -825,7 +903,16 @@ func RunCompact(opts GlobalOptions) error {
 			return err
 		}
 		return syncDir(dir)
-	})
+	}); err != nil {
+		return err
+	}
+	if opts.JSON {
+		return writeJSON(os.Stdout, compactOutput{
+			Kind:   "compact",
+			Status: "ok",
+		})
+	}
+	return nil
 }
 
 func RunPrune(confirm bool, opts GlobalOptions) error {

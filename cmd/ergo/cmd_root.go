@@ -1,5 +1,8 @@
-// Root command configuration for the ergo CLI.
-// Defines global flags, help output, and top-level command metadata.
+// Purpose: Define the root command and global flags for the ergo CLI.
+// Exports: none (package-private root command helpers).
+// Role: CLI configuration and help plumbing.
+// Invariants: Help text is sourced from internal/ergo UsageText.
+// Notes: Global flags must match help/quickstart documentation.
 package main
 
 import (

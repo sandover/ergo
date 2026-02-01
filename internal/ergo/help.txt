@@ -19,6 +19,7 @@
   claim [<id>] --agent <identity> [--epic <id>]
                                           claim oldest ready task, or by ID
                                           sets to "doing"; --agent required
+                                          if none ready: prints message, exit 0
 
   dep <A> <B>                             A depends on B (B blocks A)
   dep rm <A> <B>                          remove dependency
@@ -52,6 +53,7 @@
 
 {{HEADER}}FOR AGENTS{{RESET}}
   ALWAYS use --json for structured output.
+  Mutating commands return a JSON object when --json is set.
   ALWAYS pass --agent when claiming (e.g. haiku@agent-host).
   ALWAYS set done, blocked, error, or canceled when finished (never leave doing).
   ALWAYS use printf for multiline input (heredocs break in some terminals).

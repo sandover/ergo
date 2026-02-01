@@ -1,8 +1,8 @@
-// Prune planning and execution helpers for the policy-based `ergo prune`.
-// Purpose: compute deterministic prune targets and optionally persist delete-marker events.
-// Exports: RunPrunePlan, RunPruneApply, PrunePlan.
-// Role: core logic used by the CLI and tests; keeps policy decisions pure and isolated.
-// Invariants: eligible tasks are done/canceled only; preserved tasks are untouched; empty epics are pruned after task selection.
+// Purpose: Compute and apply prune plans for closed work.
+// Exports: RunPrunePlan, RunPruneApply, PrunePlan, PruneItem.
+// Role: Prune policy logic used by the CLI and tests.
+// Invariants: Only done/canceled tasks are pruned; empty epics pruned after tasks.
+// Notes: Planning is deterministic and sorted by ID.
 package ergo
 
 import (

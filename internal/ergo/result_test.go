@@ -130,6 +130,7 @@ func TestDeriveFileURL(t *testing.T) {
 		{"docs/report.md", "/home/user/project", "file:///home/user/project/docs/report.md"},
 		{"file.txt", "/tmp", "file:///tmp/file.txt"},
 		{"path with spaces/file.txt", "/home/user", "file:///home/user/path%20with%20spaces/file.txt"},
+		{`docs/report.md`, `C:\Users\me\project`, "file:///C:/Users/me/project/docs/report.md"},
 	}
 
 	for _, tt := range tests {

@@ -1,4 +1,8 @@
-// CLI option and flag parsing helpers.
+// Purpose: Provide debug logging for CLI operations.
+// Exports: debugf.
+// Role: Diagnostics helper used across command handlers.
+// Invariants: Emits output only when opts.Verbose is true.
+// Notes: Writes to stderr to avoid polluting stdout.
 package ergo
 
 import (

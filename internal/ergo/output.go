@@ -1,8 +1,8 @@
-// JSON output shapes and formatting helpers.
-// Purpose: define stable output schemas for CLI JSON responses.
-// Exports: writeJSON, buildTaskListItems, buildResultOutputItems (and output structs).
-// Role: serialization layer between in-memory models and CLI output.
-// Invariants: JSON keys remain stable; `writeJSON` emits a single object/array per call.
+// Purpose: Define JSON output schemas and formatting helpers.
+// Exports: none (package-internal output helpers).
+// Role: Serialization layer between in-memory models and CLI output.
+// Invariants: JSON keys remain stable; writeJSON emits a single value per call.
+// Notes: File URLs are derived from repo-relative paths.
 package ergo
 
 import (
@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/url"
 	"path/filepath"
+	"strings"
 )
 
 type taskListItem struct {
@@ -66,10 +67,31 @@ type createOutput struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type setOutput struct {
+	Kind          string   `json:"kind"`
+	ID            string   `json:"id"`
+	UpdatedFields []string `json:"updated_fields"`
+	State         string   `json:"state"`
+	ClaimedBy     string   `json:"claimed_by,omitempty"`
+}
+
 type pruneOutput struct {
 	Kind      string   `json:"kind"`
 	DryRun    bool     `json:"dry_run"`
 	PrunedIDs []string `json:"pruned_ids"`
+}
+
+type depOutput struct {
+	Kind   string `json:"kind"`
+	Action string `json:"action"`
+	FromID string `json:"from_id"`
+	ToID   string `json:"to_id"`
+	Type   string `json:"type"`
+}
+
+type compactOutput struct {
+	Kind   string `json:"kind"`
+	Status string `json:"status"`
 }
 
 type whereOutput struct {
@@ -111,6 +133,11 @@ func buildResultOutputItems(results []Result, repoDir string) []resultOutputItem
 // deriveFileURL creates a file:// URL from a relative path and repo directory.
 func deriveFileURL(relPath, repoDir string) string {
 	absPath := filepath.Join(repoDir, relPath)
+	absPath = strings.ReplaceAll(absPath, "\\", "/")
+	absPath = filepath.ToSlash(absPath)
+	if len(absPath) >= 2 && absPath[1] == ':' && !strings.HasPrefix(absPath, "/") {
+		absPath = "/" + absPath
+	}
 	u := url.URL{
 		Scheme: "file",
 		Path:   absPath,

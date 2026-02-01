@@ -20,12 +20,14 @@ Core loop:
   3) Attach results and set state:
      {{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
      Never leave tasks in `doing`. Always set done, blocked, error, or canceled.
+     Mutating commands return JSON objects when --json is set.
 
 Common variants:
   - Claim a specific task by ID:
     {{CMD}}ergo claim ABCDEF --agent sonnet@agent-host{{RESET}}
   - Claim oldest ready task within an epic:
     {{CMD}}ergo claim --agent sonnet@agent-host --epic ABCDEF{{RESET}}
+  - If no tasks are ready, claim prints “No ready ergo tasks.” and exits 0.
   - Change state (uses existing claim if present):
     {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
 

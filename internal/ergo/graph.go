@@ -1,4 +1,8 @@
-// Event replay, compaction, and readiness/blocking logic.
+// Purpose: Replay events into graph state and compute readiness/compaction.
+// Exports: none (package-internal graph helpers).
+// Role: Core domain logic for state reconstruction and queries.
+// Invariants: Tombstones remove tasks; results are ordered newest-first.
+// Notes: Readiness checks dependencies and epic-deps.
 package ergo
 
 import (

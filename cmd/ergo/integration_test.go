@@ -221,6 +221,48 @@ func TestSet_StateTransition(t *testing.T) {
 	}
 }
 
+func TestSet_JSONOutput(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskID, "--json")
+	if code != 0 {
+		t.Fatalf("set --json failed: exit %d", code)
+	}
+
+	var out map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("failed to parse set --json output: %v", err)
+	}
+	if out["kind"] != "set" {
+		t.Errorf("expected kind=set, got %v", out["kind"])
+	}
+	if out["id"] != taskID {
+		t.Errorf("expected id=%s, got %v", taskID, out["id"])
+	}
+	if out["state"] != "done" {
+		t.Errorf("expected state=done, got %v", out["state"])
+	}
+	fields, ok := out["updated_fields"].([]interface{})
+	if !ok || len(fields) == 0 {
+		t.Fatalf("expected updated_fields array, got %v", out["updated_fields"])
+	}
+	foundState := false
+	for _, f := range fields {
+		if f == "state" {
+			foundState = true
+		}
+	}
+	if !foundState {
+		t.Errorf("expected updated_fields to include state, got %v", fields)
+	}
+}
+
 func TestSet_InvalidTransition(t *testing.T) {
 	dir := setupErgo(t)
 
@@ -244,6 +286,52 @@ func TestSet_InvalidTransition(t *testing.T) {
 	errMsg := strings.ToLower(stderr)
 	if !strings.Contains(errMsg, "transition") && !strings.Contains(errMsg, "invalid") {
 		t.Errorf("expected error about invalid transition, got: %q", stderr)
+	}
+}
+
+func TestDep_JSONOutput(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Task A"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskA := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, `{"title":"Task B"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskB := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, "", "dep", taskA, taskB, "--json")
+	if code != 0 {
+		t.Fatalf("dep --json failed: exit %d", code)
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("failed to parse dep --json output: %v", err)
+	}
+	if out["kind"] != "dep" || out["action"] != "link" {
+		t.Errorf("expected kind=dep action=link, got %v", out)
+	}
+	if out["from_id"] != taskA || out["to_id"] != taskB {
+		t.Errorf("unexpected dep ids: %v", out)
+	}
+	if out["type"] != "depends" {
+		t.Errorf("expected type=depends, got %v", out["type"])
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "dep", "rm", taskA, taskB, "--json")
+	if code != 0 {
+		t.Fatalf("dep rm --json failed: exit %d", code)
+	}
+	out = map[string]interface{}{}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("failed to parse dep rm --json output: %v", err)
+	}
+	if out["kind"] != "dep" || out["action"] != "unlink" {
+		t.Errorf("expected kind=dep action=unlink, got %v", out)
 	}
 }
 
@@ -511,6 +599,23 @@ func TestPrune_CompactRemovesHistory(t *testing.T) {
 	}
 	if strings.Contains(string(data), "tombstone") || strings.Contains(string(data), taskID) {
 		t.Fatalf("expected compacted log to remove pruned history, got: %s", string(data))
+	}
+}
+
+func TestCompact_JSONOutput(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, "", "compact", "--json")
+	if code != 0 {
+		t.Fatalf("compact --json failed: exit %d", code)
+	}
+
+	var out map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("failed to parse compact --json output: %v", err)
+	}
+	if out["kind"] != "compact" || out["status"] != "ok" {
+		t.Errorf("unexpected compact output: %v", out)
 	}
 }
 

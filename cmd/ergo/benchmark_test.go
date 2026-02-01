@@ -152,19 +152,21 @@ func TestConcurrentClaimNoDoubles(t *testing.T) {
 			const maxRetries = 3
 			for attempt := 0; attempt < maxRetries; attempt++ {
 				stdout, stderr, exitCode := runTestErgoWithExit(ergo, dir, "", "claim", "--agent", agentID)
-				if exitCode == 0 && stdout != "" {
+				if exitCode == 0 {
+					if strings.Contains(stdout, "No ready ergo tasks.") || stdout == "" {
+						return
+					}
 					// Successfully claimed
 					id := extractTaskID(stdout)
 					if id != "" {
 						claimedIDs <- id
+						return
 					}
+					errors <- fmt.Errorf("%s: unexpected output %q", agentID, stdout)
 					return
 				} else if exitCode == 1 && strings.Contains(stderr, "lock busy") && attempt < maxRetries-1 {
 					// Lock busy, retry
 					continue
-				} else if exitCode == 3 {
-					// No ready tasks, acceptable
-					return
 				} else if exitCode != 1 || !strings.Contains(stderr, "lock busy") {
 					// Other error
 					errors <- fmt.Errorf("%s: unexpected exit %d", agentID, exitCode)
@@ -209,6 +211,8 @@ func TestConcurrentClaimNoDoubles(t *testing.T) {
 
 var benchBinaryCache string
 var benchBinaryOnce sync.Once
+var benchBinaryCleanupOnce sync.Once
+var benchBinaryCleanup func()
 
 func buildErgoBinary(b *testing.B) string {
 	b.Helper()
@@ -218,6 +222,7 @@ func buildErgoBinary(b *testing.B) string {
 	if benchBinaryCache == "" {
 		b.Fatal("failed to build ergo binary")
 	}
+	b.Cleanup(cleanupBenchBinary)
 	return benchBinaryCache
 }
 
@@ -229,6 +234,7 @@ func buildErgoBinaryForTest(t *testing.T) string {
 	if benchBinaryCache == "" {
 		t.Fatal("failed to build ergo binary")
 	}
+	t.Cleanup(cleanupBenchBinary)
 	return benchBinaryCache
 }
 
@@ -237,12 +243,33 @@ func buildBinary() string {
 	if err != nil {
 		return ""
 	}
-	binary := filepath.Join(cwd, "ergo-bench")
-	cmd := exec.Command("go", "build", "-o", binary, ".")
-	if err := cmd.Run(); err != nil {
+	tmpRoot := filepath.Join(cwd, "tmp")
+	if err := os.MkdirAll(tmpRoot, 0755); err != nil {
 		return ""
 	}
+	tmpDir, err := os.MkdirTemp(tmpRoot, "ergo-bench-")
+	if err != nil {
+		return ""
+	}
+	binary := filepath.Join(tmpDir, "ergo-bench")
+	cmd := exec.Command("go", "build", "-o", binary, ".")
+	cmd.Dir = cwd
+	if err := cmd.Run(); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		return ""
+	}
+	benchBinaryCleanup = func() {
+		_ = os.RemoveAll(tmpDir)
+	}
 	return binary
+}
+
+func cleanupBenchBinary() {
+	benchBinaryCleanupOnce.Do(func() {
+		if benchBinaryCleanup != nil {
+			benchBinaryCleanup()
+		}
+	})
 }
 
 func runBenchErgo(b *testing.B, binary, dir, stdin string, args ...string) string {

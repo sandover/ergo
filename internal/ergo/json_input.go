@@ -1,4 +1,8 @@
-// JSON input parsing and validation for task/epic creation and updates.
+// Purpose: Parse and validate JSON stdin for task/epic mutations.
+// Exports: TaskInput, ValidationError, ParseTaskInput.
+// Role: Input validation layer for mutation commands.
+// Invariants: Unknown keys are rejected; required fields enforced by mode.
+// Notes: Returns structured errors for agent consumption.
 //
 // Agents pipe JSON to stdin for all mutations:
 //
