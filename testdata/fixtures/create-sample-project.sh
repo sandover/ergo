@@ -17,10 +17,10 @@ $ERGO init
 # ============================================
 # PHASE 1: Research & Design
 # ============================================
-DESIGN_EPIC=$($ERGO new epic "Research & Design")
+DESIGN_EPIC=$(printf '%s' '{"title":"Research & Design"}' | $ERGO new epic)
 
 # Research tasks - some done, one in progress
-REQ_TASK=$($ERGO new task "Define product requirements" --epic "$DESIGN_EPIC")
+REQ_TASK=$(printf '%s' '{"title":"Define product requirements","epic":"'"$DESIGN_EPIC"'"}' | $ERGO new task)
 mkdir -p docs
 cat > docs/prd.md << 'EOF'
 # Product Requirements Document
@@ -41,10 +41,10 @@ Teams need a lightweight task tracker that works well with AI coding agents.
 - <100ms for any command
 - Zero external dependencies at runtime
 EOF
-$ERGO set "$REQ_TASK" claim=maya state=done
-$ERGO set "$REQ_TASK" result.path=docs/prd.md result.summary="PRD complete"
+printf '%s' '{"claim":"maya","state":"done"}' | $ERGO set "$REQ_TASK"
+printf '%s' '{"result_path":"docs/prd.md","result_summary":"PRD complete"}' | $ERGO set "$REQ_TASK"
 
-COMP_TASK=$($ERGO new task "Competitor analysis" --epic "$DESIGN_EPIC")
+COMP_TASK=$(printf '%s' '{"title":"Competitor analysis","epic":"'"$DESIGN_EPIC"'"}' | $ERGO new task)
 mkdir -p docs
 cat > docs/competitor-analysis.md << 'EOF'
 # Competitor Analysis
@@ -59,74 +59,74 @@ cat > docs/competitor-analysis.md << 'EOF'
 - Agent-friendly JSON mode
 - Minimal footprint
 EOF
-$ERGO set "$COMP_TASK" claim=sonnet@agent-host state=done
-$ERGO set "$COMP_TASK" result.path=docs/competitor-analysis.md result.summary="Competitor landscape documented"
+printf '%s' '{"claim":"sonnet@agent-host","state":"done"}' | $ERGO set "$COMP_TASK"
+printf '%s' '{"result_path":"docs/competitor-analysis.md","result_summary":"Competitor landscape documented"}' | $ERGO set "$COMP_TASK"
 
-INTERVIEW_TASK=$($ERGO new task "User interviews (3 customers)" --epic "$DESIGN_EPIC")
-$ERGO set "$INTERVIEW_TASK" claim=human@agent-host state=doing
+INTERVIEW_TASK=$(printf '%s' '{"title":"User interviews (3 customers)","epic":"'"$DESIGN_EPIC"'"}' | $ERGO new task)
+printf '%s' '{"claim":"human@agent-host","state":"doing"}' | $ERGO set "$INTERVIEW_TASK"
 
-DESIGN_TASK=$($ERGO new task "Write technical design doc" --epic "$DESIGN_EPIC")
+DESIGN_TASK=$(printf '%s' '{"title":"Write technical design doc","epic":"'"$DESIGN_EPIC"'"}' | $ERGO new task)
 $ERGO dep "$DESIGN_TASK" "$REQ_TASK"  # Design doc needs requirements first
 
 # ============================================
 # PHASE 2: Implementation (blocked by Design)
 # ============================================
-IMPL_EPIC=$($ERGO new epic "Implementation")
+IMPL_EPIC=$(printf '%s' '{"title":"Implementation"}' | $ERGO new epic)
 $ERGO dep "$IMPL_EPIC" "$DESIGN_EPIC"
 
 # Backend tasks
-SCAFFOLD_TASK=$($ERGO new task "Set up project scaffolding" --epic "$IMPL_EPIC")
+SCAFFOLD_TASK=$(printf '%s' '{"title":"Set up project scaffolding","epic":"'"$IMPL_EPIC"'"}' | $ERGO new task)
 
-MODEL_TASK=$($ERGO new task "Implement core data model" --epic "$IMPL_EPIC")
+MODEL_TASK=$(printf '%s' '{"title":"Implement core data model","epic":"'"$IMPL_EPIC"'"}' | $ERGO new task)
 $ERGO dep "$MODEL_TASK" "$SCAFFOLD_TASK"
 
-API_TASK=$($ERGO new task "Build REST API endpoints" --epic "$IMPL_EPIC")
+API_TASK=$(printf '%s' '{"title":"Build REST API endpoints","epic":"'"$IMPL_EPIC"'"}' | $ERGO new task)
 $ERGO dep "$API_TASK" "$MODEL_TASK"
 
-UI_TASK=$($ERGO new task "Build web frontend" --epic "$IMPL_EPIC")
+UI_TASK=$(printf '%s' '{"title":"Build web frontend","epic":"'"$IMPL_EPIC"'"}' | $ERGO new task)
 $ERGO dep "$UI_TASK" "$API_TASK"
 
-TEST_TASK=$($ERGO new task "Write integration tests" --epic "$IMPL_EPIC")
+TEST_TASK=$(printf '%s' '{"title":"Write integration tests","epic":"'"$IMPL_EPIC"'"}' | $ERGO new task)
 $ERGO dep "$TEST_TASK" "$API_TASK"
 
-SEC_TASK=$($ERGO new task "Security review" --epic "$IMPL_EPIC")
+SEC_TASK=$(printf '%s' '{"title":"Security review","epic":"'"$IMPL_EPIC"'"}' | $ERGO new task)
 $ERGO dep "$SEC_TASK" "$API_TASK"
 
 # ============================================
 # PHASE 3: Launch (blocked by Implementation)
 # ============================================
-LAUNCH_EPIC=$($ERGO new epic "Launch")
+LAUNCH_EPIC=$(printf '%s' '{"title":"Launch"}' | $ERGO new epic)
 $ERGO dep "$LAUNCH_EPIC" "$IMPL_EPIC"
 
-STAGING_TASK=$($ERGO new task "Deploy to staging" --epic "$LAUNCH_EPIC")
+STAGING_TASK=$(printf '%s' '{"title":"Deploy to staging","epic":"'"$LAUNCH_EPIC"'"}' | $ERGO new task)
 $ERGO dep "$STAGING_TASK" "$UI_TASK"    # Need frontend complete
 $ERGO dep "$STAGING_TASK" "$TEST_TASK"  # Need tests passing
 
-QA_TASK=$($ERGO new task "QA sign-off" --epic "$LAUNCH_EPIC")
+QA_TASK=$(printf '%s' '{"title":"QA sign-off","epic":"'"$LAUNCH_EPIC"'"}' | $ERGO new task)
 $ERGO dep "$QA_TASK" "$STAGING_TASK"
 
-NOTES_TASK=$($ERGO new task "Write release notes" --epic "$LAUNCH_EPIC")
+NOTES_TASK=$(printf '%s' '{"title":"Write release notes","epic":"'"$LAUNCH_EPIC"'"}' | $ERGO new task)
 $ERGO dep "$NOTES_TASK" "$UI_TASK"  # Need to know what's shipping
 
-PROD_TASK=$($ERGO new task "Production deploy" --epic "$LAUNCH_EPIC")
+PROD_TASK=$(printf '%s' '{"title":"Production deploy","epic":"'"$LAUNCH_EPIC"'"}' | $ERGO new task)
 $ERGO dep "$PROD_TASK" "$QA_TASK"
 $ERGO dep "$PROD_TASK" "$NOTES_TASK"
 
-SOCIAL_TASK=$($ERGO new task "Announce on social media" --epic "$LAUNCH_EPIC")
+SOCIAL_TASK=$(printf '%s' '{"title":"Announce on social media","epic":"'"$LAUNCH_EPIC"'"}' | $ERGO new task)
 $ERGO dep "$SOCIAL_TASK" "$PROD_TASK"
 
 # ============================================
 # Standalone tasks (no epic)
 # ============================================
-README_TASK=$($ERGO new task "Update README with new features")
+README_TASK=$(printf '%s' '{"title":"Update README with new features"}' | $ERGO new task)
 $ERGO dep "$README_TASK" "$PROD_TASK"  # Doc the release after it ships
 
-TYPO_TASK=$($ERGO new task "Fix typo in CLI help")
-$ERGO set "$TYPO_TASK" claim=maya state=done
+TYPO_TASK=$(printf '%s' '{"title":"Fix typo in CLI help"}' | $ERGO new task)
+printf '%s' '{"claim":"maya","state":"done"}' | $ERGO set "$TYPO_TASK"
 
 # A canceled task
-DB_TASK=$($ERGO new task "Evaluate alternative database (decided against)")
-$ERGO set "$DB_TASK" claim=sonnet@agent-host state=canceled
+DB_TASK=$(printf '%s' '{"title":"Evaluate alternative database (decided against)"}' | $ERGO new task)
+printf '%s' '{"claim":"sonnet@agent-host","state":"canceled"}' | $ERGO set "$DB_TASK"
 
 echo ""
 echo "✓ Sample project created in $FIXTURE_DIR"

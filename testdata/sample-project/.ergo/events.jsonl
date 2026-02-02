@@ -1,53 +1,49 @@
-{"type":"new_epic","ts":"2026-01-14T02:06:00.892228Z","data":{"id":"BO52AI","uuid":"651fd436-0def-4588-9c7a-ab21eac1cf8a","epic_id":"","state":"todo","body":"Research \u0026 Design","worker":"any","created_at":"2026-01-14T02:06:00.892228Z"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.895164Z","data":{"id":"AZMJMV","uuid":"0998c33e-2e0a-4709-a9bc-97479feb93bf","epic_id":"BO52AI","state":"todo","body":"Define product requirements","worker":"any","created_at":"2026-01-14T02:06:00.895164Z"}}
-{"type":"claim","ts":"2026-01-14T02:06:00.901751Z","data":{"id":"AZMJMV","agent_id":"maya","ts":"2026-01-14T02:06:00.901751Z"}}
-{"type":"state","ts":"2026-01-14T02:06:00.901751Z","data":{"id":"AZMJMV","state":"done","ts":"2026-01-14T02:06:00.901751Z"}}
-{"type":"result","ts":"2026-01-14T02:06:00.904443Z","data":{"task_id":"AZMJMV","summary":"PRD complete","path":"docs/prd.md","sha256_at_attach":"5d5d27455eeb22ab1de7703cefb697e12f9a1bf04ea624767dd8877015c77187","mtime_at_attach":"2026-01-14T02:06:00.899201067Z","ts":"2026-01-14T02:06:00.904443Z"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.907137Z","data":{"id":"3YEG76","uuid":"8efd3b97-d6c2-42e2-a26d-6164d6d19d79","epic_id":"BO52AI","state":"todo","body":"Competitor analysis","worker":"any","created_at":"2026-01-14T02:06:00.907137Z"}}
-{"type":"claim","ts":"2026-01-14T02:06:00.913555Z","data":{"id":"3YEG76","agent_id":"brandon","ts":"2026-01-14T02:06:00.913555Z"}}
-{"type":"state","ts":"2026-01-14T02:06:00.913555Z","data":{"id":"3YEG76","state":"done","ts":"2026-01-14T02:06:00.913555Z"}}
-{"type":"result","ts":"2026-01-14T02:06:00.916288Z","data":{"task_id":"3YEG76","summary":"Competitor landscape documented","path":"docs/competitor-analysis.md","sha256_at_attach":"9319a8df8f88a51b108ad69a21018e65a8a8f84b53ac2f8a5c723c9dc53141ba","mtime_at_attach":"2026-01-14T02:06:00.9105166Z","ts":"2026-01-14T02:06:00.916288Z"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.918785Z","data":{"id":"OSD6M4","uuid":"b9988243-5094-4430-8400-76e92d9bf5bc","epic_id":"BO52AI","state":"todo","body":"User interviews (3 customers)","worker":"any","created_at":"2026-01-14T02:06:00.918785Z"}}
-{"type":"worker","ts":"2026-01-14T02:06:00.921256Z","data":{"id":"OSD6M4","worker":"human","ts":"2026-01-14T02:06:00.921256Z"}}
-{"type":"claim","ts":"2026-01-14T02:06:00.923661Z","data":{"id":"OSD6M4","agent_id":"brandon","ts":"2026-01-14T02:06:00.923661Z"}}
-{"type":"state","ts":"2026-01-14T02:06:00.923661Z","data":{"id":"OSD6M4","state":"doing","ts":"2026-01-14T02:06:00.923661Z"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.925984Z","data":{"id":"SZ7VNT","uuid":"f2d2e111-461a-459f-ac55-fdd8ea78990a","epic_id":"BO52AI","state":"todo","body":"Write technical design doc","worker":"any","created_at":"2026-01-14T02:06:00.925984Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.928618Z","data":{"from_id":"SZ7VNT","to_id":"AZMJMV","type":"depends"}}
-{"type":"new_epic","ts":"2026-01-14T02:06:00.931103Z","data":{"id":"A7OFRI","uuid":"29e4b191-6d09-4324-b3a4-72f0978eac95","epic_id":"","state":"todo","body":"Implementation","worker":"any","created_at":"2026-01-14T02:06:00.931103Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.933334Z","data":{"from_id":"A7OFRI","to_id":"BO52AI","type":"depends"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.935971Z","data":{"id":"GU4HAJ","uuid":"ca948bf0-4f3e-43c9-8978-3b851c172049","epic_id":"A7OFRI","state":"todo","body":"Set up project scaffolding","worker":"any","created_at":"2026-01-14T02:06:00.935971Z"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.938406Z","data":{"id":"TFM5AN","uuid":"5f052567-3503-4afd-b22b-2f01daa90cf3","epic_id":"A7OFRI","state":"todo","body":"Implement core data model","worker":"any","created_at":"2026-01-14T02:06:00.938406Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.940586Z","data":{"from_id":"TFM5AN","to_id":"GU4HAJ","type":"depends"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.942781Z","data":{"id":"FPUR4F","uuid":"cb9e369d-5515-42c3-987e-9e1555eb483b","epic_id":"A7OFRI","state":"todo","body":"Build REST API endpoints","worker":"any","created_at":"2026-01-14T02:06:00.942781Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.945304Z","data":{"from_id":"FPUR4F","to_id":"TFM5AN","type":"depends"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.947825Z","data":{"id":"3AN7WU","uuid":"9f1be101-2f01-426c-a498-a1d270a3c33a","epic_id":"A7OFRI","state":"todo","body":"Build web frontend","worker":"any","created_at":"2026-01-14T02:06:00.947825Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.950076Z","data":{"from_id":"3AN7WU","to_id":"FPUR4F","type":"depends"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.952397Z","data":{"id":"5LOHWM","uuid":"229eb84c-6cae-4e5a-8b72-bce5bc975f10","epic_id":"A7OFRI","state":"todo","body":"Write integration tests","worker":"any","created_at":"2026-01-14T02:06:00.952397Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.95479Z","data":{"from_id":"5LOHWM","to_id":"FPUR4F","type":"depends"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.957104Z","data":{"id":"YOLWTX","uuid":"2ac8176b-7c01-4c7f-8068-54c032082c5f","epic_id":"A7OFRI","state":"todo","body":"Security review","worker":"any","created_at":"2026-01-14T02:06:00.957104Z"}}
-{"type":"worker","ts":"2026-01-14T02:06:00.959367Z","data":{"id":"YOLWTX","worker":"human","ts":"2026-01-14T02:06:00.959367Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.961584Z","data":{"from_id":"YOLWTX","to_id":"FPUR4F","type":"depends"}}
-{"type":"new_epic","ts":"2026-01-14T02:06:00.96387Z","data":{"id":"DCNZIA","uuid":"9523883b-a244-42f3-9157-36ba47762ddf","epic_id":"","state":"todo","body":"Launch","worker":"any","created_at":"2026-01-14T02:06:00.96387Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.966065Z","data":{"from_id":"DCNZIA","to_id":"A7OFRI","type":"depends"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.968276Z","data":{"id":"3SDWXI","uuid":"0cc96012-fcc5-4423-8ae3-997bf208e5c0","epic_id":"DCNZIA","state":"todo","body":"Deploy to staging","worker":"any","created_at":"2026-01-14T02:06:00.968276Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.970616Z","data":{"from_id":"3SDWXI","to_id":"3AN7WU","type":"depends"}}
-{"type":"link","ts":"2026-01-14T02:06:00.972864Z","data":{"from_id":"3SDWXI","to_id":"5LOHWM","type":"depends"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.974999Z","data":{"id":"FSZYCW","uuid":"dd19baa3-3cff-4477-97e1-54299fec31a5","epic_id":"DCNZIA","state":"todo","body":"QA sign-off","worker":"any","created_at":"2026-01-14T02:06:00.974999Z"}}
-{"type":"worker","ts":"2026-01-14T02:06:00.977363Z","data":{"id":"FSZYCW","worker":"human","ts":"2026-01-14T02:06:00.977363Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.979612Z","data":{"from_id":"FSZYCW","to_id":"3SDWXI","type":"depends"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.981851Z","data":{"id":"RWO7XH","uuid":"5d969183-cafd-4fc7-bce0-9775a9ae9ac8","epic_id":"DCNZIA","state":"todo","body":"Write release notes","worker":"any","created_at":"2026-01-14T02:06:00.981851Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.984031Z","data":{"from_id":"RWO7XH","to_id":"3AN7WU","type":"depends"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.986261Z","data":{"id":"GWEAXZ","uuid":"4f80ceb5-c031-4f49-886a-5b5e6e4b6fa5","epic_id":"DCNZIA","state":"todo","body":"Production deploy","worker":"any","created_at":"2026-01-14T02:06:00.986261Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.988398Z","data":{"from_id":"GWEAXZ","to_id":"FSZYCW","type":"depends"}}
-{"type":"link","ts":"2026-01-14T02:06:00.99061Z","data":{"from_id":"GWEAXZ","to_id":"RWO7XH","type":"depends"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.992879Z","data":{"id":"3QVE7N","uuid":"870fed7b-377c-4e76-b63d-468b2be121f6","epic_id":"DCNZIA","state":"todo","body":"Announce on social media","worker":"any","created_at":"2026-01-14T02:06:00.992879Z"}}
-{"type":"worker","ts":"2026-01-14T02:06:00.995184Z","data":{"id":"3QVE7N","worker":"human","ts":"2026-01-14T02:06:00.995184Z"}}
-{"type":"link","ts":"2026-01-14T02:06:00.997317Z","data":{"from_id":"3QVE7N","to_id":"GWEAXZ","type":"depends"}}
-{"type":"new_task","ts":"2026-01-14T02:06:00.999531Z","data":{"id":"JLVKJ4","uuid":"ecff5e95-bafe-4fab-9cdf-fb308d7491c8","epic_id":"","state":"todo","body":"Update README with new features","worker":"any","created_at":"2026-01-14T02:06:00.999531Z"}}
-{"type":"link","ts":"2026-01-14T02:06:01.001734Z","data":{"from_id":"JLVKJ4","to_id":"GWEAXZ","type":"depends"}}
-{"type":"new_task","ts":"2026-01-14T02:06:01.004047Z","data":{"id":"VFWGO2","uuid":"999db368-63a8-4ac0-a20f-f99f9275a052","epic_id":"","state":"todo","body":"Fix typo in CLI help","worker":"any","created_at":"2026-01-14T02:06:01.004047Z"}}
-{"type":"claim","ts":"2026-01-14T02:06:01.006267Z","data":{"id":"VFWGO2","agent_id":"maya","ts":"2026-01-14T02:06:01.006267Z"}}
-{"type":"state","ts":"2026-01-14T02:06:01.006267Z","data":{"id":"VFWGO2","state":"done","ts":"2026-01-14T02:06:01.006267Z"}}
-{"type":"new_task","ts":"2026-01-14T02:06:01.009648Z","data":{"id":"IGB25C","uuid":"ddc834a2-4239-40ed-8322-419df28f00c3","epic_id":"","state":"todo","body":"Evaluate alternative database (decided against)","worker":"any","created_at":"2026-01-14T02:06:01.009648Z"}}
-{"type":"claim","ts":"2026-01-14T02:06:01.013428Z","data":{"id":"IGB25C","agent_id":"brandon","ts":"2026-01-14T02:06:01.013428Z"}}
-{"type":"state","ts":"2026-01-14T02:06:01.013428Z","data":{"id":"IGB25C","state":"canceled","ts":"2026-01-14T02:06:01.013428Z"}}
+{"type":"new_epic","ts":"2026-02-02T20:21:00.77859Z","data":{"id":"IPY7F6","uuid":"0c229217-f854-43fc-bbb3-bb9c937ee8c3","epic_id":"","state":"todo","title":"Research \u0026 Design","body":"","created_at":"2026-02-02T20:21:00.77859Z"}}
+{"type":"new_task","ts":"2026-02-02T20:21:00.791016Z","data":{"id":"XSFBG3","uuid":"25b164fc-009b-4dcd-b8ad-8e9a455dc40f","epic_id":"IPY7F6","state":"todo","title":"Define product requirements","body":"","created_at":"2026-02-02T20:21:00.791016Z"}}
+{"type":"claim","ts":"2026-02-02T20:21:00.806255Z","data":{"id":"XSFBG3","agent_id":"maya","ts":"2026-02-02T20:21:00.806255Z"}}
+{"type":"state","ts":"2026-02-02T20:21:00.806255Z","data":{"id":"XSFBG3","state":"done","ts":"2026-02-02T20:21:00.806255Z"}}
+{"type":"result","ts":"2026-02-02T20:21:00.81767Z","data":{"task_id":"XSFBG3","summary":"PRD complete","path":"docs/prd.md","sha256_at_attach":"5d5d27455eeb22ab1de7703cefb697e12f9a1bf04ea624767dd8877015c77187","mtime_at_attach":"2026-02-02T20:21:00.796142503Z","ts":"2026-02-02T20:21:00.81767Z"}}
+{"type":"new_task","ts":"2026-02-02T20:21:00.829894Z","data":{"id":"M4J3CD","uuid":"52816c54-5f3d-4a67-91b4-bd3bd4f38af9","epic_id":"IPY7F6","state":"todo","title":"Competitor analysis","body":"","created_at":"2026-02-02T20:21:00.829894Z"}}
+{"type":"claim","ts":"2026-02-02T20:21:00.84466Z","data":{"id":"M4J3CD","agent_id":"sonnet@agent-host","ts":"2026-02-02T20:21:00.84466Z"}}
+{"type":"state","ts":"2026-02-02T20:21:00.84466Z","data":{"id":"M4J3CD","state":"done","ts":"2026-02-02T20:21:00.84466Z"}}
+{"type":"result","ts":"2026-02-02T20:21:00.856373Z","data":{"task_id":"M4J3CD","summary":"Competitor landscape documented","path":"docs/competitor-analysis.md","sha256_at_attach":"9319a8df8f88a51b108ad69a21018e65a8a8f84b53ac2f8a5c723c9dc53141ba","mtime_at_attach":"2026-02-02T20:21:00.834865479Z","ts":"2026-02-02T20:21:00.856373Z"}}
+{"type":"new_task","ts":"2026-02-02T20:21:00.867752Z","data":{"id":"N7LZ5A","uuid":"049adad1-07bf-4081-86b7-490b1e817ac3","epic_id":"IPY7F6","state":"todo","title":"User interviews (3 customers)","body":"","created_at":"2026-02-02T20:21:00.867752Z"}}
+{"type":"claim","ts":"2026-02-02T20:21:00.878811Z","data":{"id":"N7LZ5A","agent_id":"human@agent-host","ts":"2026-02-02T20:21:00.878811Z"}}
+{"type":"state","ts":"2026-02-02T20:21:00.878811Z","data":{"id":"N7LZ5A","state":"doing","ts":"2026-02-02T20:21:00.878811Z"}}
+{"type":"new_task","ts":"2026-02-02T20:21:00.890095Z","data":{"id":"CLGBIS","uuid":"f58c3b53-7c1a-4e2d-a1a5-655d3e90f1ea","epic_id":"IPY7F6","state":"todo","title":"Write technical design doc","body":"","created_at":"2026-02-02T20:21:00.890095Z"}}
+{"type":"link","ts":"2026-02-02T20:21:00.901241Z","data":{"from_id":"CLGBIS","to_id":"XSFBG3","type":"depends"}}
+{"type":"new_epic","ts":"2026-02-02T20:21:00.911677Z","data":{"id":"IVAD2B","uuid":"4532cada-1a7e-4cc1-9741-b1b453c7ffa6","epic_id":"","state":"todo","title":"Implementation","body":"","created_at":"2026-02-02T20:21:00.911677Z"}}
+{"type":"link","ts":"2026-02-02T20:21:00.922412Z","data":{"from_id":"IVAD2B","to_id":"IPY7F6","type":"depends"}}
+{"type":"new_task","ts":"2026-02-02T20:21:00.93316Z","data":{"id":"7A5U4G","uuid":"f1114399-9856-41e2-9b6e-8339c6e5f2d4","epic_id":"IVAD2B","state":"todo","title":"Set up project scaffolding","body":"","created_at":"2026-02-02T20:21:00.93316Z"}}
+{"type":"new_task","ts":"2026-02-02T20:21:00.943759Z","data":{"id":"FZ4GCO","uuid":"9ff0f984-f146-4cab-a27d-b91c34ecdb93","epic_id":"IVAD2B","state":"todo","title":"Implement core data model","body":"","created_at":"2026-02-02T20:21:00.943759Z"}}
+{"type":"link","ts":"2026-02-02T20:21:00.954149Z","data":{"from_id":"FZ4GCO","to_id":"7A5U4G","type":"depends"}}
+{"type":"new_task","ts":"2026-02-02T20:21:00.965035Z","data":{"id":"VQF43M","uuid":"3a72f471-aa61-4f55-9fd0-e03ccd71322a","epic_id":"IVAD2B","state":"todo","title":"Build REST API endpoints","body":"","created_at":"2026-02-02T20:21:00.965035Z"}}
+{"type":"link","ts":"2026-02-02T20:21:00.974714Z","data":{"from_id":"VQF43M","to_id":"FZ4GCO","type":"depends"}}
+{"type":"new_task","ts":"2026-02-02T20:21:00.985045Z","data":{"id":"RO7TMI","uuid":"495161e5-1189-4835-b46d-1e31d43f1f22","epic_id":"IVAD2B","state":"todo","title":"Build web frontend","body":"","created_at":"2026-02-02T20:21:00.985045Z"}}
+{"type":"link","ts":"2026-02-02T20:21:00.995103Z","data":{"from_id":"RO7TMI","to_id":"VQF43M","type":"depends"}}
+{"type":"new_task","ts":"2026-02-02T20:21:01.005893Z","data":{"id":"XPBCZE","uuid":"dcf2f684-2b05-4c31-ada9-73776d971396","epic_id":"IVAD2B","state":"todo","title":"Write integration tests","body":"","created_at":"2026-02-02T20:21:01.005893Z"}}
+{"type":"link","ts":"2026-02-02T20:21:01.016252Z","data":{"from_id":"XPBCZE","to_id":"VQF43M","type":"depends"}}
+{"type":"new_task","ts":"2026-02-02T20:21:01.026606Z","data":{"id":"UPBAOK","uuid":"2a8a26a0-84ba-4288-8046-3ef57d33cfd6","epic_id":"IVAD2B","state":"todo","title":"Security review","body":"","created_at":"2026-02-02T20:21:01.026606Z"}}
+{"type":"link","ts":"2026-02-02T20:21:01.036446Z","data":{"from_id":"UPBAOK","to_id":"VQF43M","type":"depends"}}
+{"type":"new_epic","ts":"2026-02-02T20:21:01.046208Z","data":{"id":"IDHPVE","uuid":"b0400fff-2a5d-49ed-ba29-e43ae252aaea","epic_id":"","state":"todo","title":"Launch","body":"","created_at":"2026-02-02T20:21:01.046208Z"}}
+{"type":"link","ts":"2026-02-02T20:21:01.056178Z","data":{"from_id":"IDHPVE","to_id":"IVAD2B","type":"depends"}}
+{"type":"new_task","ts":"2026-02-02T20:21:01.066097Z","data":{"id":"4VL7LU","uuid":"341e20b8-9365-4e35-b631-ca93d096fca4","epic_id":"IDHPVE","state":"todo","title":"Deploy to staging","body":"","created_at":"2026-02-02T20:21:01.066097Z"}}
+{"type":"link","ts":"2026-02-02T20:21:01.075556Z","data":{"from_id":"4VL7LU","to_id":"RO7TMI","type":"depends"}}
+{"type":"link","ts":"2026-02-02T20:21:01.085202Z","data":{"from_id":"4VL7LU","to_id":"XPBCZE","type":"depends"}}
+{"type":"new_task","ts":"2026-02-02T20:21:01.094955Z","data":{"id":"WM55DT","uuid":"23df71a9-7c20-4d0a-8ac4-c774f6e2688b","epic_id":"IDHPVE","state":"todo","title":"QA sign-off","body":"","created_at":"2026-02-02T20:21:01.094955Z"}}
+{"type":"link","ts":"2026-02-02T20:21:01.104763Z","data":{"from_id":"WM55DT","to_id":"4VL7LU","type":"depends"}}
+{"type":"new_task","ts":"2026-02-02T20:21:01.114814Z","data":{"id":"WW6BHT","uuid":"f97509df-b94c-4e6e-88d3-58644d1b24a1","epic_id":"IDHPVE","state":"todo","title":"Write release notes","body":"","created_at":"2026-02-02T20:21:01.114814Z"}}
+{"type":"link","ts":"2026-02-02T20:21:01.12447Z","data":{"from_id":"WW6BHT","to_id":"RO7TMI","type":"depends"}}
+{"type":"new_task","ts":"2026-02-02T20:21:01.134578Z","data":{"id":"YODI6U","uuid":"5858b2e8-cfb2-4ee6-ad9d-a1483dd98c34","epic_id":"IDHPVE","state":"todo","title":"Production deploy","body":"","created_at":"2026-02-02T20:21:01.134578Z"}}
+{"type":"link","ts":"2026-02-02T20:21:01.144155Z","data":{"from_id":"YODI6U","to_id":"WM55DT","type":"depends"}}
+{"type":"link","ts":"2026-02-02T20:21:01.153692Z","data":{"from_id":"YODI6U","to_id":"WW6BHT","type":"depends"}}
+{"type":"new_task","ts":"2026-02-02T20:21:01.163599Z","data":{"id":"WJPGVP","uuid":"3f59dbd4-38c0-4d09-a855-eaa95183d3d8","epic_id":"IDHPVE","state":"todo","title":"Announce on social media","body":"","created_at":"2026-02-02T20:21:01.163599Z"}}
+{"type":"link","ts":"2026-02-02T20:21:01.173533Z","data":{"from_id":"WJPGVP","to_id":"YODI6U","type":"depends"}}
+{"type":"new_task","ts":"2026-02-02T20:21:01.183796Z","data":{"id":"ZLCQOR","uuid":"7daf87ad-479d-4da9-9a20-370e5404173d","epic_id":"","state":"todo","title":"Update README with new features","body":"","created_at":"2026-02-02T20:21:01.183796Z"}}
+{"type":"link","ts":"2026-02-02T20:21:01.19353Z","data":{"from_id":"ZLCQOR","to_id":"YODI6U","type":"depends"}}
+{"type":"new_task","ts":"2026-02-02T20:21:01.203615Z","data":{"id":"FATKPA","uuid":"7843a7db-3fc1-4540-b678-8e968f932f1c","epic_id":"","state":"todo","title":"Fix typo in CLI help","body":"","created_at":"2026-02-02T20:21:01.203615Z"}}
+{"type":"claim","ts":"2026-02-02T20:21:01.213929Z","data":{"id":"FATKPA","agent_id":"maya","ts":"2026-02-02T20:21:01.213929Z"}}
+{"type":"state","ts":"2026-02-02T20:21:01.213929Z","data":{"id":"FATKPA","state":"done","ts":"2026-02-02T20:21:01.213929Z"}}
+{"type":"new_task","ts":"2026-02-02T20:21:01.224627Z","data":{"id":"IQJO6N","uuid":"2a2e6ba2-0482-46ea-96d6-9c7e0b211238","epic_id":"","state":"todo","title":"Evaluate alternative database (decided against)","body":"","created_at":"2026-02-02T20:21:01.224627Z"}}
+{"type":"claim","ts":"2026-02-02T20:21:01.235382Z","data":{"id":"IQJO6N","agent_id":"sonnet@agent-host","ts":"2026-02-02T20:21:01.235382Z"}}
+{"type":"state","ts":"2026-02-02T20:21:01.235382Z","data":{"id":"IQJO6N","state":"canceled","ts":"2026-02-02T20:21:01.235382Z"}}
