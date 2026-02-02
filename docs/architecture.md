@@ -68,7 +68,7 @@ The allowed transitions and claim invariants live in code (the model layer) and 
 
 The code is intentionally layered:
 
-- **Model**: types and invariants (states, transitions, dep rules).
+- **Model**: types and invariants (states, transitions, dependency rules).
 - **Storage**: `.ergo` discovery + reading/writing events.
 - **Replay/graph**: materialize state from events; readiness/blocking/compaction logic.
 - **Commands**: implement CLI operations by combining the above layers.

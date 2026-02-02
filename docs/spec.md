@@ -99,7 +99,7 @@ When `--json` is set and a command succeeds:
 Commands that are expected to be machine-used should offer a useful JSON shape:
 - `list --json`: array of items
 - `show --json`: object (or object-with-children for epics)
-- Mutations (`new`, `set`, `dep`, `prune`, `compact`, `claim`): JSON object(s)
+- Mutations (`new`, `set`, `sequence`, `prune`, `compact`, `claim`): JSON object(s)
 
 ### “No ready tasks” for `claim`
 

@@ -152,6 +152,17 @@ type GlobalOptions struct {
 	Quiet    bool
 	Verbose  bool
 	JSON     bool
+
+	// Input mode + metadata flags (set by Cobra subcommands that support --body-stdin).
+	// These are intentionally ignored unless a command explicitly opts into them.
+	BodyStdin         bool
+	TitleFlag         string
+	BodyFlag          string
+	EpicFlag          string
+	StateFlag         string
+	ClaimFlag         string
+	ResultPathFlag    string
+	ResultSummaryFlag string
 }
 
 type Task struct {

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING:** Replace `dep` with `sequence` for dependency ordering.
+  - Old: `ergo dep A B` (A depends on B)
+  - New: `ergo sequence B A` (B then A; same relationship)
+  - New: `ergo sequence A B C` for ordered chains
+  - New: `ergo sequence rm A B` removes the implied edge
+
 ## [0.9.1] - 2026-02-02
 
 ### Changed

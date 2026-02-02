@@ -28,8 +28,8 @@ func init() {
 	rootCmd.AddCommand(claimCmd)
 	// ergo set
 	rootCmd.AddCommand(setCmd)
-	// ergo dep
-	rootCmd.AddCommand(depCmd)
+	// ergo sequence
+	rootCmd.AddCommand(sequenceCmd)
 	// ergo where
 	rootCmd.AddCommand(whereCmd)
 	// ergo compact
@@ -63,8 +63,33 @@ var newTaskCmd = &cobra.Command{
 	Short: "Create a new task (JSON stdin)",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunNewTask(globalOpts)
+		opts := globalOpts
+		opts.BodyStdin = newTaskBodyStdin
+		opts.TitleFlag = newTaskTitle
+		opts.BodyFlag = newTaskBody
+		opts.EpicFlag = newTaskEpic
+		opts.StateFlag = newTaskState
+		opts.ClaimFlag = newTaskClaim
+		return ergo.RunNewTask(opts)
 	},
+}
+
+var (
+	newTaskBodyStdin bool
+	newTaskTitle     string
+	newTaskBody      string
+	newTaskEpic      string
+	newTaskState     string
+	newTaskClaim     string
+)
+
+func init() {
+	newTaskCmd.Flags().BoolVar(&newTaskBodyStdin, "body-stdin", false, "Read body from stdin (raw text); metadata via flags")
+	newTaskCmd.Flags().StringVar(&newTaskTitle, "title", "", "Task title (required with --body-stdin)")
+	newTaskCmd.Flags().StringVar(&newTaskBody, "body", "", "Inline body text (mutually exclusive with --body-stdin)")
+	newTaskCmd.Flags().StringVar(&newTaskEpic, "epic", "", "Epic ID to assign this task to")
+	newTaskCmd.Flags().StringVar(&newTaskState, "state", "", "Initial state (todo|doing|done|blocked|canceled|error)")
+	newTaskCmd.Flags().StringVar(&newTaskClaim, "claim", "", "Initial claim identity (agent id)")
 }
 
 var newEpicCmd = &cobra.Command{
@@ -72,8 +97,24 @@ var newEpicCmd = &cobra.Command{
 	Short: "Create a new epic (JSON stdin)",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunNewEpic(globalOpts)
+		opts := globalOpts
+		opts.BodyStdin = newEpicBodyStdin
+		opts.TitleFlag = newEpicTitle
+		opts.BodyFlag = newEpicBody
+		return ergo.RunNewEpic(opts)
 	},
+}
+
+var (
+	newEpicBodyStdin bool
+	newEpicTitle     string
+	newEpicBody      string
+)
+
+func init() {
+	newEpicCmd.Flags().BoolVar(&newEpicBodyStdin, "body-stdin", false, "Read body from stdin (raw text); metadata via flags")
+	newEpicCmd.Flags().StringVar(&newEpicTitle, "title", "", "Epic title (required with --body-stdin)")
+	newEpicCmd.Flags().StringVar(&newEpicBody, "body", "", "Inline body text (mutually exclusive with --body-stdin)")
 }
 
 // -- list --
@@ -148,16 +189,47 @@ var setCmd = &cobra.Command{
 	Short: "Update a task (JSON stdin)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunSet(args[0], globalOpts)
+		opts := globalOpts
+		opts.BodyStdin = setBodyStdin
+		opts.TitleFlag = setTitle
+		opts.BodyFlag = setBody
+		opts.EpicFlag = setEpic
+		opts.StateFlag = setState
+		opts.ClaimFlag = setClaim
+		opts.ResultPathFlag = setResultPath
+		opts.ResultSummaryFlag = setResultSummary
+		return ergo.RunSet(args[0], opts)
 	},
 }
 
-// -- dep --
-var depCmd = &cobra.Command{
-	Use:   "dep <A> <B> | dep rm <A> <B>",
-	Short: "Manage dependencies (A depends on B)",
+var (
+	setBodyStdin     bool
+	setTitle         string
+	setBody          string
+	setEpic          string
+	setState         string
+	setClaim         string
+	setResultPath    string
+	setResultSummary string
+)
+
+func init() {
+	setCmd.Flags().BoolVar(&setBodyStdin, "body-stdin", false, "Read body from stdin (raw text); other fields via flags")
+	setCmd.Flags().StringVar(&setTitle, "title", "", "New title")
+	setCmd.Flags().StringVar(&setBody, "body", "", "Inline body text (mutually exclusive with --body-stdin)")
+	setCmd.Flags().StringVar(&setEpic, "epic", "", "Epic ID to assign this task to (\"\" unassign only via JSON)")
+	setCmd.Flags().StringVar(&setState, "state", "", "Set state (todo|doing|done|blocked|canceled|error)")
+	setCmd.Flags().StringVar(&setClaim, "claim", "", "Set claim identity (\"\" unclaim only via JSON)")
+	setCmd.Flags().StringVar(&setResultPath, "result-path", "", "Attach result file path (requires --result-summary)")
+	setCmd.Flags().StringVar(&setResultSummary, "result-summary", "", "Attach one-line result summary (requires --result-path)")
+}
+
+// -- sequence --
+var sequenceCmd = &cobra.Command{
+	Use:   "sequence <A> <B> [<C>...] | sequence rm <A> <B>",
+	Short: "Enforce task order (A then B then C)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunDep(args, globalOpts)
+		return ergo.RunSequence(args, globalOpts)
 	},
 }
 

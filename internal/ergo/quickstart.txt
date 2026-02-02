@@ -38,7 +38,7 @@ Common variants:
 {{HEADER}}3. CREATE WORK (JSON stdin){{RESET}}
 
 Use `printf '%s'` for reliable JSON delivery. All fields are strings.
-Unknown keys are rejected.
+Unknown keys are rejected (with suggestions for close matches).
 
 Create a task:
   {{CMD}}printf '%s' '{"title":"Login","body":"Implement signup","epic":"OFKSTE"}' | ergo new task{{RESET}}
@@ -50,10 +50,26 @@ Atomic create-and-claim (preferred for dynamic tasking):
   {{CMD}}printf '%s' '{"title":"Fix CVE","claim":"sonnet@agent-host"}' | ergo new task{{RESET}}
   `claim` implies `state=doing` unless `state` is explicitly set.
 
+{{HEADER}}3b. CREATE WORK (body from stdin){{RESET}}
+
+Use `--body-stdin` when the body is multi-line markdown. In this mode, stdin is the literal body text and metadata is passed via flags.
+
+Create a task with a multi-line body:
+  {{CMD}}printf '%s\n' '## Goal' '- Do the thing' '' '## Acceptance criteria' '- Thing is done' | ergo new task --body-stdin --title "Do the thing"{{RESET}}
+
+Update a task body (and state) from stdin:
+  {{CMD}}printf '%s\n' '## Status' '- Waiting on review' | ergo set ABCDEF --body-stdin --state blocked{{RESET}}
+
 {{HEADER}}4. DEPENDENCIES{{RESET}}
 
-Add dependency (A depends on B; B blocks A):
-  {{CMD}}ergo dep TASK_A TASK_B{{RESET}}
+Enforce order (A happens before B):
+  {{CMD}}ergo sequence TASK_A TASK_B{{RESET}}
+
+Chain order (A then B then C):
+  {{CMD}}ergo sequence TASK_A TASK_B TASK_C{{RESET}}
+
+Remove order between A and B (remove edge where B depends on A):
+  {{CMD}}ergo sequence rm TASK_A TASK_B{{RESET}}
 
 Find ready work (all deps done or canceled):
   {{CMD}}ergo list --ready{{RESET}}
@@ -102,7 +118,7 @@ Inspect results:
 Epics complete when all children are done or canceled. They have no own state.
 Epic-to-epic deps block all tasks in the dependent epic.
 
-{{CMD}}ergo dep EPIC_A EPIC_B{{RESET}}
+{{CMD}}ergo sequence EPIC_A EPIC_B{{RESET}}
 
 {{HEADER}}REFERENCE: TITLE + BODY{{RESET}}
 Use `title` for the task name; `body` for details.

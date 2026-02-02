@@ -24,6 +24,16 @@ import (
 	"strings"
 )
 
+var knownJSONFields = []string{
+	"title",
+	"body",
+	"epic",
+	"state",
+	"claim",
+	"result_path",
+	"result_summary",
+}
+
 // TaskInput is the unified JSON schema for creating and updating tasks/epics.
 //
 // For `new task` / `new epic`: title is required; body is optional (details).
@@ -106,6 +116,22 @@ func ParseTaskInput() (*TaskInput, *ValidationError) {
 	decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&input); err != nil {
+		unknownField, hasUnknown := extractUnknownField(err)
+		if hasUnknown {
+			message := fmt.Sprintf("invalid JSON: %v", err)
+			invalid := map[string]string{
+				unknownField: "unknown field",
+			}
+			if suggestion, ok := suggestFieldName(unknownField); ok {
+				message = fmt.Sprintf("invalid JSON: unknown field %q (did you mean: %s?)", unknownField, suggestion)
+				invalid[unknownField] = fmt.Sprintf("unknown field (did you mean: %s?)", suggestion)
+			}
+			return nil, &ValidationError{
+				Error:   "parse_error",
+				Message: message,
+				Invalid: invalid,
+			}
+		}
 		return nil, &ValidationError{
 			Error:   "parse_error",
 			Message: fmt.Sprintf("invalid JSON: %v", err),
@@ -120,6 +146,90 @@ func ParseTaskInput() (*TaskInput, *ValidationError) {
 	}
 
 	return &input, nil
+}
+
+func extractUnknownField(err error) (string, bool) {
+	msg := err.Error()
+	const prefix = "json: unknown field "
+	if !strings.HasPrefix(msg, prefix) {
+		return "", false
+	}
+	rest := strings.TrimPrefix(msg, prefix)
+	if len(rest) < 2 || rest[0] != '"' {
+		return "", false
+	}
+	rest = rest[1:]
+	end := strings.Index(rest, "\"")
+	if end == -1 {
+		return "", false
+	}
+	return rest[:end], true
+}
+
+func suggestFieldName(unknown string) (string, bool) {
+	unknown = strings.ToLower(unknown)
+	best := ""
+	bestDist := 99
+	secondBest := 99
+	for _, cand := range knownJSONFields {
+		dist := levenshteinDistance(unknown, cand)
+		if dist < bestDist {
+			secondBest = bestDist
+			bestDist = dist
+			best = cand
+			continue
+		}
+		if dist < secondBest {
+			secondBest = dist
+		}
+	}
+	if best == "" {
+		return "", false
+	}
+	if bestDist <= 2 && (secondBest-bestDist >= 2 || secondBest > 3) {
+		return best, true
+	}
+	return "", false
+}
+
+func levenshteinDistance(a, b string) int {
+	if a == b {
+		return 0
+	}
+	if len(a) == 0 {
+		return len(b)
+	}
+	if len(b) == 0 {
+		return len(a)
+	}
+
+	prev := make([]int, len(b)+1)
+	for j := 0; j <= len(b); j++ {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		cur := make([]int, len(b)+1)
+		cur[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 0
+			if a[i-1] != b[j-1] {
+				cost = 1
+			}
+			del := prev[j] + 1
+			ins := cur[j-1] + 1
+			sub := prev[j-1] + cost
+			cur[j] = minInt(del, minInt(ins, sub))
+		}
+		prev = cur
+	}
+	return prev[len(b)]
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // ValidateForNewTask validates TaskInput for new task creation.

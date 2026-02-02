@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func RunInit(args []string, opts GlobalOptions) error {
@@ -53,6 +54,52 @@ func RunInit(args []string, opts GlobalOptions) error {
 }
 
 func RunNewEpic(opts GlobalOptions) error {
+	if opts.BodyStdin {
+		if err := validateBodyStdinExclusions(opts.BodyFlag); err != nil {
+			return err
+		}
+		title := strings.TrimSpace(opts.TitleFlag)
+		if title == "" {
+			return errors.New("new epic --body-stdin requires --title")
+		}
+		body, err := readBodyFromStdinOrEmpty()
+		if err != nil {
+			return err
+		}
+
+		dir, err := ergoDir(opts)
+		if err != nil {
+			return err
+		}
+		created, err := createTask(dir, opts, "", true, title, body)
+		if err != nil {
+			return err
+		}
+		if opts.JSON {
+			return writeJSON(os.Stdout, created)
+		}
+		fmt.Println(created.ID)
+		return nil
+	}
+
+	if !stdinIsPiped() && strings.TrimSpace(opts.TitleFlag) != "" {
+		title := strings.TrimSpace(opts.TitleFlag)
+
+		dir, err := ergoDir(opts)
+		if err != nil {
+			return err
+		}
+		created, err := createTask(dir, opts, "", true, title, opts.BodyFlag)
+		if err != nil {
+			return err
+		}
+		if opts.JSON {
+			return writeJSON(os.Stdout, created)
+		}
+		fmt.Println(created.ID)
+		return nil
+	}
+
 	// Parse JSON from stdin
 	input, verr := ParseTaskInput()
 	if verr != nil {
@@ -88,6 +135,82 @@ func RunNewEpic(opts GlobalOptions) error {
 }
 
 func RunNewTask(opts GlobalOptions) error {
+	if opts.BodyStdin {
+		if err := validateBodyStdinExclusions(opts.BodyFlag); err != nil {
+			return err
+		}
+		title := strings.TrimSpace(opts.TitleFlag)
+		if title == "" {
+			return errors.New("new task --body-stdin requires --title")
+		}
+		body, err := readBodyFromStdinOrEmpty()
+		if err != nil {
+			return err
+		}
+
+		dir, err := ergoDir(opts)
+		if err != nil {
+			return err
+		}
+		created, err := createTask(dir, opts, opts.EpicFlag, false, title, body)
+		if err != nil {
+			return err
+		}
+
+		updates := buildFlagUpdates(opts)
+		delete(updates, "title")
+		delete(updates, "epic")
+		if len(updates) > 0 {
+			agentID := opts.AgentID
+			if err := applySetUpdates(dir, opts, created.ID, updates, agentID, true); err != nil {
+				return err
+			}
+		}
+
+		if opts.JSON {
+			return writeJSON(os.Stdout, created)
+		}
+		fmt.Println(created.ID)
+		return nil
+	}
+
+	hasFlagInput := strings.TrimSpace(opts.TitleFlag) != "" ||
+		opts.BodyFlag != "" ||
+		opts.EpicFlag != "" ||
+		opts.StateFlag != "" ||
+		opts.ClaimFlag != ""
+	if !stdinIsPiped() && hasFlagInput {
+		title := strings.TrimSpace(opts.TitleFlag)
+		if title == "" {
+			return errors.New("new task requires --title (or pipe JSON to stdin)")
+		}
+
+		dir, err := ergoDir(opts)
+		if err != nil {
+			return err
+		}
+		created, err := createTask(dir, opts, opts.EpicFlag, false, title, opts.BodyFlag)
+		if err != nil {
+			return err
+		}
+
+		updates := buildFlagUpdates(opts)
+		delete(updates, "title")
+		delete(updates, "epic")
+		if len(updates) > 0 {
+			agentID := opts.AgentID
+			if err := applySetUpdates(dir, opts, created.ID, updates, agentID, true); err != nil {
+				return err
+			}
+		}
+
+		if opts.JSON {
+			return writeJSON(os.Stdout, created)
+		}
+		fmt.Println(created.ID)
+		return nil
+	}
+
 	// Parse JSON from stdin
 	input, verr := ParseTaskInput()
 	if verr != nil {

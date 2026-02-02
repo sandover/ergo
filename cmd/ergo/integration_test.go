@@ -45,29 +45,11 @@ func TestMain(m *testing.M) {
 func runErgo(t *testing.T, dir string, stdin string, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
 
-	// Use bash -c to properly pipe stdin (Go's exec doesn't set pipe mode)
-	if stdin != "" {
-		cmdStr := ergoBinary
-		for _, arg := range args {
-			// Shell-escape args
-			cmdStr += " '" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
-		}
-		cmd := exec.Command("bash", "-c", "echo '"+stdin+"' | "+cmdStr)
-		cmd.Dir = dir
-		var outBuf, errBuf bytes.Buffer
-		cmd.Stdout = &outBuf
-		cmd.Stderr = &errBuf
-		err := cmd.Run()
-		exitCode = 0
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			exitCode = exitErr.ExitCode()
-		}
-		return outBuf.String(), errBuf.String(), exitCode
-	}
-
-	// No stdin
 	cmd := exec.Command(ergoBinary, args...)
 	cmd.Dir = dir
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
@@ -128,6 +110,80 @@ func TestNewTask_HappyPath(t *testing.T) {
 	taskID := strings.TrimSpace(stdout)
 	if len(taskID) != 6 {
 		t.Errorf("expected 6-char task ID, got %q", taskID)
+	}
+}
+
+func TestNewTask_BodyStdin_Multiline(t *testing.T) {
+	dir := setupErgo(t)
+	body := "line1\nline2\n"
+
+	stdout, stderr, code := runErgo(t, dir, body, "new", "task", "--body-stdin", "--title", "Test task")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr=%q)", code, stderr)
+	}
+	taskID := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+	var task map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
+		t.Fatalf("failed to parse show output: %v", err)
+	}
+	if task["body"] != body {
+		t.Errorf("expected body=%q, got %q", body, task["body"])
+	}
+}
+
+func TestNewEpic_BodyStdin_Multiline(t *testing.T) {
+	dir := setupErgo(t)
+	body := "epic line1\nepic line2\n"
+
+	stdout, stderr, code := runErgo(t, dir, body, "new", "epic", "--body-stdin", "--title", "My Epic")
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d (stderr=%q)", code, stderr)
+	}
+	epicID := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, "", "show", epicID, "--json")
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+	var epic map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &epic); err != nil {
+		t.Fatalf("failed to parse show output: %v", err)
+	}
+	if epic["body"] != body {
+		t.Errorf("expected body=%q, got %q", body, epic["body"])
+	}
+}
+
+func TestNewTask_BodyStdin_ValidationErrors(t *testing.T) {
+	dir := setupErgo(t)
+
+	_, stderr, code := runErgo(t, dir, "x", "new", "task", "--body-stdin")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr, "requires --title") {
+		t.Fatalf("expected missing-title error, got stderr=%q", stderr)
+	}
+
+	_, stderr, code = runErgo(t, dir, "x", "new", "task", "--body-stdin", "--title", "T", "--body", "inline")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr, "mutually exclusive") {
+		t.Fatalf("expected mutual exclusion error, got stderr=%q", stderr)
+	}
+
+	_, stderr, code = runErgo(t, dir, "x", "new", "task", "--body-stdin", "--title", "T", "--state", "doing")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr, "state requires claim") {
+		t.Fatalf("expected claim invariant error, got stderr=%q", stderr)
 	}
 }
 
@@ -221,6 +277,37 @@ func TestSet_StateTransition(t *testing.T) {
 	}
 }
 
+func TestSet_BodyStdin_UpdatesBody(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+
+	newBody := "updated\nbody\n"
+	_, stderr, code := runErgo(t, dir, newBody, "set", taskID, "--body-stdin", "--state", "done")
+	if code != 0 {
+		t.Fatalf("set --body-stdin failed: exit %d (stderr=%q)", code, stderr)
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+	var task map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
+		t.Fatalf("failed to parse show output: %v", err)
+	}
+	if task["body"] != newBody {
+		t.Errorf("expected body=%q, got %q", newBody, task["body"])
+	}
+	if task["state"] != "done" {
+		t.Errorf("expected state=done, got %v", task["state"])
+	}
+}
+
 func TestSet_JSONOutput(t *testing.T) {
 	dir := setupErgo(t)
 
@@ -289,7 +376,7 @@ func TestSet_InvalidTransition(t *testing.T) {
 	}
 }
 
-func TestDep_JSONOutput(t *testing.T) {
+func TestSequence_JSONOutput(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, _, code := runErgo(t, dir, `{"title":"Task A"}`, "new", "task")
@@ -304,34 +391,122 @@ func TestDep_JSONOutput(t *testing.T) {
 	}
 	taskB := strings.TrimSpace(stdout)
 
-	stdout, _, code = runErgo(t, dir, "", "dep", taskA, taskB, "--json")
+	stdout, _, code = runErgo(t, dir, "", "sequence", taskB, taskA, "--json")
 	if code != 0 {
-		t.Fatalf("dep --json failed: exit %d", code)
+		t.Fatalf("sequence --json failed: exit %d", code)
 	}
 	var out map[string]interface{}
 	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-		t.Fatalf("failed to parse dep --json output: %v", err)
+		t.Fatalf("failed to parse sequence --json output: %v", err)
 	}
-	if out["kind"] != "dep" || out["action"] != "link" {
-		t.Errorf("expected kind=dep action=link, got %v", out)
+	if out["kind"] != "sequence" || out["action"] != "link" {
+		t.Errorf("expected kind=sequence action=link, got %v", out)
 	}
-	if out["from_id"] != taskA || out["to_id"] != taskB {
-		t.Errorf("unexpected dep ids: %v", out)
+	edges, ok := out["edges"].([]interface{})
+	if !ok || len(edges) != 1 {
+		t.Fatalf("expected 1 edge, got %v", out["edges"])
 	}
-	if out["type"] != "depends" {
-		t.Errorf("expected type=depends, got %v", out["type"])
+	edge, ok := edges[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected edge object, got %v", edges[0])
+	}
+	if edge["from_id"] != taskA || edge["to_id"] != taskB {
+		t.Errorf("unexpected edge ids: %v", edge)
+	}
+	if edge["type"] != "depends" {
+		t.Errorf("expected type=depends, got %v", edge["type"])
 	}
 
-	stdout, _, code = runErgo(t, dir, "", "dep", "rm", taskA, taskB, "--json")
+	stdout, _, code = runErgo(t, dir, "", "sequence", "rm", taskB, taskA, "--json")
 	if code != 0 {
-		t.Fatalf("dep rm --json failed: exit %d", code)
+		t.Fatalf("sequence rm --json failed: exit %d", code)
 	}
 	out = map[string]interface{}{}
 	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-		t.Fatalf("failed to parse dep rm --json output: %v", err)
+		t.Fatalf("failed to parse sequence rm --json output: %v", err)
 	}
-	if out["kind"] != "dep" || out["action"] != "unlink" {
-		t.Errorf("expected kind=dep action=unlink, got %v", out)
+	if out["kind"] != "sequence" || out["action"] != "unlink" {
+		t.Errorf("expected kind=sequence action=unlink, got %v", out)
+	}
+	edges, ok = out["edges"].([]interface{})
+	if !ok || len(edges) != 1 {
+		t.Fatalf("expected 1 edge, got %v", out["edges"])
+	}
+	edge, ok = edges[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected edge object, got %v", edges[0])
+	}
+	if edge["from_id"] != taskA || edge["to_id"] != taskB {
+		t.Errorf("unexpected edge ids: %v", edge)
+	}
+}
+
+func TestSequence_ChainOrder_Readiness(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Task A"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskA := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, `{"title":"Task B"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskB := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, `{"title":"Task C"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskC := strings.TrimSpace(stdout)
+
+	_, _, code = runErgo(t, dir, "", "sequence", taskA, taskB, taskC)
+	if code != 0 {
+		t.Fatalf("sequence chain failed: exit %d", code)
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "list", "--ready", "--json")
+	if code != 0 {
+		t.Fatalf("list --ready failed: exit %d", code)
+	}
+	var ready []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &ready); err != nil {
+		t.Fatalf("failed to parse list --ready output: %v", err)
+	}
+	if len(ready) != 1 || ready[0]["id"] != taskA {
+		t.Fatalf("expected only Task A ready, got %v", ready)
+	}
+
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskA)
+	if code != 0 {
+		t.Fatalf("set taskA done failed: exit %d", code)
+	}
+	stdout, _, code = runErgo(t, dir, "", "list", "--ready", "--json")
+	if code != 0 {
+		t.Fatalf("list --ready failed: exit %d", code)
+	}
+	if err := json.Unmarshal([]byte(stdout), &ready); err != nil {
+		t.Fatalf("failed to parse list --ready output: %v", err)
+	}
+	if len(ready) != 1 || ready[0]["id"] != taskB {
+		t.Fatalf("expected only Task B ready, got %v", ready)
+	}
+
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskB)
+	if code != 0 {
+		t.Fatalf("set taskB done failed: exit %d", code)
+	}
+	stdout, _, code = runErgo(t, dir, "", "list", "--ready", "--json")
+	if code != 0 {
+		t.Fatalf("list --ready failed: exit %d", code)
+	}
+	if err := json.Unmarshal([]byte(stdout), &ready); err != nil {
+		t.Fatalf("failed to parse list --ready output: %v", err)
+	}
+	if len(ready) != 1 || ready[0]["id"] != taskC {
+		t.Fatalf("expected only Task C ready, got %v", ready)
 	}
 }
 
@@ -438,9 +613,9 @@ func TestPrune_RemovesDepsAndErrorsOnPrunedIDs(t *testing.T) {
 	}
 	taskB := strings.TrimSpace(stdout)
 
-	_, _, code = runErgo(t, dir, "", "dep", taskA, taskB)
+	_, _, code = runErgo(t, dir, "", "sequence", taskB, taskA)
 	if code != 0 {
-		t.Fatalf("dep failed: exit %d", code)
+		t.Fatalf("sequence failed: exit %d", code)
 	}
 	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", taskB)
 	if code != 0 {
@@ -766,9 +941,9 @@ func TestCompact_PreservesShowJSON(t *testing.T) {
 	t2 := strings.TrimSpace(stdout)
 
 	// Add dependency T2 depends on T1.
-	_, _, code = runErgo(t, dir, "", "dep", t2, t1)
+	_, _, code = runErgo(t, dir, "", "sequence", t1, t2)
 	if code != 0 {
-		t.Fatalf("dep %s %s failed: exit %d", t2, t1, code)
+		t.Fatalf("sequence %s %s failed: exit %d", t1, t2, code)
 	}
 
 	// Mutate T1 across multiple dimensions.
@@ -1220,9 +1395,9 @@ func TestListReadyBlockedByDepsCountsAsBlocked(t *testing.T) {
 	blockerID := strings.TrimSpace(stdout)
 	_, _, _ = runErgo(t, dir, "", "claim", blockerID, "--agent", "test@local")
 
-	stdout, _, _ = runErgo(t, dir, `{"title":"Blocked by dep"}`, "new", "task")
+	stdout, _, _ = runErgo(t, dir, `{"title":"Blocked by dependency"}`, "new", "task")
 	blockedID := strings.TrimSpace(stdout)
-	_, _, _ = runErgo(t, dir, "", "dep", blockedID, blockerID)
+	_, _, _ = runErgo(t, dir, "", "sequence", blockerID, blockedID)
 
 	stdout, _, code := runErgo(t, dir, "", "list", "--ready")
 	if code != 0 {

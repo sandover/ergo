@@ -1,4 +1,4 @@
-// Purpose: Implement list/show/claim/set/dep/compact/prune/where behaviors and output.
+// Purpose: Implement list/show/claim/set/sequence/compact/prune/where behaviors and output.
 // Exports: RunSet, RunDep, RunClaim, RunShow, RunList, RunCompact, RunPrune, RunWhere.
 // Role: Command layer bridging CLI wiring to graph/storage operations.
 // Invariants: Mutations acquire the lock; JSON output is stable when requested.
@@ -28,6 +28,135 @@ type ListOptions struct {
 func RunSet(id string, opts GlobalOptions) error {
 	if id == "" {
 		return errors.New("usage: echo '{\"state\":\"done\"}' | ergo set <id>")
+	}
+
+	if opts.BodyStdin {
+		if err := validateBodyStdinExclusions(opts.BodyFlag); err != nil {
+			return err
+		}
+		body, err := readBodyFromStdinOrEmpty()
+		if err != nil {
+			return err
+		}
+		updates := buildFlagUpdates(opts)
+		updates["body"] = body
+
+		updatedFields := []string{"body"}
+		if strings.TrimSpace(opts.TitleFlag) != "" {
+			updatedFields = append(updatedFields, "title")
+		}
+		if opts.EpicFlag != "" {
+			updatedFields = append(updatedFields, "epic")
+		}
+		if opts.StateFlag != "" {
+			updatedFields = append(updatedFields, "state")
+		}
+		if opts.ClaimFlag != "" {
+			updatedFields = append(updatedFields, "claim")
+		}
+		if opts.ResultPathFlag != "" {
+			updatedFields = append(updatedFields, "result_path")
+		}
+		if opts.ResultSummaryFlag != "" {
+			updatedFields = append(updatedFields, "result_summary")
+		}
+
+		dir, err := ergoDir(opts)
+		if err != nil {
+			return err
+		}
+		agentID := opts.AgentID
+		if err := applySetUpdates(dir, opts, id, updates, agentID, opts.JSON); err != nil {
+			return err
+		}
+
+		if opts.JSON {
+			graph, err := loadGraph(dir)
+			if err != nil {
+				return err
+			}
+			task := graph.Tasks[id]
+			if task == nil {
+				return fmt.Errorf("unknown task id %s", id)
+			}
+			return writeJSON(os.Stdout, setOutput{
+				Kind:          "set",
+				ID:            id,
+				UpdatedFields: updatedFields,
+				State:         task.State,
+				ClaimedBy:     task.ClaimedBy,
+			})
+		}
+		return nil
+	}
+
+	hasFlagInput := strings.TrimSpace(opts.TitleFlag) != "" ||
+		opts.BodyFlag != "" ||
+		opts.EpicFlag != "" ||
+		opts.StateFlag != "" ||
+		opts.ClaimFlag != "" ||
+		opts.ResultPathFlag != "" ||
+		opts.ResultSummaryFlag != ""
+	if !stdinIsPiped() && hasFlagInput {
+		updates := buildFlagUpdates(opts)
+		if opts.BodyFlag != "" {
+			updates["body"] = opts.BodyFlag
+		}
+
+		if len(updates) == 0 {
+			return errors.New("no fields to update")
+		}
+
+		var updatedFields []string
+		if strings.TrimSpace(opts.TitleFlag) != "" {
+			updatedFields = append(updatedFields, "title")
+		}
+		if opts.BodyFlag != "" {
+			updatedFields = append(updatedFields, "body")
+		}
+		if opts.EpicFlag != "" {
+			updatedFields = append(updatedFields, "epic")
+		}
+		if opts.StateFlag != "" {
+			updatedFields = append(updatedFields, "state")
+		}
+		if opts.ClaimFlag != "" {
+			updatedFields = append(updatedFields, "claim")
+		}
+		if opts.ResultPathFlag != "" {
+			updatedFields = append(updatedFields, "result_path")
+		}
+		if opts.ResultSummaryFlag != "" {
+			updatedFields = append(updatedFields, "result_summary")
+		}
+
+		dir, err := ergoDir(opts)
+		if err != nil {
+			return err
+		}
+		agentID := opts.AgentID
+		if err := applySetUpdates(dir, opts, id, updates, agentID, opts.JSON); err != nil {
+			return err
+		}
+
+		if opts.JSON {
+			graph, err := loadGraph(dir)
+			if err != nil {
+				return err
+			}
+			task := graph.Tasks[id]
+			if task == nil {
+				return fmt.Errorf("unknown task id %s", id)
+			}
+			return writeJSON(os.Stdout, setOutput{
+				Kind:          "set",
+				ID:            id,
+				UpdatedFields: updatedFields,
+				State:         task.State,
+				ClaimedBy:     task.ClaimedBy,
+			})
+		}
+		return nil
 	}
 
 	// Parse JSON from stdin
@@ -497,52 +626,77 @@ func identityBodyResolver(value string) (string, error) {
 	return value, nil
 }
 
-func RunDep(args []string, opts GlobalOptions) error {
+type sequenceEdge struct {
+	FromID string
+	ToID   string
+}
+
+func buildSequenceEdges(order []string) []sequenceEdge {
+	if len(order) < 2 {
+		return nil
+	}
+	edges := make([]sequenceEdge, 0, len(order)-1)
+	for i := 0; i < len(order)-1; i++ {
+		edges = append(edges, sequenceEdge{
+			FromID: order[i+1],
+			ToID:   order[i],
+		})
+	}
+	return edges
+}
+
+func RunSequence(args []string, opts GlobalOptions) error {
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
 	}
 
-	usage := "usage: ergo dep <A> <B> | ergo dep rm <A> <B>"
+	usage := "usage: ergo sequence <A> <B> [<C>...] | ergo sequence rm <A> <B>"
 	if len(args) < 2 {
 		return errors.New(usage)
 	}
 
-	if len(args) == 2 {
-		// dep <A> <B>: A depends on B (B blocks A)
-		if err := writeLinkEvent(dir, opts, "link", args[0], args[1]); err != nil {
+	action := "link"
+	var edges []sequenceEdge
+	if args[0] == "rm" {
+		if len(args) != 3 {
+			return errors.New(usage)
+		}
+		action = "unlink"
+		edges = buildSequenceEdges([]string{args[1], args[2]})
+	} else {
+		if len(args) < 2 {
+			return errors.New(usage)
+		}
+		edges = buildSequenceEdges(args)
+	}
+
+	if len(edges) == 0 {
+		return errors.New(usage)
+	}
+
+	for _, edge := range edges {
+		if err := writeLinkEvent(dir, opts, action, edge.FromID, edge.ToID); err != nil {
 			return err
 		}
-		if opts.JSON {
-			return writeJSON(os.Stdout, depOutput{
-				Kind:   "dep",
-				Action: "link",
-				FromID: args[0],
-				ToID:   args[1],
+	}
+
+	if opts.JSON {
+		outEdges := make([]sequenceEdgeOutput, 0, len(edges))
+		for _, edge := range edges {
+			outEdges = append(outEdges, sequenceEdgeOutput{
+				FromID: edge.FromID,
+				ToID:   edge.ToID,
 				Type:   dependsLinkType,
 			})
 		}
-		return nil
+		return writeJSON(os.Stdout, sequenceOutput{
+			Kind:   "sequence",
+			Action: action,
+			Edges:  outEdges,
+		})
 	}
-
-	if len(args) == 3 && args[0] == "rm" {
-		// dep rm <A> <B>: remove dependency
-		if err := writeLinkEvent(dir, opts, "unlink", args[1], args[2]); err != nil {
-			return err
-		}
-		if opts.JSON {
-			return writeJSON(os.Stdout, depOutput{
-				Kind:   "dep",
-				Action: "unlink",
-				FromID: args[1],
-				ToID:   args[2],
-				Type:   dependsLinkType,
-			})
-		}
-		return nil
-	}
-
-	return errors.New(usage)
+	return nil
 }
 
 func RunList(listOpts ListOptions, opts GlobalOptions) error {

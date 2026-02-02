@@ -6,9 +6,9 @@
 {{HEADER}}COMMANDS{{RESET}}
   init [dir]                              create .ergo/ in dir (default: .)
 
-  new epic                                create epic from JSON stdin (prints ID)
-  new task                                create task from JSON stdin (prints ID)
-  set <id>                                update task/epic from JSON stdin
+  new epic                                create epic (JSON stdin; or --body-stdin)
+  new task                                create task (JSON stdin; or --body-stdin)
+  set <id>                                update task/epic (JSON stdin; or --body-stdin)
   show <id>                               show epic or task details
 
   list [--epic <id>] [--ready] [--epics] [--all]
@@ -21,8 +21,8 @@
                                           sets to "doing"; --agent required
                                           if none ready: prints message, exit 0
 
-  dep <A> <B>                             A depends on B (B blocks A)
-  dep rm <A> <B>                          remove dependency
+  sequence <A> <B> [<C>...]               enforce order A then B then C
+  sequence rm <A> <B>                     remove edge where B depends on A
 
   where                                   print active .ergo directory path
   prune [--yes] [--json]                  remove done/canceled tasks + empty epics
@@ -40,7 +40,7 @@
   -V, --version                           print version
 
 {{HEADER}}JSON INPUT FIELDS (all strings){{RESET}}
-  Unknown keys are rejected.
+  Unknown keys are rejected (with suggestions for close matches).
   Epics only support: title, body
   title           required for new, optional for set
   body            optional details (omit if empty)
@@ -58,5 +58,5 @@
   Mutating commands return a JSON object when --json is set.
   ALWAYS pass --agent when claiming (e.g. haiku@agent-host).
   ALWAYS set done, blocked, error, or canceled when finished (never leave doing).
-  ALWAYS use printf for multiline input (heredocs break in some terminals).
+  For multiline bodies, prefer --body-stdin (stdin is the literal body text).
   Before starting, run 'ergo quickstart' for the complete reference.

@@ -355,7 +355,7 @@ func TestValidationError_GoError(t *testing.T) {
 }
 
 func TestParseTaskInput_RejectsUnknownField(t *testing.T) {
-	restoreStdin := setStdin(t, `{"title":"X","worker":"human"}`)
+	restoreStdin := setStdin(t, `{"title":"X","boddy":"human"}`)
 	defer restoreStdin()
 
 	_, err := ParseTaskInput()
@@ -364,6 +364,31 @@ func TestParseTaskInput_RejectsUnknownField(t *testing.T) {
 	}
 	if !strings.Contains(err.Message, "unknown field") {
 		t.Fatalf("expected unknown field error, got: %q", err.Message)
+	}
+	if !strings.Contains(err.Message, "did you mean: body") {
+		t.Fatalf("expected suggestion, got: %q", err.Message)
+	}
+	if err.Invalid == nil {
+		t.Fatalf("expected invalid map, got nil")
+	}
+	if err.Invalid["boddy"] == "" {
+		t.Fatalf("expected invalid entry for boddy, got: %v", err.Invalid)
+	}
+}
+
+func TestParseTaskInput_UnknownField_NoSuggestion(t *testing.T) {
+	restoreStdin := setStdin(t, `{"title":"X","zzzzzz":"human"}`)
+	defer restoreStdin()
+
+	_, err := ParseTaskInput()
+	if err == nil {
+		t.Fatal("expected parse error for unknown field, got nil")
+	}
+	if strings.Contains(err.Message, "did you mean") {
+		t.Fatalf("expected no suggestion, got: %q", err.Message)
+	}
+	if err.Invalid != nil && strings.Contains(err.Invalid["zzzzzz"], "did you mean") {
+		t.Fatalf("expected no suggestion in invalid map, got: %v", err.Invalid)
 	}
 }
 

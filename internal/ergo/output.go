@@ -81,12 +81,16 @@ type pruneOutput struct {
 	PrunedIDs []string `json:"pruned_ids"`
 }
 
-type depOutput struct {
-	Kind   string `json:"kind"`
-	Action string `json:"action"`
+type sequenceEdgeOutput struct {
 	FromID string `json:"from_id"`
 	ToID   string `json:"to_id"`
 	Type   string `json:"type"`
+}
+
+type sequenceOutput struct {
+	Kind   string               `json:"kind"`
+	Action string               `json:"action"`
+	Edges  []sequenceEdgeOutput `json:"edges"`
 }
 
 type compactOutput struct {

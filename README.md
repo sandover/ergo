@@ -94,8 +94,8 @@ echo '{"title":"Password hashing","body":"Use bcrypt with cost=12","epic":"ABCDE
 printf '%s' '{"title":"Choose session duration","body":"Decide between 1h and 24h access tokens.\nWeigh security vs UX tradeoffs.","epic":"ABCDEF"}' | ergo new task
 # => returns e.g. MNOPQR
 
-# Set dependency relationship between tasks
-ergo dep MNOPQR GHIJKL
+# Enforce order between tasks (GHIJKL then MNOPQR)
+ergo sequence GHIJKL MNOPQR
 ```
 
 ### Execution
