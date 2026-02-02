@@ -22,6 +22,10 @@ Core loop:
      Never leave tasks in `doing`. Always set done, blocked, error, or canceled.
      Mutating commands return JSON objects when --json is set.
 
+Flags:
+  - Use `--quiet` to suppress non-essential output (useful for scripts).
+  - Use `--verbose` for debug traces on stderr.
+
 Common variants:
   - Claim a specific task by ID:
     {{CMD}}ergo claim ABCDEF --agent sonnet@agent-host{{RESET}}

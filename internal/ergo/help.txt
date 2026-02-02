@@ -34,6 +34,8 @@
   --dir <path>                            discovery start (or .ergo path)
   --agent <identity>                      identity for claim and implicit set
   --json                                  JSON output (required for agents)
+  --quiet, -q                             suppress output
+  --verbose, -v                           verbose output
   -h, --help                              show help
   -V, --version                           print version
 
