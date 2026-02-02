@@ -65,28 +65,88 @@ type treeNode struct {
 	collapsedCount int  // number of tasks in collapsed epic
 }
 
+// buildListRoots applies list-view filters to a tree and returns the roots to render.
+func buildListRoots(graph *Graph, showAll bool, readyOnly bool, epicID string) []*treeNode {
+	var roots []*treeNode
+	explicitEpic := epicID != ""
+	if explicitEpic {
+		if root := buildEpicTree(graph, epicID); root != nil {
+			roots = []*treeNode{root}
+		}
+	} else {
+		// Build tree structure: epics contain their tasks, and epics nest by dependency
+		roots = buildTree(graph)
+	}
+
+	if explicitEpic {
+		if len(roots) == 1 {
+			// Epic-focused view shows all epic children by default; --ready is the only
+			// implicit filter. (--all is accepted but redundant here.)
+			roots[0].children = filterEpicChildrenForList(roots[0].children, graph, showAll || !readyOnly, readyOnly)
+		}
+	} else {
+		// Apply ready filter first (drop epics with no matching children).
+		if readyOnly {
+			roots = filterNodesByReady(roots, graph)
+		} else if !showAll {
+			// Compute derived state for epics and filter unless --all
+			roots = filterAndCollapseNodes(roots)
+		}
+	}
+
+	return roots
+}
+
 // renderTreeView outputs tasks in a hierarchical tree format.
-func renderTreeView(w io.Writer, graph *Graph, repoDir string, useColor bool, showAll bool, readyOnly bool) {
-	// Build tree structure: epics contain their tasks, and epics nest by dependency
-	roots := buildTree(graph)
-
-	// Apply ready filter first (drop epics with no matching children).
-	if readyOnly {
-		roots = filterNodesByReady(roots, graph)
-	} else if !showAll {
-		// Compute derived state for epics and filter/collapse unless --all
-		roots = filterAndCollapseNodes(roots)
-	}
-
+func renderTreeView(w io.Writer, roots []*treeNode, graph *Graph, repoDir string, useColor bool) {
 	termWidth := getTerminalWidth()
-
 	for i, root := range roots {
-		renderNode(w, root, "", i == len(roots)-1, graph, repoDir, useColor, nil, termWidth)
+		renderNode(w, root, "", i == len(roots)-1, true, graph, repoDir, useColor, nil, termWidth)
 	}
+}
 
-	// Summary line
-	stats := computeStats(graph)
-	renderSummary(w, stats, useColor)
+func buildEpicTree(graph *Graph, epicID string) *treeNode {
+	epic := graph.Tasks[epicID]
+	if epic == nil || !epic.IsEpic {
+		return nil
+	}
+	node := &treeNode{task: epic, isReady: isReady(epic, graph)}
+
+	var tasks []*Task
+	for _, task := range graph.Tasks {
+		if task.IsEpic || task.EpicID != epicID {
+			continue
+		}
+		tasks = append(tasks, task)
+	}
+	tasks = topoSortTasks(tasks, graph)
+	for _, t := range tasks {
+		node.children = append(node.children, &treeNode{
+			task:    t,
+			isReady: isReady(t, graph),
+		})
+	}
+	return node
+}
+
+func filterEpicChildrenForList(children []*treeNode, graph *Graph, showAll bool, readyOnly bool) []*treeNode {
+	filtered := make([]*treeNode, 0, len(children))
+	for _, child := range children {
+		if child == nil || child.task == nil {
+			continue
+		}
+		if readyOnly {
+			if !isReady(child.task, graph) {
+				continue
+			}
+		} else if !showAll {
+			if child.task.State == stateDone || child.task.State == stateCanceled {
+				continue
+			}
+		}
+		filtered = append(filtered, child)
+	}
+	return filtered
 }
 
 // filterNodesByReady keeps only ready tasks and epics with ready children.
@@ -142,8 +202,7 @@ func derivedEpicState(children []*treeNode) string {
 	return "active"
 }
 
-// filterAndCollapseNodes filters canceled tasks, hides fully-canceled epics,
-// and collapses fully-done epics to a summary line.
+// filterAndCollapseNodes filters canceled tasks and hides fully-canceled or fully-done epics.
 func filterAndCollapseNodes(nodes []*treeNode) []*treeNode {
 	var filtered []*treeNode
 	for _, node := range nodes {
@@ -155,11 +214,7 @@ func filterAndCollapseNodes(nodes []*treeNode) []*treeNode {
 				// Hide fully-canceled epics
 				continue
 			case "done":
-				// Collapse: mark as collapsed, count tasks, then clear children
-				node.collapsed = true
-				node.collapsedCount = countTasks(node.children)
-				node.children = nil
-				filtered = append(filtered, node)
+				// Hide fully-done epics in active view
 				continue
 			case "empty":
 				// Empty epics are shown as-is
@@ -199,15 +254,27 @@ type taskStats struct {
 	ready      int
 	inProgress int
 	blocked    int
+	errors     int
 	done       int
 	canceled   int
 	total      int
 }
 
-func computeStats(graph *Graph) taskStats {
+type summaryBucket int
+
+const (
+	summaryReady summaryBucket = iota
+	summaryInProgress
+	summaryBlocked
+	summaryError
+	summaryDone
+	summaryCanceled
+)
+
+func computeStatsForTasks(tasks []*Task, graph *Graph) taskStats {
 	var stats taskStats
-	for _, task := range graph.Tasks {
-		if task.IsEpic {
+	for _, task := range tasks {
+		if task == nil || task.IsEpic {
 			continue
 		}
 		stats.total++
@@ -216,8 +283,12 @@ func computeStats(graph *Graph) taskStats {
 			stats.done++
 		case stateCanceled:
 			stats.canceled++
+		case stateError:
+			stats.errors++
 		case stateDoing:
 			stats.inProgress++
+		case stateBlocked:
+			stats.blocked++
 		case stateTodo:
 			if isReady(task, graph) {
 				stats.ready++
@@ -231,46 +302,57 @@ func computeStats(graph *Graph) taskStats {
 	return stats
 }
 
-func renderSummary(w io.Writer, stats taskStats, useColor bool) {
-	if stats.total == 0 {
-		return
-	}
-	fmt.Fprintln(w)
-
+func renderSummary(w io.Writer, stats taskStats, useColor bool, buckets []summaryBucket, addSpacing bool) {
 	var parts []string
 
-	if stats.ready > 0 {
-		part := fmt.Sprintf("%d ready", stats.ready)
+	for _, bucket := range buckets {
+		var (
+			count int
+			label string
+			color string
+		)
+		switch bucket {
+		case summaryReady:
+			count = stats.ready
+			label = "ready"
+			color = colorYellow
+		case summaryInProgress:
+			count = stats.inProgress
+			label = "in progress"
+			color = colorCyan
+		case summaryBlocked:
+			count = stats.blocked
+			label = "blocked"
+			color = colorDim
+		case summaryError:
+			count = stats.errors
+			label = "error"
+			color = colorRed
+		case summaryDone:
+			count = stats.done
+			label = "done"
+			color = colorGreen
+		case summaryCanceled:
+			count = stats.canceled
+			label = "canceled"
+			color = colorDim
+		}
+		if count <= 0 {
+			continue
+		}
+		part := fmt.Sprintf("%d %s", count, label)
 		if useColor {
-			part = colorYellow + part + colorReset
+			part = color + part + colorReset
 		}
 		parts = append(parts, part)
 	}
 
-	if stats.inProgress > 0 {
-		part := fmt.Sprintf("%d in progress", stats.inProgress)
-		if useColor {
-			part = colorCyan + part + colorReset
-		}
-		parts = append(parts, part)
+	if len(parts) == 0 {
+		return
 	}
-
-	if stats.blocked > 0 {
-		part := fmt.Sprintf("%d blocked", stats.blocked)
-		if useColor {
-			part = colorDim + part + colorReset
-		}
-		parts = append(parts, part)
+	if addSpacing {
+		fmt.Fprintln(w)
 	}
-
-	if stats.done > 0 {
-		part := fmt.Sprintf("%d done", stats.done)
-		if useColor {
-			part = colorGreen + part + colorReset
-		}
-		parts = append(parts, part)
-	}
-
 	fmt.Fprintln(w, strings.Join(parts, " · "))
 }
 
@@ -413,7 +495,7 @@ func topoSortTasks(tasks []*Task, graph *Graph) []*Task {
 
 // renderNode renders a single node and its children.
 // parentBlockers tracks blockers already shown at a parent level to avoid repetition.
-func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *Graph, repoDir string, useColor bool, parentBlockers map[string]bool, termWidth int) {
+func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot bool, graph *Graph, repoDir string, useColor bool, parentBlockers map[string]bool, termWidth int) {
 	task := node.task
 
 	// Determine connector
@@ -421,12 +503,13 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 	if isLast {
 		connector = "└"
 	}
+	showConnector := !isRoot
 
 	// Handle collapsed (done) epics
 	if node.collapsed && task.IsEpic {
 		title := task.Title
 		countStr := fmt.Sprintf("[%d tasks]", node.collapsedCount)
-		line := formatCollapsedEpicLine(prefix, connector, task.ID, title, countStr, useColor, termWidth)
+		line := formatCollapsedEpicLine(prefix, connector, showConnector, task.ID, title, countStr, useColor, termWidth)
 		fmt.Fprintln(w, line)
 		return
 	}
@@ -471,7 +554,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 	}
 
 	// Format with optional color
-	line := formatTreeLine(prefix, connector, icon, task.ID, title, annotations, blockerAnnotation, task, node.isReady, useColor, termWidth)
+	line := formatTreeLine(prefix, connector, showConnector, icon, task.ID, title, annotations, blockerAnnotation, task, node.isReady, useColor, termWidth)
 	fmt.Fprintln(w, line)
 
 	// Show result file URL on separate line for done tasks
@@ -479,7 +562,9 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 		latest := task.Results[0]
 		fileURL := deriveFileURL(latest.Path, repoDir)
 		resultPrefix := prefix
-		if isLast {
+		if isRoot {
+			resultPrefix += "  "
+		} else if isLast {
 			resultPrefix += "  "
 		} else {
 			resultPrefix += "│ "
@@ -490,7 +575,9 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 
 	// Render children, passing down our blockers so they don't repeat
 	childPrefix := prefix
-	if isLast {
+	if isRoot {
+		childPrefix = ""
+	} else if isLast {
 		childPrefix += "  "
 	} else {
 		childPrefix += "│ "
@@ -506,7 +593,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, graph *
 	}
 
 	for i, child := range node.children {
-		renderNode(w, child, childPrefix, i == len(node.children)-1, graph, repoDir, useColor, childBlockers, termWidth)
+		renderNode(w, child, childPrefix, i == len(node.children)-1, false, graph, repoDir, useColor, childBlockers, termWidth)
 	}
 }
 
@@ -641,7 +728,7 @@ func truncateToWidth(s string, maxWidth int) string {
 
 // formatCollapsedEpicLine formats a done epic as a single collapsed line.
 // Format: ├ Ⓔ  ✓ Epic title [3 tasks]                                    EPICID
-func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useColor bool, termWidth int) string {
+func formatCollapsedEpicLine(prefix, connector string, showConnector bool, id, title, countStr string, useColor bool, termWidth int) string {
 	// Layout contract: ids are right-aligned at idStart.
 	minGap := idMinGap
 	rightMargin := idRightMargin
@@ -652,14 +739,16 @@ func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useC
 	}
 
 	var base strings.Builder
-	if useColor {
-		base.WriteString(colorDim)
-	}
-	base.WriteString(prefix)
-	base.WriteString(connector)
-	base.WriteString(" ")
-	if useColor {
-		base.WriteString(colorReset)
+	if showConnector {
+		if useColor {
+			base.WriteString(colorDim)
+		}
+		base.WriteString(prefix)
+		base.WriteString(connector)
+		base.WriteString(" ")
+		if useColor {
+			base.WriteString(colorReset)
+		}
 	}
 	base.WriteString(iconEpic)
 	base.WriteString("  ")
@@ -722,7 +811,7 @@ func formatCollapsedEpicLine(prefix, connector, id, title, countStr string, useC
 // formatTreeLine formats a tree line with optional color.
 // Visual hierarchy: icon → title → @claimer → [blocker column] → ID (right-aligned)
 // Ensures the line never exceeds termWidth by truncating content as needed.
-func formatTreeLine(prefix, connector, icon, id, title string, annotations []string, blockerAnnotation string, task *Task, isReady bool, useColor bool, termWidth int) string {
+func formatTreeLine(prefix, connector string, showConnector bool, icon, id, title string, annotations []string, blockerAnnotation string, task *Task, isReady bool, useColor bool, termWidth int) string {
 	// Layout contract: ids are right-aligned at idStart.
 	minGap := idMinGap
 	rightMargin := idRightMargin
@@ -747,14 +836,16 @@ func formatTreeLine(prefix, connector, icon, id, title string, annotations []str
 
 	// Build base prefix (tree + icon).
 	var base strings.Builder
-	if useColor {
-		base.WriteString(colorDim)
-	}
-	base.WriteString(prefix)
-	base.WriteString(connector)
-	base.WriteString(" ")
-	if useColor {
-		base.WriteString(colorReset)
+	if showConnector {
+		if useColor {
+			base.WriteString(colorDim)
+		}
+		base.WriteString(prefix)
+		base.WriteString(connector)
+		base.WriteString(" ")
+		if useColor {
+			base.WriteString(colorReset)
+		}
 	}
 	if iconStr != "" {
 		if useColor {

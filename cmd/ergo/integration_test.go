@@ -641,7 +641,11 @@ func TestPrune_LockBusy(t *testing.T) {
 	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		t.Fatalf("failed to acquire lock: %v", err)
 	}
-	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+	defer func() {
+		if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN); err != nil {
+			t.Errorf("failed to release lock: %v", err)
+		}
+	}()
 
 	before := countEventLines(t, dir)
 	_, stderr, code := runErgo(t, dir, "", "prune", "--yes")
@@ -1069,6 +1073,258 @@ func TestListJSONIncludesAllTasks(t *testing.T) {
 	}
 }
 
+func TestListJSONReadyFilters(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Ready task"}`, "new", "task")
+	readyID := strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Done task"}`, "new", "task")
+	doneID := strings.TrimSpace(stdout)
+	runErgo(t, dir, `{"state":"done"}`, "set", doneID)
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Blocked task"}`, "new", "task")
+	blockedID := strings.TrimSpace(stdout)
+	runErgo(t, dir, `{"state":"blocked"}`, "set", blockedID)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--json", "--ready")
+	if code != 0 {
+		t.Fatalf("list --json --ready failed: exit %d", code)
+	}
+
+	var tasks []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &tasks); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	ids := make(map[string]bool)
+	for _, task := range tasks {
+		ids[task["id"].(string)] = true
+	}
+
+	if !ids[readyID] {
+		t.Errorf("expected ready task %s in JSON output", readyID)
+	}
+	if ids[doneID] {
+		t.Errorf("did not expect done task %s in JSON output", doneID)
+	}
+	if ids[blockedID] {
+		t.Errorf("did not expect blocked task %s in JSON output", blockedID)
+	}
+}
+
+func TestListJSONEpicFilters(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Epic A"}`, "new", "epic")
+	epicA := strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Epic B"}`, "new", "epic")
+	epicB := strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, fmt.Sprintf(`{"title":"A1","epic":"%s"}`, epicA), "new", "task")
+	taskA1 := strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, fmt.Sprintf(`{"title":"B1","epic":"%s"}`, epicB), "new", "task")
+	taskB1 := strings.TrimSpace(stdout)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--json", "--epic", epicA)
+	if code != 0 {
+		t.Fatalf("list --json --epic failed: exit %d", code)
+	}
+
+	var tasks []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &tasks); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	ids := make(map[string]bool)
+	for _, task := range tasks {
+		ids[task["id"].(string)] = true
+	}
+
+	if !ids[taskA1] {
+		t.Errorf("expected epic A task %s in JSON output", taskA1)
+	}
+	if ids[taskB1] {
+		t.Errorf("did not expect epic B task %s in JSON output", taskB1)
+	}
+}
+
+func TestListJSONEpicsOnly(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Epic A"}`, "new", "epic")
+	epicA := strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Epic B"}`, "new", "epic")
+	epicB := strings.TrimSpace(stdout)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--json", "--epics")
+	if code != 0 {
+		t.Fatalf("list --json --epics failed: exit %d", code)
+	}
+
+	var items []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &items); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	ids := make(map[string]bool)
+	for _, item := range items {
+		ids[item["id"].(string)] = true
+		if item["title"] == "" {
+			t.Errorf("expected epic title to be present in JSON output")
+		}
+		if kind, ok := item["kind"]; ok && kind != "epic" {
+			t.Errorf("expected kind=epic, got: %v", kind)
+		}
+	}
+
+	if !ids[epicA] || !ids[epicB] {
+		t.Errorf("expected both epics in JSON output, got ids: %v", ids)
+	}
+}
+
+func TestListJSONConflictingFlags(t *testing.T) {
+	dir := setupErgo(t)
+
+	_, stderr, code := runErgo(t, dir, "", "list", "--json", "--ready", "--all")
+	if code == 0 {
+		t.Fatalf("expected error for conflicting --ready and --all with --json")
+	}
+	if !strings.Contains(stderr, "conflicting flags: --ready and --all") {
+		t.Errorf("expected conflict error, got: %s", stderr)
+	}
+}
+
+func TestListNoTasksEmptyState(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, "", "list")
+	if code != 0 {
+		t.Fatalf("list failed: exit %d", code)
+	}
+	if !strings.Contains(stdout, "No tasks.") {
+		t.Errorf("expected no tasks message, got: %s", stdout)
+	}
+	if strings.Contains(stdout, "ready") || strings.Contains(stdout, "blocked") || strings.Contains(stdout, "done") {
+		t.Errorf("expected no summary when no tasks, got: %s", stdout)
+	}
+}
+
+func TestListReadyBlockedByDepsCountsAsBlocked(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Blocker"}`, "new", "task")
+	blockerID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, "", "claim", blockerID, "--agent", "test@local")
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Blocked by dep"}`, "new", "task")
+	blockedID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, "", "dep", blockedID, blockerID)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--ready")
+	if code != 0 {
+		t.Fatalf("list --ready failed: exit %d", code)
+	}
+	if !strings.Contains(stdout, "No ready tasks.") {
+		t.Fatalf("expected no ready tasks message, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "1 in progress") {
+		t.Errorf("expected in progress count for blocker, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "1 blocked") {
+		t.Errorf("expected blocked count for unmet deps, got: %s", stdout)
+	}
+}
+
+func TestListSummaryIncludesErrorBucket(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Error task"}`, "new", "task")
+	errorID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, "", "claim", errorID, "--agent", "test@local")
+	_, _, _ = runErgo(t, dir, `{"state":"error"}`, "set", errorID)
+
+	stdout, _, code := runErgo(t, dir, "", "list")
+	if code != 0 {
+		t.Fatalf("list failed: exit %d", code)
+	}
+	if !strings.Contains(stdout, "1 error") {
+		t.Errorf("expected error bucket in summary, got: %s", stdout)
+	}
+}
+
+func TestListEpicDoneTasksNotHidden(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Epic"}`, "new", "epic")
+	epicID := strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, fmt.Sprintf(`{"title":"Done","epic":"%s"}`, epicID), "new", "task")
+	doneID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, `{"state":"done"}`, "set", doneID)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--epic", epicID)
+	if code != 0 {
+		t.Fatalf("list --epic failed: exit %d", code)
+	}
+	if !strings.Contains(stdout, doneID) {
+		t.Errorf("expected done task %s in epic output, got: %s", doneID, stdout)
+	}
+	if strings.Contains(stdout, "No tasks in this epic.") {
+		t.Errorf("did not expect empty message when epic has tasks, got: %s", stdout)
+	}
+}
+
+func TestListEpicsNoEpicsOnlyMessage(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--epics")
+	if code != 0 {
+		t.Fatalf("list --epics failed: exit %d", code)
+	}
+	if strings.TrimSpace(stdout) != "No epics." {
+		t.Errorf("expected only no epics message, got: %s", stdout)
+	}
+}
+
+func TestListJSONEpicsEmptyArray(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--json", "--epics")
+	if code != 0 {
+		t.Fatalf("list --json --epics failed: exit %d", code)
+	}
+	var items []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &items); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("expected empty array for no epics, got %d", len(items))
+	}
+}
+
+func TestListJSONEpicInvalidReturnsEmpty(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, stderr, code := runErgo(t, dir, "", "list", "--json", "--epic", "ZZZZZZ")
+	if code != 0 {
+		t.Fatalf("expected success for invalid epic ID in JSON mode, got exit %d", code)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Errorf("expected no stderr output, got: %s", stderr)
+	}
+	var items []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &items); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("expected empty array for invalid epic ID, got %d", len(items))
+	}
+}
+
 // TestListReadyExcludesCompletedTasks verifies --ready hides done/canceled tasks in human output.
 func TestListReadyExcludesCompletedTasks(t *testing.T) {
 	dir := setupErgo(t)
@@ -1090,5 +1346,273 @@ func TestListReadyExcludesCompletedTasks(t *testing.T) {
 	}
 	if strings.Contains(stdout, doneID) {
 		t.Errorf("did not expect done task %s in output", doneID)
+	}
+}
+
+func TestListEpicFilterHuman(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Epic A"}`, "new", "epic")
+	epicA := strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Epic B"}`, "new", "epic")
+	epicB := strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, fmt.Sprintf(`{"title":"A1","epic":"%s"}`, epicA), "new", "task")
+	taskA1 := strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, fmt.Sprintf(`{"title":"A2","epic":"%s"}`, epicA), "new", "task")
+	taskA2 := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, `{"state":"done"}`, "set", taskA2)
+
+	stdout, _, _ = runErgo(t, dir, fmt.Sprintf(`{"title":"B1","epic":"%s"}`, epicB), "new", "task")
+	taskB1 := strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Orphan"}`, "new", "task")
+	orphan := strings.TrimSpace(stdout)
+
+	stdout, stderr, code := runErgo(t, dir, "", "list", "--epic", epicA)
+	if code != 0 {
+		t.Fatalf("list --epic failed: exit %d", code)
+	}
+	if !strings.Contains(stdout, epicA) {
+		t.Errorf("expected epic %s in output", epicA)
+	}
+	if !strings.Contains(stdout, taskA1) || !strings.Contains(stdout, taskA2) {
+		t.Errorf("expected epic A tasks in output")
+	}
+	if strings.Contains(stdout, epicB) || strings.Contains(stdout, taskB1) {
+		t.Errorf("did not expect epic B in output")
+	}
+	if strings.Contains(stdout, orphan) {
+		t.Errorf("did not expect orphan task in output")
+	}
+	if !strings.Contains(stdout, taskA2) {
+		t.Errorf("expected done epic task %s in output (epic-focused view shows done by default)", taskA2)
+	}
+	if strings.Contains(stdout, "No tasks in this epic.") {
+		t.Errorf("did not expect 'No tasks in this epic.' when epic has tasks")
+	}
+	if !strings.Contains(stderr, "agents: use 'ergo --json list'") {
+		t.Errorf("expected agents hint in stderr, got: %s", stderr)
+	}
+
+	_, stderr, code = runErgo(t, dir, "", "list", "--epic", "ZZZZZZ")
+	if code == 0 {
+		t.Fatalf("expected error for invalid epic ID")
+	}
+	if !strings.Contains(stderr, "no such epic: ZZZZZZ") {
+		t.Errorf("expected invalid epic error, got: %s", stderr)
+	}
+}
+
+func TestListConflictingFlags(t *testing.T) {
+	dir := setupErgo(t)
+
+	_, stderr, code := runErgo(t, dir, "", "list", "--ready", "--all")
+	if code == 0 {
+		t.Fatalf("expected error for conflicting --ready and --all")
+	}
+	if !strings.Contains(stderr, "conflicting flags: --ready and --all") {
+		t.Errorf("expected conflict error, got: %s", stderr)
+	}
+
+	_, stderr, code = runErgo(t, dir, "", "list", "--epics", "--ready")
+	if code == 0 {
+		t.Fatalf("expected error for conflicting --epics and --ready")
+	}
+	if !strings.Contains(stderr, "conflicting flags: --epics and --ready") {
+		t.Errorf("expected conflict error, got: %s", stderr)
+	}
+
+	_, stderr, code = runErgo(t, dir, "", "list", "--epics", "--all")
+	if code == 0 {
+		t.Fatalf("expected error for conflicting --epics and --all")
+	}
+	if !strings.Contains(stderr, "conflicting flags: --epics and --all") {
+		t.Errorf("expected conflict error, got: %s", stderr)
+	}
+
+	_, stderr, code = runErgo(t, dir, "", "list", "--epics", "--epic", "ABCDEF")
+	if code == 0 {
+		t.Fatalf("expected error for conflicting --epics and --epic")
+	}
+	if !strings.Contains(stderr, "conflicting flags: --epics and --epic") {
+		t.Errorf("expected conflict error, got: %s", stderr)
+	}
+}
+
+func TestListReadyEmptyStateWithContext(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Doing task"}`, "new", "task")
+	doingID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, "", "claim", doingID, "--agent", "test@local")
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Blocked task"}`, "new", "task")
+	blockedID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, `{"state":"blocked"}`, "set", blockedID)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--ready")
+	if code != 0 {
+		t.Fatalf("list --ready failed: exit %d", code)
+	}
+	if !strings.Contains(stdout, "No ready tasks.") {
+		t.Fatalf("expected empty ready message, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "1 in progress") {
+		t.Errorf("expected contextual in progress count, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "1 blocked") {
+		t.Errorf("expected contextual blocked count, got: %s", stdout)
+	}
+}
+
+func TestListNoActiveTasksSummary(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Done task"}`, "new", "task")
+	doneID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, `{"state":"done"}`, "set", doneID)
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Canceled task"}`, "new", "task")
+	canceledID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, `{"state":"canceled"}`, "set", canceledID)
+
+	stdout, _, code := runErgo(t, dir, "", "list")
+	if code != 0 {
+		t.Fatalf("list failed: exit %d", code)
+	}
+	if !strings.Contains(stdout, "No active tasks.") {
+		t.Fatalf("expected no active tasks message, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "1 done") || !strings.Contains(stdout, "1 canceled") {
+		t.Errorf("expected done/canceled summary, got: %s", stdout)
+	}
+}
+
+func TestListAllSummaryIncludesTerminalStates(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Ready task"}`, "new", "task")
+	_ = strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"In progress task"}`, "new", "task")
+	doingID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, "", "claim", doingID, "--agent", "test@local")
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Blocked task"}`, "new", "task")
+	blockedID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, `{"state":"blocked"}`, "set", blockedID)
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Error task"}`, "new", "task")
+	errorID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, "", "claim", errorID, "--agent", "test@local")
+	_, _, _ = runErgo(t, dir, `{"state":"error"}`, "set", errorID)
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Done task"}`, "new", "task")
+	doneID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, `{"state":"done"}`, "set", doneID)
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Canceled task"}`, "new", "task")
+	canceledID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, `{"state":"canceled"}`, "set", canceledID)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--all")
+	if code != 0 {
+		t.Fatalf("list --all failed: exit %d", code)
+	}
+	for _, needle := range []string{"1 ready", "1 in progress", "1 blocked", "1 error", "1 done", "1 canceled"} {
+		if !strings.Contains(stdout, needle) {
+			t.Errorf("expected summary to include %q, got: %s", needle, stdout)
+		}
+	}
+}
+
+func TestListEpicReadyEmptyState(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Epic"}`, "new", "epic")
+	epicID := strings.TrimSpace(stdout)
+
+	stdout, _, _ = runErgo(t, dir, fmt.Sprintf(`{"title":"Doing","epic":"%s"}`, epicID), "new", "task")
+	doingID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, "", "claim", doingID, "--agent", "test@local")
+
+	stdout, _, _ = runErgo(t, dir, fmt.Sprintf(`{"title":"Blocked","epic":"%s"}`, epicID), "new", "task")
+	blockedID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, `{"state":"blocked"}`, "set", blockedID)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--epic", epicID, "--ready")
+	if code != 0 {
+		t.Fatalf("list --epic --ready failed: exit %d", code)
+	}
+	if !strings.Contains(stdout, epicID) {
+		t.Errorf("expected epic header in output, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "No ready tasks in this epic.") {
+		t.Errorf("expected epic ready empty message, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "1 in progress") || !strings.Contains(stdout, "1 blocked") {
+		t.Errorf("expected epic contextual counts, got: %s", stdout)
+	}
+}
+
+func TestListEpicsNoEpicsMessage(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--epics")
+	if code != 0 {
+		t.Fatalf("list --epics failed: exit %d", code)
+	}
+	if !strings.Contains(stdout, "No epics.") {
+		t.Errorf("expected no epics message, got: %s", stdout)
+	}
+}
+
+func TestListEpicsRendersLikeListRows(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Epic A"}`, "new", "epic")
+	epicA := strings.TrimSpace(stdout)
+
+	stdout, _, code := runErgo(t, dir, "", "list", "--epics")
+	if code != 0 {
+		t.Fatalf("list --epics failed: exit %d", code)
+	}
+	if !strings.Contains(stdout, "Ⓔ") {
+		t.Errorf("expected epic icon in output, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, epicA) {
+		t.Errorf("expected epic ID %s in output, got: %s", epicA, stdout)
+	}
+	if strings.Contains(stdout, "  "+epicA+"  ") {
+		t.Errorf("expected aligned list-row format (not raw 'ID  Title' lines), got: %s", stdout)
+	}
+}
+
+func TestListQuietSuppressesSummaryAndHints(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, _ := runErgo(t, dir, `{"title":"Doing task"}`, "new", "task")
+	doingID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, "", "claim", doingID, "--agent", "test@local")
+
+	stdout, _, _ = runErgo(t, dir, `{"title":"Blocked task"}`, "new", "task")
+	blockedID := strings.TrimSpace(stdout)
+	_, _, _ = runErgo(t, dir, `{"state":"blocked"}`, "set", blockedID)
+
+	stdout, stderr, code := runErgo(t, dir, "", "list", "--ready", "--quiet")
+	if code != 0 {
+		t.Fatalf("list --ready --quiet failed: exit %d", code)
+	}
+	if !strings.Contains(stdout, "No ready tasks.") {
+		t.Errorf("expected empty message in quiet mode, got: %s", stdout)
+	}
+	if strings.Contains(stdout, "in progress") || strings.Contains(stdout, "blocked") {
+		t.Errorf("expected summary suppressed in quiet mode, got: %s", stdout)
+	}
+	if strings.TrimSpace(stderr) != "" {
+		t.Errorf("expected hints suppressed in quiet mode, got: %s", stderr)
 	}
 }

@@ -551,6 +551,21 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	showEpics := listOpts.ShowEpics
 	showAll := listOpts.ShowAll
 
+	if readyOnly && showAll {
+		return errors.New("conflicting flags: --ready and --all")
+	}
+	if showEpics {
+		if readyOnly {
+			return errors.New("conflicting flags: --epics and --ready")
+		}
+		if showAll {
+			return errors.New("conflicting flags: --epics and --all")
+		}
+		if epicID != "" {
+			return errors.New("conflicting flags: --epics and --epic")
+		}
+	}
+
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
@@ -616,20 +631,119 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 
 	// If --epics only, show simple epic list instead of tree
 	if showEpics && epicID == "" && !readyOnly {
+		useColor := stdoutIsTTY()
+		termWidth := getTerminalWidth()
 		for _, epic := range epics {
-			fmt.Printf("%s  %s\n", epic.ID, epic.Title)
+			icon := stateIcon(epic, false)
+			line := formatTreeLine("", "", false, icon, epic.ID, epic.Title, nil, "", epic, false, useColor, termWidth)
+			fmt.Fprintln(os.Stdout, line)
 		}
 		if len(epics) == 0 {
-			fmt.Println("no epics")
+			fmt.Println("No epics.")
 		}
 		return nil
 	}
 
 	// Tree view (human-friendly hierarchical output)
-	useColor := stdoutIsTTY()
-	renderTreeView(os.Stdout, graph, repoDir, useColor, showAll, readyOnly)
+	if epicID != "" {
+		epic := graph.Tasks[epicID]
+		if epic == nil || !epic.IsEpic {
+			return fmt.Errorf("no such epic: %s", epicID)
+		}
+	}
 
-	return nil
+	useColor := stdoutIsTTY()
+	roots := buildListRoots(graph, showAll, readyOnly, epicID)
+
+	printSummary := func(stats taskStats, buckets []summaryBucket, addSpacing bool) {
+		if opts.Quiet {
+			return
+		}
+		renderSummary(os.Stdout, stats, useColor, buckets, addSpacing)
+	}
+
+	allTasks := collectNonEpicTasks(graph)
+	activeTasks := filterActiveTasks(allTasks)
+	readyTasks := filterReadyTasks(allTasks, graph)
+
+	if epicID != "" {
+		epicChildren := collectEpicChildren(epicID, graph)
+		epicChildrenReady := filterReadyTasks(epicChildren, graph)
+
+		renderTreeView(os.Stdout, roots, graph, repoDir, useColor)
+
+		switch {
+		case readyOnly:
+			if len(epicChildren) == 0 {
+				fmt.Fprintln(os.Stdout, "No tasks in this epic.")
+				return nil
+			}
+			if len(epicChildrenReady) == 0 {
+				fmt.Fprintln(os.Stdout, "No ready tasks in this epic.")
+				stats := computeStatsForTasks(epicChildren, graph)
+				printSummary(stats, []summaryBucket{summaryInProgress, summaryBlocked, summaryError}, false)
+				return nil
+			}
+			stats := computeStatsForTasks(epicChildrenReady, graph)
+			printSummary(stats, []summaryBucket{summaryReady}, true)
+			return nil
+		default:
+			if len(epicChildren) == 0 {
+				fmt.Fprintln(os.Stdout, "No tasks in this epic.")
+				return nil
+			}
+			// Epic-focused view includes done/canceled by default.
+			stats := computeStatsForTasks(epicChildren, graph)
+			printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryError, summaryDone, summaryCanceled}, true)
+			return nil
+		}
+	}
+
+	switch {
+	case readyOnly:
+		if len(allTasks) == 0 {
+			fmt.Fprintln(os.Stdout, "No tasks.")
+			return nil
+		}
+		if len(readyTasks) == 0 {
+			fmt.Fprintln(os.Stdout, "No ready tasks.")
+			stats := computeStatsForTasks(activeTasks, graph)
+			printSummary(stats, []summaryBucket{summaryInProgress, summaryBlocked, summaryError}, false)
+			return nil
+		}
+		renderTreeView(os.Stdout, roots, graph, repoDir, useColor)
+		stats := computeStatsForTasks(readyTasks, graph)
+		printSummary(stats, []summaryBucket{summaryReady}, true)
+		return nil
+	case showAll:
+		if len(allTasks) == 0 && len(roots) == 0 {
+			fmt.Fprintln(os.Stdout, "No tasks.")
+			return nil
+		}
+		renderTreeView(os.Stdout, roots, graph, repoDir, useColor)
+		stats := computeStatsForTasks(allTasks, graph)
+		printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryError, summaryDone, summaryCanceled}, true)
+		return nil
+	default:
+		if len(allTasks) == 0 {
+			if len(roots) == 0 {
+				fmt.Fprintln(os.Stdout, "No tasks.")
+				return nil
+			}
+			renderTreeView(os.Stdout, roots, graph, repoDir, useColor)
+			return nil
+		}
+		if len(activeTasks) == 0 {
+			fmt.Fprintln(os.Stdout, "No active tasks.")
+			stats := computeStatsForTasks(allTasks, graph)
+			printSummary(stats, []summaryBucket{summaryDone, summaryCanceled}, false)
+			return nil
+		}
+		renderTreeView(os.Stdout, roots, graph, repoDir, useColor)
+		stats := computeStatsForTasks(activeTasks, graph)
+		printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryError}, true)
+		return nil
+	}
 }
 
 // collectEpicChildren returns all tasks belonging to the given epic, sorted by ID.
@@ -644,6 +758,36 @@ func collectEpicChildren(epicID string, graph *Graph) []*Task {
 		return children[i].ID < children[j].ID
 	})
 	return children
+}
+
+func collectNonEpicTasks(graph *Graph) []*Task {
+	var tasks []*Task
+	for _, task := range graph.Tasks {
+		if !isEpic(task) {
+			tasks = append(tasks, task)
+		}
+	}
+	return tasks
+}
+
+func filterActiveTasks(tasks []*Task) []*Task {
+	var active []*Task
+	for _, task := range tasks {
+		if task.State != stateDone && task.State != stateCanceled {
+			active = append(active, task)
+		}
+	}
+	return active
+}
+
+func filterReadyTasks(tasks []*Task, graph *Graph) []*Task {
+	var ready []*Task
+	for _, task := range tasks {
+		if isReady(task, graph) {
+			ready = append(ready, task)
+		}
+	}
+	return ready
 }
 
 // buildTaskShowOutput creates a taskShowOutput struct for JSON serialization.

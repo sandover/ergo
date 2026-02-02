@@ -20,6 +20,75 @@ This spec covers:
 - Failures return a non-zero exit code and print an informative error to stderr.
 - When `--json` is set, commands should avoid emitting non-JSON noise on stdout.
 
+### `list` (human output)
+
+These rules govern the human-oriented output of `ergo list` when `--json` is not set.
+
+Root rows (no epic):
+- Root task rows are rendered as plain list rows (no tree/connector glyphs in the left margin).
+- Root epic rows are rendered as plain list rows (no tree/connector glyphs in the left margin).
+- Root rows start with the state/epic icon (or other explicit root prefix), then the title, with the ID right-aligned.
+- Root rows must not include `├`, `└`, or `│` in their left margin/prefix area.
+
+Hierarchy:
+- Child tasks under an epic are rendered with tree/connector glyphs (`├`, `└`, `│`) to indicate membership and ordering.
+- Child indentation must make epic membership unambiguous (no child line can be mistaken for a root row).
+
+Result attachment lines:
+- Result lines (`→ file:///...`) are visually associated with their task.
+- Root task result lines must not imply hierarchy to an unrelated header or epic.
+- Child task result lines must maintain the same epic association as their parent task.
+
+Summary line:
+- Summary scope always matches the view that was rendered.
+- Summary buckets:
+  - Default (`ergo list`): `ready · in progress · blocked · error` (active tasks only).
+  - `--ready`: `N ready` only.
+  - `--all`: `ready · in progress · blocked · error · done · canceled`.
+  - `--epic <id>`: same buckets, scoped to that epic’s children.
+- `blocked` includes explicit `blocked` plus `todo` with unmet deps; `error` is counted separately.
+- Summaries are suppressed when `--quiet` is set.
+
+Empty states:
+- Never silently empty: if the selected view renders zero tasks, print a full-sentence empty-state message.
+- Exact empty-state strings:
+  - `No tasks.`
+  - `No active tasks.`
+  - `No ready tasks.`
+  - `No tasks in this epic.`
+  - `No ready tasks in this epic.`
+  - `No epics.`
+- Contextual summaries may be printed after empty-state messages to explain why the view is empty:
+  - `No active tasks.` → `N done · M canceled`.
+  - `No ready tasks.` → `M in progress · K blocked · E error`.
+  - Epic-scoped equivalents apply for `--epic <id>`.
+- In `--quiet` mode, the primary empty-state message still prints; summaries and hints are suppressed.
+
+Mixed-mode layout:
+- When both root tasks and epics exist, there is no blank-line separator by default (consult before changing).
+
+Flag conflicts:
+- `--ready` and `--all` are mutually exclusive.
+- `--epics` cannot be combined with `--ready`, `--all`, or `--epic <id>`.
+
+`list --epics` (human output):
+- Epics-only view renders each epic as a root row using the same list visual language (includes `Ⓔ` and right-aligned ID).
+- When there are no epics, print `No epics.`.
+
+#### `list --epic <id>` (human output)
+
+When `--epic <id>` is provided and `--json` is not set:
+- Output is an epic-focused view: show the epic header line plus its child tasks only.
+- Orphan tasks are excluded.
+- The epic header is always shown, even if no children match the current filters.
+- Invalid epic IDs are errors (non-zero exit) with a clear stderr message (e.g., `no such epic: <id>`).
+- By default, epic-focused view shows **all** tasks within the epic (including `done`/`canceled`).
+- `--ready` filters to ready tasks within the epic.
+- `--all` is accepted but redundant in epic-focused view.
+- Explicit epic targeting disables auto-collapse of fully done epics (show the epic line regardless).
+- The stderr hint (`agents: use 'ergo --json list'...`) continues to print for human output.
+- Empty-state messages and summaries follow the rules above, scoped to the epic’s children.
+
 ### `--json` contract
 
 When `--json` is set and a command succeeds:

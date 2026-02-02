@@ -101,7 +101,8 @@ func BenchmarkTombstoneList1000(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		renderTreeView(io.Discard, graph, ".", false, true, false)
+		roots := buildListRoots(graph, true, false, "")
+		renderTreeView(io.Discard, roots, graph, ".", false)
 	}
 }
 

@@ -123,7 +123,7 @@ func TestFilterAndCollapseNodes(t *testing.T) {
 		}
 	})
 
-	t.Run("collapses fully-done epics", func(t *testing.T) {
+	t.Run("hides fully-done epics", func(t *testing.T) {
 		nodes := []*treeNode{
 			{
 				task: &Task{ID: "E1", IsEpic: true},
@@ -137,18 +137,8 @@ func TestFilterAndCollapseNodes(t *testing.T) {
 
 		filtered := filterAndCollapseNodes(nodes)
 
-		if len(filtered) != 1 {
-			t.Fatalf("expected 1 node, got %d", len(filtered))
-		}
-		epic := filtered[0]
-		if !epic.collapsed {
-			t.Error("expected epic to be collapsed")
-		}
-		if epic.collapsedCount != 3 {
-			t.Errorf("expected 3 tasks in collapsed count, got %d", epic.collapsedCount)
-		}
-		if len(epic.children) != 0 {
-			t.Errorf("expected children cleared, got %d", len(epic.children))
+		if len(filtered) != 0 {
+			t.Fatalf("expected fully-done epic to be hidden, got %d nodes", len(filtered))
 		}
 	})
 
@@ -199,32 +189,90 @@ func TestCountTasks(t *testing.T) {
 	}
 }
 
-// TestRenderCollapsedEpic verifies the collapsed epic rendering format.
-func TestRenderCollapsedEpic(t *testing.T) {
-	// Create an epic with 5 done tasks
+// TestHideDoneEpicsInActiveView verifies done epics are hidden in active view.
+func TestHideDoneEpicsInActiveView(t *testing.T) {
 	graph := &Graph{
 		Tasks: map[string]*Task{
 			"E1": {ID: "E1", IsEpic: true, Title: "My Epic"},
 			"T1": {ID: "T1", EpicID: "E1", State: stateDone},
 			"T2": {ID: "T2", EpicID: "E1", State: stateDone},
-			"T3": {ID: "T3", EpicID: "E1", State: stateDone},
-			"T4": {ID: "T4", EpicID: "E1", State: stateDone},
-			"T5": {ID: "T5", EpicID: "E1", State: stateDone},
 		},
 		Deps: map[string]map[string]struct{}{},
 	}
 
 	var buf bytes.Buffer
-	// showAll=false triggers collapsing of done epics
-	renderTreeView(&buf, graph, "/repo", false, false, false)
+	roots := buildListRoots(graph, false, false, "")
+	renderTreeView(&buf, roots, graph, "/repo", false)
 
 	output := buf.String()
-	// Should show the checkmark icon and task count
-	if !strings.Contains(output, "✓") {
-		t.Error("expected checkmark icon in collapsed epic")
+	if strings.Contains(output, "E1") {
+		t.Errorf("expected done epic to be hidden in active view, got: %s", output)
 	}
-	if !strings.Contains(output, "[5 tasks]") {
-		t.Errorf("expected '[5 tasks]' in output, got: %s", output)
+}
+
+func TestRenderTreeRootRowsNoConnectors(t *testing.T) {
+	graph := &Graph{
+		Tasks: map[string]*Task{
+			"E1": {ID: "E1", IsEpic: true, Title: "Epic"},
+			"T1": {ID: "T1", EpicID: "E1", State: stateTodo, Title: "Child 1"},
+			"T2": {ID: "T2", EpicID: "E1", State: stateDone, Title: "Child 2"},
+			"O1": {
+				ID:    "O1",
+				State: stateDone,
+				Title: "Orphan",
+				Results: []Result{{
+					Path:    "docs/root.md",
+					Summary: "root result",
+				}},
+			},
+		},
+		Deps: map[string]map[string]struct{}{},
+	}
+
+	var buf bytes.Buffer
+	roots := buildListRoots(graph, false, false, "")
+	renderTreeView(&buf, roots, graph, "/repo", false)
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	findLine := func(needle string) string {
+		for _, line := range lines {
+			if strings.Contains(line, needle) {
+				return line
+			}
+		}
+		return ""
+	}
+
+	epicLine := findLine("E1")
+	if epicLine == "" {
+		t.Fatalf("expected epic line for E1")
+	}
+	if strings.HasPrefix(epicLine, "├") || strings.HasPrefix(epicLine, "└") || strings.HasPrefix(epicLine, "│") {
+		t.Errorf("expected root epic line to avoid connectors, got: %q", epicLine)
+	}
+
+	orphanLine := findLine("O1")
+	if orphanLine == "" {
+		t.Fatalf("expected root task line for O1")
+	}
+	if strings.HasPrefix(orphanLine, "├") || strings.HasPrefix(orphanLine, "└") || strings.HasPrefix(orphanLine, "│") {
+		t.Errorf("expected root task line to avoid connectors, got: %q", orphanLine)
+	}
+
+	childLine := findLine("T1")
+	if childLine == "" {
+		t.Fatalf("expected child task line for T1")
+	}
+	if !(strings.HasPrefix(childLine, "├") || strings.HasPrefix(childLine, "└")) {
+		t.Errorf("expected child task line to start with connector, got: %q", childLine)
+	}
+
+	resultLine := findLine("file:///repo/docs/root.md")
+	if resultLine == "" {
+		t.Fatalf("expected result line for root task")
+	}
+	if strings.HasPrefix(resultLine, "│") {
+		t.Errorf("expected root result line to avoid connector, got: %q", resultLine)
 	}
 }
 
@@ -321,6 +369,7 @@ func TestFormatTreeLineTruncation(t *testing.T) {
 	line := formatTreeLine(
 		"",                             // prefix
 		"├",                            // connector
+		true,                           // showConnector
 		"◐",                            // icon
 		task.ID,                        // id
 		"Test task",                    // title
