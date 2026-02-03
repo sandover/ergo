@@ -1616,7 +1616,7 @@ func TestListEpicFilterHuman(t *testing.T) {
 	if strings.Contains(stdout, "No tasks in this epic.") {
 		t.Errorf("did not expect 'No tasks in this epic.' when epic has tasks")
 	}
-	if !strings.Contains(stderr, "agents: use 'ergo --json list'") {
+	if !strings.Contains(stderr, "Coding agents should call 'ergo --json list'") {
 		t.Errorf("expected agents hint in stderr, got: %s", stderr)
 	}
 

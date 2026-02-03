@@ -788,7 +788,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	}
 
 	if !opts.Quiet {
-		fmt.Fprintln(os.Stderr, "agents: use 'ergo --json list' for structured output")
+		fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json list' instead for structured output.")
 	}
 
 	// If --epics only, show simple epic list instead of tree
@@ -1155,6 +1155,9 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 			})
 		}
 		return writeJSON(os.Stdout, output)
+	}
+	if !opts.Quiet {
+		fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json show <id>' instead for structured output.")
 	}
 	if short {
 		epic := task.EpicID
