@@ -7,12 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No changes yet._
+
+## [0.9.2] - 2026-02-03
+
+### Added
+- `--body-stdin` mode for `new`/`set`: stdin is treated as literal body text; metadata is passed via flags.
+- `claim --json` now includes an additive `reminder` field.
+
 ### Changed
 - **BREAKING:** Replace `dep` with `sequence` for dependency ordering.
   - Old: `ergo dep A B` (A depends on B)
   - New: `ergo sequence B A` (B then A; same relationship)
   - New: `ergo sequence A B C` for ordered chains
   - New: `ergo sequence rm A B` removes the implied edge
+- `claim` output now includes a reminder: “When you have completed this claimed task, you MUST mark it done.”
+
+### Documentation
+- Align README, `ergo --help`, and `ergo quickstart` with the supported input patterns (JSON stdin, `--body-stdin`, and flags-only when stdin is a TTY).
 
 ## [0.9.1] - 2026-02-02
 
