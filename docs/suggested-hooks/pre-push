@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Purpose: Block pushes that fail CI parity checks.
+# Exports: none.
+# Role: Strong local guardrail for lower-trust agents; enforces tidy/lint/race parity before pushing.
+# Invariants: Does not modify the repo; fails the push when checks fail.
+# Notes: Uses `task ci` as the single source of truth for CI parity.
+
+set -euo pipefail
+
+echo >&2
+echo "# repo invariants" >&2
+echo "# - pre-push runs: task ci" >&2
+echo "# - manuals are the product: internal/ergo/help.txt + internal/ergo/quickstart.txt must match behavior" >&2
+echo "# - plan hygiene: close ergo tasks; commit .ergo/events.jsonl when it changes" >&2
+echo "# - keep changes explicit; avoid hidden state unless secret" >&2
+echo >&2
+
+task ci
+
+echo "ok: task ci passed; safe to push" >&2
+

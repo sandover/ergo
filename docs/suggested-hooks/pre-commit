@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Purpose: Provide a conservative pre-commit gate for untrusted or mixed-trust agents.
 # Exports: none.
-# Role: Local quality gate that formats staged Go files, runs fast checks, and prints reminders.
-# Invariants: Never parses stdin; never commits; fails the commit on fmt/lint/test failures.
+# Role: Local quality gate that formats staged Go files, runs quick tests, and prints actionable reminders.
+# Invariants: Never parses stdin; never commits; fails the commit on formatting/tooling/test failures.
 # Notes: This hook is intentionally repo-aware (Taskfile/go tooling) and prints warnings for doc drift.
 
 set -euo pipefail
@@ -13,7 +13,7 @@ banner_marker="# commit checklist"
 
 echo >&2
 echo "# repo invariants" >&2
-echo "# - pre-push should run: task ci" >&2
+echo "# - pre-push runs: task ci" >&2
 echo "# - manuals are the product: internal/ergo/help.txt + internal/ergo/quickstart.txt must match behavior" >&2
 echo "# - plan hygiene: close ergo tasks; commit .ergo/events.jsonl when it changes" >&2
 echo "# - keep changes explicit; avoid hidden state unless secret" >&2
@@ -28,15 +28,17 @@ if [[ -f "$banner_path" ]]; then
 fi
 echo >&2
 
+# Staged file inventory (used for decisions and warnings below).
+mapfile -t staged_files < <(git diff --cached --name-only --diff-filter=ACM || true)
+
 # Format only staged Go files, then restage them.
-mapfile -t staged_go_files < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\\.go$' || true)
+mapfile -t staged_go_files < <(printf '%s\n' "${staged_files[@]}" | grep -E '\\.go$' || true)
 if (( ${#staged_go_files[@]} > 0 )); then
   gofmt -w "${staged_go_files[@]}"
   git add -- "${staged_go_files[@]}"
 fi
 
 # Warn (do not fail) if likely CLI changes are staged without updating the agent manuals.
-mapfile -t staged_files < <(git diff --cached --name-only --diff-filter=ACM || true)
 has_cli_changes=false
 has_manual_changes=false
 for f in "${staged_files[@]}"; do
@@ -57,7 +59,7 @@ if [[ "$has_cli_changes" == "true" && "$has_manual_changes" == "false" ]]; then
   echo "  ergo --help" >&2
   echo "  ergo quickstart" >&2
   echo "staged code files (first 10):" >&2
-  printf '%s\n' "${staged_files[@]}" | rg -n '^(cmd/ergo/|internal/ergo/)' | head -n 10 | sed 's/^/  - /' >&2 || true
+  printf '%s\n' "${staged_files[@]}" | grep -E '^(cmd/ergo/|internal/ergo/)' | head -n 10 | sed 's/^/  - /' >&2 || true
 fi
 
 # Warn (do not fail) if ergo tasks/log changed but .ergo/events.jsonl is not staged.
@@ -72,8 +74,15 @@ if [[ -f "$repo_root/.ergo/events.jsonl" ]]; then
   fi
 fi
 
-# Fast parity checks.
-task lint
-go test ./...
+# Quick checks: run unit tests only when Go code/config changed (CI parity lives in pre-push).
+has_go_changes=false
+for f in "${staged_files[@]}"; do
+  case "$f" in
+    *.go|go.mod|go.sum|Taskfile.yml) has_go_changes=true ;;
+  esac
+done
+if [[ "$has_go_changes" == "true" ]]; then
+  go test ./...
+fi
 
-echo "ok: fmt/lint/tests passed; safe to commit" >&2
+echo "ok: pre-commit checks passed; safe to commit" >&2

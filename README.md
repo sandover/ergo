@@ -21,7 +21,7 @@ Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler, soun
 ## Suggested git hooks
 
 This repo includes optional local git hooks to help agents (especially lower-trust ones) keep invariants tight.
-See `docs/suggested-hooks/` for the suggested `pre-commit` and `prepare-commit-msg` hooks.
+See `docs/suggested-hooks/` for the suggested `pre-commit`, `prepare-commit-msg`, and `pre-push` hooks.
 
 ## Features
 
