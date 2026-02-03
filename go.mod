@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/charmbracelet/glamour v0.10.0
+	github.com/creack/pty v1.1.24
 	github.com/mattn/go-runewidth v0.0.16
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/term v0.39.0

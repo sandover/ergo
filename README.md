@@ -82,7 +82,7 @@ ergo show GQUJPG
 
 For most commands, agents read and write JSON to `ergo` via stdin.
 
-For multi-line markdown bodies, prefer `--body-stdin`: stdin becomes the literal body text, and metadata (title/state/epic/claim/results) is passed via flags.
+For multi-line markdown bodies, prefer `--body-stdin`: stdin becomes the literal body text (non-empty), and metadata (title/state/epic/claim/results) is passed via flags.
 
 Agents (and humans) should run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
 

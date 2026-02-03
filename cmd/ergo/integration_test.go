@@ -7,8 +7,10 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +18,9 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
+
+	"github.com/creack/pty"
 )
 
 var ergoBinary string
@@ -59,6 +64,52 @@ func runErgo(t *testing.T, dir string, stdin string, args ...string) (stdout, st
 		exitCode = exitErr.ExitCode()
 	}
 	return outBuf.String(), errBuf.String(), exitCode
+}
+
+func runErgoWithPTY(t *testing.T, dir string, stdin string, args ...string) (stdout, stderr string, exitCode int) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, ergoBinary, args...)
+	cmd.Dir = dir
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		t.Fatalf("failed to start PTY: %v", err)
+	}
+	defer func() {
+		_ = ptmx.Close()
+	}()
+	var outBuf bytes.Buffer
+	done := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(&outBuf, ptmx)
+		close(done)
+	}()
+	if stdin != "" {
+		if _, err := ptmx.WriteString(stdin); err != nil {
+			t.Fatalf("failed to write PTY stdin: %v", err)
+		}
+		if !strings.HasSuffix(stdin, "\n") {
+			if _, err := ptmx.WriteString("\n"); err != nil {
+				t.Fatalf("failed to write PTY newline: %v", err)
+			}
+		}
+	}
+	if _, err := ptmx.Write([]byte{4}); err != nil {
+		t.Fatalf("failed to write PTY EOT: %v", err)
+	}
+	err = cmd.Wait()
+	if ctx.Err() == context.DeadlineExceeded {
+		t.Fatalf("PTY command timed out")
+	}
+	_ = ptmx.Close()
+	<-done
+	exitCode = 0
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		exitCode = exitErr.ExitCode()
+	}
+	return outBuf.String(), "", exitCode
 }
 
 // setupErgo creates a temp directory and initializes .ergo/
@@ -305,6 +356,52 @@ func TestSet_BodyStdin_UpdatesBody(t *testing.T) {
 	}
 	if task["state"] != "done" {
 		t.Errorf("expected state=done, got %v", task["state"])
+	}
+}
+
+func TestSet_BodyStdin_RejectsEmptyBody(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+
+	_, stderr, code := runErgo(t, dir, "\n", "set", taskID, "--body-stdin")
+	if code != 1 {
+		t.Fatalf("expected exit 1, got %d", code)
+	}
+	if !strings.Contains(stderr, "requires non-empty body") {
+		t.Fatalf("expected empty-body error, got stderr=%q", stderr)
+	}
+}
+
+func TestSet_BodyStdin_TTYInput(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+
+	updatedBody := "Updated via TTY"
+	stdout, stderr, code := runErgoWithPTY(t, dir, updatedBody, "set", taskID, "--body-stdin")
+	if code != 0 {
+		t.Fatalf("set --body-stdin TTY failed: exit %d (stderr=%q, stdout=%q)", code, stderr, stdout)
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+	var task map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
+		t.Fatalf("failed to parse show output: %v", err)
+	}
+	if task["body"] != updatedBody+"\n" {
+		t.Errorf("expected body=%q, got %q", updatedBody+"\n", task["body"])
 	}
 }
 

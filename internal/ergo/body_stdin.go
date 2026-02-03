@@ -2,7 +2,7 @@
 // Exports: readBodyFromStdinOrEmpty, validateBodyStdinExclusions, buildFlagUpdates.
 // Role: Shared glue used by `new`/`set` command handlers for the body-stdin input mode.
 // Invariants: `--body-stdin` forbids `--body`; stdin is never parsed as JSON in this mode.
-// Notes: When stdin is a TTY (not piped), body is treated as empty to avoid blocking reads.
+// Notes: Reads stdin regardless of TTY/piped; empty input returns an empty body.
 package ergo
 
 import (
@@ -13,9 +13,6 @@ import (
 )
 
 func readBodyFromStdinOrEmpty() (string, error) {
-	if !stdinIsPiped() {
-		return "", nil
-	}
 	b, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return "", err

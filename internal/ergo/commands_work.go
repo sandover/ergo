@@ -38,6 +38,9 @@ func RunSet(id string, opts GlobalOptions) error {
 		if err != nil {
 			return err
 		}
+		if strings.TrimSpace(body) == "" {
+			return errors.New("set --body-stdin requires non-empty body")
+		}
 		updates := buildFlagUpdates(opts)
 		updates["body"] = body
 

@@ -53,7 +53,7 @@ Atomic create-and-claim (preferred for dynamic tasking):
 
 {{HEADER}}3b. CREATE WORK (body from stdin){{RESET}}
 
-Use `--body-stdin` when the body is multi-line markdown. In this mode, stdin is the literal body text and metadata is passed via flags.
+Use `--body-stdin` when the body is multi-line markdown. In this mode, stdin is the literal body text (non-empty) and metadata is passed via flags.
 
 Create a task with a multi-line body:
   {{CMD}}printf '%s\n' '## Goal' '- Do the thing' '' '## Acceptance criteria' '- Thing is done' | ergo new task --body-stdin --title "Do the thing"{{RESET}}

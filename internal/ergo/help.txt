@@ -40,7 +40,7 @@
   -V, --version                           print version
 
 {{HEADER}}COMMON FLAGS (new/set){{RESET}}
-  --body-stdin                            read body from stdin (raw text); other fields via flags
+  --body-stdin                            read body from stdin (raw text, non-empty); other fields via flags
   --title <text>                          set title (required for new * with --body-stdin)
   --body <text>                           inline body text (mutually exclusive with --body-stdin)
   --epic <id>                             assign to epic ("" unassign only via JSON)

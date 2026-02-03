@@ -20,7 +20,7 @@ For `new epic`, `new task`, and `set`:
 
 - Default input mode reads a single JSON object from stdin (entire stdin; trailing newlines are allowed).
 - When stdin is a TTY (not piped), these commands may be driven entirely by flags (e.g. `--title`, `--body`, `--state`) without any stdin.
-- With `--body-stdin`, stdin is treated as literal body text and is **not** parsed as JSON.
+- With `--body-stdin`, stdin is treated as literal body text (non-empty) and is **not** parsed as JSON.
   - In this mode, the body comes from stdin and other updates come from flags (e.g. `--title`, `--state`, `--epic`, `--claim`, results).
   - `--body` and `--body-stdin` are mutually exclusive.
   - `new epic --body-stdin` and `new task --body-stdin` require `--title`.
