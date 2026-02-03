@@ -37,7 +37,7 @@ Common variants:
 
 {{HEADER}}3. CREATE WORK (JSON stdin){{RESET}}
 
-Use `printf '%s'` for reliable JSON delivery. All fields are strings.
+Use `printf '%s'` for reliable JSON delivery. Heredocs (`<<'JSON'`) can work too, but some terminals/tooling don’t support them reliably. All fields are strings.
 Unknown keys are rejected (with suggestions for close matches).
 
 Create a task:

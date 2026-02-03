@@ -75,7 +75,9 @@ ergo show GQUJPG
 
 ## Usage (Agents)
 
-For most commands, agents read and write JSON to `ergo` via stdin. For multi-line input, the `printf` style is robust even in unusual terminals like VSCode & Cursor.
+For most commands, agents read and write JSON to `ergo` via stdin.
+
+For multi-line markdown bodies, prefer `--body-stdin`: stdin becomes the literal body text, and metadata (title/state/epic/claim/results) is passed via flags.
 
 Agents (and humans) should run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
 
@@ -83,20 +85,69 @@ Agents (and humans) should run `ergo --help` for syntax and `ergo quickstart` fo
 
 ```bash
 # Create an epic
-echo '{"title":"User login","body":"Let users sign in with email+pw"}' | ergo new epic
+printf '%s' '{"title":"User login","body":"Let users sign in with email+pw"}' | ergo new epic
 # => ergo returns a new task ID, e.g. ABCDEF
 
 # Add a task to that epic
-echo '{"title":"Password hashing","body":"Use bcrypt with cost=12","epic":"ABCDEF"}' | ergo new task
+printf '%s' '{"title":"Password hashing","body":"Use bcrypt with cost=12","epic":"ABCDEF"}' | ergo new task
 # => returns a new task ID, e.g. GHIJKL
 
-# Add a task with a multi-line body
-printf '%s' '{"title":"Choose session duration","body":"Decide between 1h and 24h access tokens.\nWeigh security vs UX tradeoffs.","epic":"ABCDEF"}' | ergo new task
+# Add a task with a multi-line body (stdin is literal body text)
+printf '%s\n' \
+  '## Goal' \
+  '- Choose between 1h and 24h access tokens' \
+  '' \
+  '## Acceptance criteria' \
+  '- Decision recorded with rationale' \
+  | ergo new task --body-stdin --title "Choose session duration" --epic ABCDEF
 # => returns e.g. MNOPQR
 
 # Enforce order between tasks (GHIJKL then MNOPQR)
 ergo sequence GHIJKL MNOPQR
 ```
+
+### Stdin patterns (JSON vs `--body-stdin`)
+
+ergo reads **all** of stdin, so any “feed stdin” pattern works as long as it produces the right bytes.
+
+**1) `--body-stdin` (recommended for multi-line bodies)**
+
+- Pros: no JSON escaping; copy/paste markdown directly.
+- Cons: stdin is *only* the body (no JSON parsing); metadata must come from flags.
+
+```bash
+# Body via heredoc (convenient, but not supported by every command runner)
+ergo new task --body-stdin --title "Write spec" <<'MD'
+## Goal
+- Define the contract
+MD
+
+# Body via printf (most robust across terminals and tooling)
+printf '%s\n' '## Goal' '- Define the contract' | ergo new task --body-stdin --title "Write spec"
+```
+
+**2) JSON on stdin (default mode)**
+
+- Pros: everything in one JSON object; great for automation.
+- Cons: multi-line text requires JSON escaping (e.g. `\n`, quotes, backslashes).
+
+```bash
+# JSON via printf (recommended: portable and predictable)
+printf '%s' '{"title":"T","body":"One line"}' | ergo new task
+
+# JSON via heredoc (no quoting, but needs a real shell / multiline support)
+ergo new task <<'JSON'
+{"title":"T","body":"One line"}
+JSON
+
+# JSON via echo (fine for trivial cases, but behavior varies across shells)
+echo '{"title":"T","body":"One line"}' | ergo new task
+```
+
+Notes:
+- Prefer `printf` over `echo` when you care about portability and escaping (`echo` differs across shells and may interpret backslashes or flags).
+- Prefer quoted heredoc delimiters (`<<'JSON'`) to avoid accidental `$VAR` expansion.
+- Some editor/agent command runners don’t handle heredocs or multi-line pastes reliably; `printf '%s\n' ... | ergo ...` tends to work everywhere.
 
 ### Execution
 

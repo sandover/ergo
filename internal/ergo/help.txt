@@ -39,6 +39,16 @@
   -h, --help                              show help
   -V, --version                           print version
 
+{{HEADER}}COMMON FLAGS (new/set){{RESET}}
+  --body-stdin                            read body from stdin (raw text); other fields via flags
+  --title <text>                          set title (required for new * with --body-stdin)
+  --body <text>                           inline body text (mutually exclusive with --body-stdin)
+  --epic <id>                             assign to epic ("" unassign only via JSON)
+  --state <state>                         set state (todo|doing|done|blocked|canceled|error)
+  --claim <agent>                         set claim ("" unclaim only via JSON)
+  --result-path <path>                    attach result file path (requires --result-summary)
+  --result-summary <text>                 attach one-line result summary (requires --result-path)
+
 {{HEADER}}JSON INPUT FIELDS (all strings){{RESET}}
   Unknown keys are rejected (with suggestions for close matches).
   Epics only support: title, body

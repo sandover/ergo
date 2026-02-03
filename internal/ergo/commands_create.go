@@ -1,10 +1,13 @@
 // Purpose: Implement init and create commands for tasks/epics.
 // Exports: RunInit, RunNewTask, RunNewEpic.
 // Role: Command layer for creation workflows and repo initialization.
-// Invariants: Writes are append-only under lock; JSON stdin required for new.
+// Invariants: Writes are append-only under lock; create is safe under concurrent writers.
 // Notes: New tasks start in todo state; epics cannot nest.
 //
-// Task and epic creation uses stdin-only JSON input:
+// Task and epic creation supports multiple input styles:
+// - JSON object on stdin (default)
+// - Flags-only input (e.g. --title/--body) when stdin is a TTY
+// - `--body-stdin` to treat stdin as literal body text (metadata via flags)
 //
 //	echo '{"title":"Do X"}' | ergo new task
 //	echo '{"title":"Auth system"}' | ergo new epic
