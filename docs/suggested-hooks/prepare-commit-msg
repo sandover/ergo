@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Purpose: Insert a short reminder banner into the commit message buffer (as comments).
+# Exports: none.
+# Role: Nudges humans/agents at commit time without changing the final commit message.
+# Invariants: Banner lines start with `#` and are ignored by git; banner is inserted at most once.
+# Notes: Works for editor-based commits; for `-m` commits, use the pre-commit echo as the reminder.
+
+set -euo pipefail
+
+msg_file="${1:-}"
+commit_source="${2:-}"
+if [[ -z "$msg_file" || ! -f "$msg_file" ]]; then
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+banner_path="$repo_root/docs/suggested-hooks/banner.txt"
+banner_marker="# commit checklist"
+
+# Only inject into editor-driven commit messages. Avoid polluting:
+# - `git commit -m/-F` (commit_source=message)
+# - `git commit --amend` / `--no-edit` (commit_source=commit)
+# - merge/squash messages (commit_source=merge|squash)
+if [[ "$commit_source" == "message" || "$commit_source" == "commit" || "$commit_source" == "merge" || "$commit_source" == "squash" ]]; then
+  exit 0
+fi
+
+if grep -qF "$banner_marker" "$msg_file"; then
+  exit 0
+fi
+
+if [[ ! -f "$banner_path" ]]; then
+  exit 0
+fi
+
+tmp="$(mktemp)"
+{
+  awk -v marker="$banner_marker" '
+    $0 == marker { printing=1 }
+    printing { print }
+  ' "$banner_path"
+  echo
+  cat "$msg_file"
+} >"$tmp"
+mv "$tmp" "$msg_file"

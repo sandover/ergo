@@ -18,6 +18,11 @@ Agents are the primary user of ergo, but human-friendly views of the task collec
 
 Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler, sounder, and faster.
 
+## Suggested git hooks
+
+This repo includes optional local git hooks to help agents (especially lower-trust ones) keep invariants tight.
+See `docs/suggested-hooks/` for the suggested `pre-commit` and `prepare-commit-msg` hooks.
+
 ## Features
 
 - **Repo-local:** state lives in `.ergo/` as append-only JSONL -- inspectable and diffable.
