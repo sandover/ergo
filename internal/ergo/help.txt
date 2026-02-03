@@ -48,6 +48,7 @@
   --claim <agent>                         set claim ("" unclaim only via JSON)
   --result-path <path>                    attach result file path (requires --result-summary)
   --result-summary <text>                 attach one-line result summary (requires --result-path)
+  When stdin is a TTY (not piped), `new`/`set` can be driven entirely by flags (no stdin).
 
 {{HEADER}}JSON INPUT FIELDS (all strings){{RESET}}
   Unknown keys are rejected (with suggestions for close matches).
@@ -67,6 +68,7 @@
   ALWAYS use --json for structured output.
   Mutating commands return a JSON object when --json is set.
   ALWAYS pass --agent when claiming (e.g. haiku@agent-host).
+  Claim output includes: "When you have completed this claimed task, you MUST mark it done."
   ALWAYS set done, blocked, error, or canceled when finished (never leave doing).
   For multiline bodies, prefer --body-stdin (stdin is the literal body text).
   Before starting, run 'ergo quickstart' for the complete reference.

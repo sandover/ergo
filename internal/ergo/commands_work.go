@@ -1,5 +1,5 @@
 // Purpose: Implement list/show/claim/set/sequence/compact/prune/where behaviors and output.
-// Exports: RunSet, RunDep, RunClaim, RunShow, RunList, RunCompact, RunPrune, RunWhere.
+// Exports: RunSet, RunClaim, RunClaimOldestReady, RunShow, RunList, RunSequence, RunCompact, RunPrune, RunWhere.
 // Role: Command layer bridging CLI wiring to graph/storage operations.
 // Invariants: Mutations acquire the lock; JSON output is stable when requested.
 // Notes: Read operations replay the event log to build current state.
@@ -27,7 +27,7 @@ type ListOptions struct {
 
 func RunSet(id string, opts GlobalOptions) error {
 	if id == "" {
-		return errors.New("usage: echo '{\"state\":\"done\"}' | ergo set <id>")
+		return errors.New("usage: ergo set <id> (JSON stdin; flags; or --body-stdin)")
 	}
 
 	if opts.BodyStdin {
@@ -220,6 +220,8 @@ func RunClaim(id string, opts GlobalOptions) error {
 		return errors.New("usage: ergo claim <id>")
 	}
 
+	reminder := "When you have completed this claimed task, you MUST mark it done."
+
 	agentID := opts.AgentID
 	if agentID == "" {
 		return errors.New("claim requires --agent")
@@ -256,6 +258,7 @@ func RunClaim(id string, opts GlobalOptions) error {
 			"body":       task.Body,
 			"agent_id":   agentID,
 			"claimed_at": claimedAt,
+			"reminder":   reminder,
 		})
 	}
 
@@ -264,6 +267,7 @@ func RunClaim(id string, opts GlobalOptions) error {
 	if task.Body != "" {
 		fmt.Println(task.Body)
 	}
+	fmt.Println(reminder)
 	return nil
 }
 
@@ -275,6 +279,8 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := filepath.Join(dir, "events.jsonl")
+
+	reminder := "When you have completed this claimed task, you MUST mark it done."
 
 	var chosen *Task
 	var now time.Time
@@ -345,6 +351,7 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 			"body":       chosen.Body,
 			"agent_id":   agentID,
 			"claimed_at": formatTime(now),
+			"reminder":   reminder,
 		})
 	}
 
@@ -353,6 +360,7 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 	if chosen.Body != "" {
 		fmt.Println(chosen.Body)
 	}
+	fmt.Println(reminder)
 	return nil
 }
 

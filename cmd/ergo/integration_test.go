@@ -1094,6 +1094,54 @@ func TestClaim_WithAgentFlag(t *testing.T) {
 	}
 }
 
+func TestClaim_JSONIncludesReminder(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+
+	agentID := "sonnet@agent-host"
+	stdout, _, code = runErgo(t, dir, "", "--json", "claim", taskID, "--agent", agentID)
+	if code != 0 {
+		t.Fatalf("claim --json failed: exit %d", code)
+	}
+
+	var out map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("failed to parse claim output: %v", err)
+	}
+	if out["reminder"] != "When you have completed this claimed task, you MUST mark it done." {
+		t.Fatalf("expected reminder field, got %v", out["reminder"])
+	}
+}
+
+func TestClaimOldestReady_JSONIncludesReminder(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Test task","body":"Test task"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	_ = strings.TrimSpace(stdout)
+
+	agentID := "sonnet@agent-host"
+	stdout, _, code = runErgo(t, dir, "", "--json", "claim", "--agent", agentID)
+	if code != 0 {
+		t.Fatalf("claim oldest-ready --json failed: exit %d", code)
+	}
+
+	var out map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("failed to parse claim output: %v", err)
+	}
+	if out["reminder"] != "When you have completed this claimed task, you MUST mark it done." {
+		t.Fatalf("expected reminder field, got %v", out["reminder"])
+	}
+}
+
 // TestTitleAndBodyStoredCorrectly verifies that title and body are stored separately.
 func TestTitleAndBodyStoredCorrectly(t *testing.T) {
 	dir := setupErgo(t)

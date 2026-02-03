@@ -84,15 +84,15 @@ Agents (and humans) should run `ergo --help` for syntax and `ergo quickstart` fo
 ### Plan Creation
 
 ```bash
-# Create an epic
-printf '%s' '{"title":"User login","body":"Let users sign in with email+pw"}' | ergo new epic
-# => ergo returns a new task ID, e.g. ABCDEF
+# Create an epic (--body-stdin: body via stdin; metadata via flags)
+printf '%s\n' 'Let users sign in with email+pw.' | ergo new epic --body-stdin --title "User login"
+# => ergo returns a new epic ID, e.g. ABCDEF
 
-# Add a task to that epic
-printf '%s' '{"title":"Password hashing","body":"Use bcrypt with cost=12","epic":"ABCDEF"}' | ergo new task
+# Add a task to that epic (--body-stdin: body via stdin; metadata via flags)
+printf '%s\n' '- Use bcrypt with cost=12' | ergo new task --body-stdin --title "Password hashing" --epic ABCDEF
 # => returns a new task ID, e.g. GHIJKL
 
-# Add a task with a multi-line body (stdin is literal body text)
+# Add a task with a multi-line body (--body-stdin: body via stdin; metadata via flags)
 printf '%s\n' \
   '## Goal' \
   '- Choose between 1h and 24h access tokens' \
@@ -106,9 +106,16 @@ printf '%s\n' \
 ergo sequence GHIJKL MNOPQR
 ```
 
-### Stdin patterns (JSON vs `--body-stdin`)
+If you prefer “all metadata in one object”, you can also send JSON to stdin (requires JSON escaping for multiline strings):
 
-ergo reads **all** of stdin, so any “feed stdin” pattern works as long as it produces the right bytes.
+```bash
+printf '%s' '{"title":"T","body":"One line","epic":"ABCDEF"}' | ergo new task
+```
+
+### Input patterns (stdin vs flags)
+
+ergo can be driven by stdin (JSON or `--body-stdin`) or by flags (when stdin is a TTY / not piped).
+If you use stdin, ergo reads **all** of it, so any “feed stdin” pattern works as long as it produces the right bytes.
 
 **1) `--body-stdin` (recommended for multi-line bodies)**
 
@@ -149,6 +156,15 @@ Notes:
 - Prefer quoted heredoc delimiters (`<<'JSON'`) to avoid accidental `$VAR` expansion.
 - Some editor/agent command runners don’t handle heredocs or multi-line pastes reliably; `printf '%s\n' ... | ergo ...` tends to work everywhere.
 
+**3) Flags only (no stdin)**
+
+When stdin is not piped (TTY), `new` and `set` can be driven entirely by flags.
+
+```bash
+ergo new task --title "Login" --body "Implement signup" --epic ABCDEF
+ergo set GHIJKL --state done
+```
+
 ### Execution
 
 ```bash
@@ -158,6 +174,7 @@ ergo --json list --ready
 # Claim a task
 # --agent should be the calling agent's identity: <model>@<hostname>
 ergo claim GHIJKL --agent sonnet@agent-host
+# Claim output includes: "When you have completed this claimed task, you MUST mark it done."
 
 # Set properties of a task, like marking it "done"
 printf '%s' '{"state":"done"}' | ergo set GHIJKL

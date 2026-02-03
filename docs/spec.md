@@ -19,6 +19,7 @@ This spec covers:
 For `new epic`, `new task`, and `set`:
 
 - Default input mode reads a single JSON object from stdin (entire stdin; trailing newlines are allowed).
+- When stdin is a TTY (not piped), these commands may be driven entirely by flags (e.g. `--title`, `--body`, `--state`) without any stdin.
 - With `--body-stdin`, stdin is treated as literal body text and is **not** parsed as JSON.
   - In this mode, the body comes from stdin and other updates come from flags (e.g. `--title`, `--state`, `--epic`, `--claim`, results).
   - `--body` and `--body-stdin` are mutually exclusive.
@@ -117,6 +118,10 @@ When `ergo claim` (oldest-ready mode) finds no claimable tasks:
 - This is a **successful** outcome (exit code `0`).
 - Human output prints a clear message.
 - With `--json`, output is a JSON object that explicitly indicates “no ready”.
+
+When `ergo claim` succeeds and `--json` is set:
+- Output includes an additional `reminder` string:
+  - Exact value: `When you have completed this claimed task, you MUST mark it done.`
 
 ## State machine and claim invariants
 

@@ -16,6 +16,7 @@ Your identity is <model>@<hostname> (e.g. sonnet@agent-host).
 Core loop:
   1) Claim oldest ready work:
      {{CMD}}ergo --json claim --agent sonnet@agent-host{{RESET}}
+     Claim output includes: "When you have completed this claimed task, you MUST mark it done."
   2) Do the work described in the task (write to project files)
   3) Attach results and set state:
      {{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
@@ -59,6 +60,16 @@ Create a task with a multi-line body:
 
 Update a task body (and state) from stdin:
   {{CMD}}printf '%s\n' '## Status' '- Waiting on review' | ergo set ABCDEF --body-stdin --state blocked{{RESET}}
+
+{{HEADER}}3c. CREATE/UPDATE (flags only){{RESET}}
+
+When stdin is not piped (TTY), you can use flags for simple inputs (short titles/bodies, state changes).
+
+Create a task (no stdin):
+  {{CMD}}ergo new task --title "Login" --body "Implement signup" --epic OFKSTE{{RESET}}
+
+Mark done (no stdin):
+  {{CMD}}ergo set ABCDEF --state done{{RESET}}
 
 {{HEADER}}4. DEPENDENCIES{{RESET}}
 

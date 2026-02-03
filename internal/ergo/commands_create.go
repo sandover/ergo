@@ -9,8 +9,8 @@
 // - Flags-only input (e.g. --title/--body) when stdin is a TTY
 // - `--body-stdin` to treat stdin as literal body text (metadata via flags)
 //
-//	echo '{"title":"Do X"}' | ergo new task
-//	echo '{"title":"Auth system"}' | ergo new epic
+//	printf '%s' '{"title":"Do X"}' | ergo new task
+//	printf '%s' '{"title":"Auth system"}' | ergo new epic
 //
 // See json_input.go for the unified TaskInput schema.
 package ergo
