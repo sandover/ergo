@@ -43,7 +43,7 @@ Or, on Linux: `go install github.com/sandover/ergo@latest`
 
 #### Step 2
 Add this instruction into your `AGENTS.md` or `CLAUDE.md` file
-> Use 'ergo' for all feature planning, run ergo --help to learn it
+> Use 'ergo' for all feature planning, run "ergo --help to learn it
 
 #### Step 3
 Once you have a description of what you want to build (your spec), use a prompt like this:
