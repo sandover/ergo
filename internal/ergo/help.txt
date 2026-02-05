@@ -12,7 +12,9 @@
   show <id>                               show epic or task details
 
   list [--epic <id>] [--ready] [--epics] [--all]
-                                          list active tasks
+                                          list active work and in-progress epics
+                                          shows done tasks within active epics for progress context
+                                          hides orphan done tasks and fully-done epics
                                           --all includes done and canceled
                                           --epics shows only epics
 

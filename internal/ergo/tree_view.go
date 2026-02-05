@@ -202,8 +202,17 @@ func derivedEpicState(children []*treeNode) string {
 	return "active"
 }
 
-// filterAndCollapseNodes filters canceled tasks and hides fully-canceled or fully-done epics.
+// filterAndCollapseNodes filters tasks for the active view (default list output).
+// UX goals for supervisors monitoring agent progress:
+// - Show progress within active epics (done tasks visible for context)
+// - Hide fully-done/canceled epics (nothing to supervise)
+// - Hide orphan done tasks (standalone completed work)
+// - Hide all canceled tasks (abandoned work)
 func filterAndCollapseNodes(nodes []*treeNode) []*treeNode {
+	return filterAndCollapseNodesImpl(nodes, false)
+}
+
+func filterAndCollapseNodesImpl(nodes []*treeNode, withinEpic bool) []*treeNode {
 	var filtered []*treeNode
 	for _, node := range nodes {
 		// For epics, check derived state BEFORE filtering children
@@ -225,10 +234,21 @@ func filterAndCollapseNodes(nodes []*treeNode) []*treeNode {
 		}
 
 		// Recursively process children
-		node.children = filterAndCollapseNodes(node.children)
+		// If this node is an epic, its children should preserve done tasks for progress visibility
+		if node.task != nil && node.task.IsEpic {
+			node.children = filterAndCollapseNodesImpl(node.children, true)
+		} else {
+			node.children = filterAndCollapseNodesImpl(node.children, withinEpic)
+		}
 
-		// Skip canceled tasks
+		// Always skip canceled tasks (abandoned work)
 		if node.task != nil && !node.task.IsEpic && node.task.State == stateCanceled {
+			continue
+		}
+
+		// Skip orphan done tasks (completed work not within an active epic)
+		// Keep done tasks within epics to show progress: "3 of 5 done"
+		if node.task != nil && !node.task.IsEpic && !withinEpic && node.task.State == stateDone {
 			continue
 		}
 
