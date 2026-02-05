@@ -1,4 +1,3 @@
-# commit checklist
-# - Use Conventional Commits (type(scope): imperative summary; scope optional).
-# - Body (8-10 lines) explains what/why/how + constraints/invariants (+ notable risks/tests).
-# - When applicable, add trailers (one per line): Fixes: #XYZ, Refs: PROJ-9, BREAKING CHANGE: ...
+# commit message
+# - Use Conventional Commits: type(scope): summary
+# - Body: what/why/how + constraints + notable risks/tests

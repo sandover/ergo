@@ -15,7 +15,7 @@ fi
 
 repo_root="$(git rev-parse --show-toplevel)"
 banner_path="$repo_root/docs/suggested-hooks/banner.txt"
-banner_marker="# commit checklist"
+banner_marker="# commit message"
 
 # Only inject into editor-driven commit messages. Avoid polluting:
 # - `git commit -m/-F` (commit_source=message)
