@@ -7,16 +7,18 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo)](https://goreportcard.com/report/github.com/sandover/ergo)
 [![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo.svg)](https://pkg.go.dev/github.com/sandover/ergo)
 
-`ergo` gives your AI agents a better way to plan. It's a lightweight way for agents to store a collection of tasks right in your project. This collection will persist across agent sessions, it is safe for concurrent agents to claim work out of, and it's easy for humans to read and reason about. The collection is stored as plain JSONL text, the most durable and resilient information format we have.
+`ergo` gives your AI agents a better way to plan -- by storing epics & tasks in your repo, in a compact, git-friendly format.
+
+Plans are persistent across agent sessions, they are easy for humans to read and reason about, and they can be shared by different agents (from different model providers).
 
 ## Why?
-In software projects, even with AI, it really helps to clearly separate WHAT you want to build from HOW the implementation happens. Traditionally, this was the difference between (say) a TDD document and a task breakdown.
+In software projects, even with AI, it really helps to clearly separate WHAT you want to build from HOW the implementation happens. Traditionally, this was the difference between a spec document and a work backlog.
 
-Coding agents' own planning modes tend to make plans which are either ephemeral and not inspectable, or they are a mess of markdown files. These files are hard to rigorously manage, and they don't necessarily capture how a project should be decomposed and sequenced.
+Coding agents' own planning modes tend to result in a mess of markdown files that blur the distinction between the spec and the backlog and become hard to manage.
 
-`ergo` is a tool your AI agent uses to write out a set of tasks. Then during implementation, your agent claims tasks out of the task collection, works on them, and marks them done. Tasks can be sequenced (this must happen before that), and they can be grouped into epics. 
+`ergo` is a tool your AI agent uses to write out a backlog of tasks. Then during implementation, your agent claims tasks, works on them, and marks them done. Tasks can be sequenced (A must happen before B), and they can be grouped into epics. 
 
- The task collection is stored in the repo, not in the agent. This means you can look at it, you can manage it with git, you can export it into other forms if you want. This also means you can work on the same plan with agents from different model providers; or even with more than one agent at a time. ergo is robust in the face of concurrency.
+The task collection is stored in the repo as JSONL file, not inside the agent or its harness. You can keep the plan in git. The plan is agnostic about which agent you use to work on it. You could even use more than one agent at the same time -- ergo is built for concurrency.
 
 Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler, sounder, and faster.
 
