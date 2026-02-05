@@ -71,14 +71,23 @@ func BenchmarkClaim(b *testing.B) {
 // Expected: 100 tasks ~3ms, 1000 tasks ~15ms (per README claims)
 // Thresholds: 100 tasks <100ms, 1000 tasks <500ms
 func TestPerformance_List100Tasks(t *testing.T) {
+	if raceEnabled() {
+		t.Skip("performance guard disabled under -race")
+	}
 	assertListUnder(t, 100, 100*time.Millisecond)
 }
 
 func TestPerformance_List1000Tasks(t *testing.T) {
+	if raceEnabled() {
+		t.Skip("performance guard disabled under -race")
+	}
 	assertListUnder(t, 1000, 500*time.Millisecond)
 }
 
 func TestPerformance_Claim(t *testing.T) {
+	if raceEnabled() {
+		t.Skip("performance guard disabled under -race")
+	}
 	dir := t.TempDir()
 	ergo := buildErgoBinaryForTest(t)
 

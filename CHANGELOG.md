@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No changes yet._
 
+## [0.9.3] - 2026-02-05
+
+### Fixed
+- `list` now shows progress context in active epics.
+- `--body-stdin` accepts empty bodies and supports TTY input.
+
+### Documentation
+- Add suggested git hooks and pre-push CI parity hook docs.
+- Update agent structured-output hints.
+
 ## [0.9.2] - 2026-02-03
 
 ### Added
