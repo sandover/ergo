@@ -7,56 +7,59 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo)](https://goreportcard.com/report/github.com/sandover/ergo)
 [![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo.svg)](https://pkg.go.dev/github.com/sandover/ergo)
 
-`ergo` gives your AI agents a better place to plan. Tasks and dependencies persist across sessions, stay visible to humans, and are safe for concurrent agents. Data lives in the repo as plain text.
+`ergo` gives your AI agents a better way to plan. It's a lightweight way for agents to store a collection of tasks right in your project. This collection will persist across agent sessions, it is safe for concurrent agents to claim work out of, and it's easy for humans to read and reason about. The collection is stored as plain JSONL text, the most durable and resilient information format we have.
 
-### Why?
-Coding agents' plans tend to be ephemeral and not inspectable -- or they take the form of (proliferating) markdown files that are hard to manage and don't necessarily capture how a project should be decomposed and sequenced. 
+## Why?
+In software projects, even with AI, it really helps to clearly separate WHAT you want to build from HOW the implementation happens. Traditionally, this was the difference between (say) a TDD document and a task breakdown.
 
-`ergo` is a tool for agents to use to write down their plan as an orderly collection of tasks -- storing that collection in the repo, not in the agent. Tasks can have dependency relationships, and they can be grouped into epics. 
+Coding agents' own planning modes tend to make plans which are either ephemeral and not inspectable, or they are a mess of markdown files. These files are hard to rigorously manage, and they don't necessarily capture how a project should be decomposed and sequenced.
 
-Agents are the primary user of ergo, but human-friendly views of the task collection are available via `ergo list` and `ergo show`.
+`ergo` is a tool your AI agent uses to write out a set of tasks. Then during implementation, your agent claims tasks out of the task collection, works on them, and marks them done. Tasks can be sequenced (this must happen before that), and they can be grouped into epics. 
+
+ The task collection is stored in the repo, not in the agent. This means you can look at it, you can manage it with git, you can export it into other forms if you want. This also means you can work on the same plan with agents from different model providers; or even with more than one agent at a time. ergo is robust in the face of concurrency.
 
 Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler, sounder, and faster.
 
-## Suggested git hooks
-
-This repo includes optional local git hooks to help agents (especially lower-trust ones) keep invariants tight.
-See `docs/suggested-hooks/` for the suggested `pre-commit`, `prepare-commit-msg`, and `pre-push` hooks.
-
 ## Features
 
-- **Repo-local:** state lives in `.ergo/` as append-only JSONL -- inspectable and diffable.
 - **Simple:** no daemons, no git hooks, few opinions, easy to reason about.
-- **Concurrency-safe:** file lock serializes writes; `claim` is race-safe.
-- **Unixy:** plain text or JSON on stdin and stdout.
 - **Fast:** 5-15x faster than beads, especially for large projects.
+- **Tasks live in the repo:** state lives in `.ergo/` as append-only JSONL.
+- **Safe for multiple agents:** a plain old file lock serializes writes
+- **Unixy:** text or JSON on stdin and stdout.
+
+---
 
 ## Quick Start
 
+#### Step 1 (in the terminal)
 ```bash
-# Install
-brew install sandover/tap/ergo   # or: go install github.com/sandover/ergo@latest
-
-# Initialize
-ergo init
-
-# Tell your agent
-echo "Use 'ergo' for all planning & task tracking, run ergo --help now" >> AGENTS.md
+# Install on Mac -- get homebrew first (https://brew.sh/)
+brew install sandover/tap/ergo 
 ```
+Or, on Linux: `go install github.com/sandover/ergo@latest`
 
-## Planning Instructions for your Agent
+#### Step 2
+Add this instruction into your `AGENTS.md` or `CLAUDE.md` file
+> Use 'ergo' for all feature planning, run ergo --help to learn it
 
-Once you and your agent have aligned on what it is you want done (whether through chat, or through giving it a set of specs), you can then tell it something like this:
+#### Step 3
+Once you have a description of what you want to build (your spec), use a prompt like this:
 
-> Write your plan into ergo as a set of well-described, tractable tasks, each with a goal, rationale, definition of done, and validation.
+> Use ergo to plan the implementation of this spec. Each task should have a goal, description, definition of done, and automated validation.
 
-You almost always get better results by then asking the agent to *evaluate and improve upon its own plan*.
+_Pro tip_: after that, tell the agent to *review and improve upon its own plan*. This leads to improvements every time. Measure twice, cut once!
 
-Once the plan is solid, tell your agent(s), "implement this plan" and they'll start picking up tasks and executing them.
+#### Step 4
+Tell your agent to implement the plan.
 
-## Usage (Humans)
+---
 
-### `ergo list`
+## How humans use ergo
+
+These three commands are typically the only ones used by humans.
+
+### `ergo list` -- to see the plan your agent wrote
 
 ![Example output of ergo list](docs/img/ergo-list-screenshot.jpg)
 
@@ -70,7 +73,7 @@ Legend:
 - `@agent-id` claimed by
 - `⧗ …` blocked by (dependency summary)
 
-### `ergo show`
+### `ergo show` -- to see details of a task
 
 ```bash
 ergo show GQUJPG
@@ -78,96 +81,36 @@ ergo show GQUJPG
 
 ![Example output of ergo show](docs/img/ergo-show-screenshot.jpg)
 
-## Usage (Agents)
-
-For most commands, agents read and write JSON to `ergo` via stdin.
-
-For multi-line markdown bodies, prefer `--body-stdin`: stdin becomes the literal body text (non-empty), and metadata (title/state/epic/claim/results) is passed via flags.
-
-Agents (and humans) should run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
-
-### Plan Creation
+### `ergo prune` -- to remove completed tasks
 
 ```bash
-# Create an epic (--body-stdin: body via stdin; metadata via flags)
-printf '%s\n' 'Let users sign in with email+pw.' | ergo new epic --body-stdin --title "User login"
-# => ergo returns a new epic ID, e.g. ABCDEF
+ergo prune
+```
 
-# Add a task to that epic (--body-stdin: body via stdin; metadata via flags)
-printf '%s\n' '- Use bcrypt with cost=12' | ergo new task --body-stdin --title "Password hashing" --epic ABCDEF
-# => returns a new task ID, e.g. GHIJKL
+Removes completed (done or canceled) tasks from the plan.
 
-# Add a task with a multi-line body (--body-stdin: body via stdin; metadata via flags)
-printf '%s\n' \
-  '## Goal' \
-  '- Choose between 1h and 24h access tokens' \
-  '' \
-  '## Acceptance criteria' \
-  '- Decision recorded with rationale' \
-  | ergo new task --body-stdin --title "Choose session duration" --epic ABCDEF
-# => returns e.g. MNOPQR
+---
 
-# Enforce order between tasks (GHIJKL then MNOPQR)
+## How coding agents use ergo
+
+Run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
+
+### Planning
+
+```bash
+# Create an epic
+ergo new epic --title "User login" --body "Let users sign in with email+pw."
+# => ABCDEF
+
+# Add tasks to it
+ergo new task --title "Password hashing" --body "Use bcrypt with cost=12" --epic ABCDEF
+# => GHIJKL
+
+ergo new task --title "Session tokens" --body "1h access, 24h refresh" --epic ABCDEF
+# => MNOPQR
+
+# Enforce order
 ergo sequence GHIJKL MNOPQR
-```
-
-If you prefer “all metadata in one object”, you can also send JSON to stdin (requires JSON escaping for multiline strings):
-
-```bash
-printf '%s' '{"title":"T","body":"One line","epic":"ABCDEF"}' | ergo new task
-```
-
-### Input patterns (stdin vs flags)
-
-ergo can be driven by stdin (JSON or `--body-stdin`) or by flags (when stdin is a TTY / not piped).
-If you use stdin, ergo reads **all** of it, so any “feed stdin” pattern works as long as it produces the right bytes.
-
-**1) `--body-stdin` (recommended for multi-line bodies)**
-
-- Pros: no JSON escaping; copy/paste markdown directly.
-- Cons: stdin is *only* the body (no JSON parsing); metadata must come from flags.
-
-```bash
-# Body via heredoc (convenient, but not supported by every command runner)
-ergo new task --body-stdin --title "Write spec" <<'MD'
-## Goal
-- Define the contract
-MD
-
-# Body via printf (most robust across terminals and tooling)
-printf '%s\n' '## Goal' '- Define the contract' | ergo new task --body-stdin --title "Write spec"
-```
-
-**2) JSON on stdin (default mode)**
-
-- Pros: everything in one JSON object; great for automation.
-- Cons: multi-line text requires JSON escaping (e.g. `\n`, quotes, backslashes).
-
-```bash
-# JSON via printf (recommended: portable and predictable)
-printf '%s' '{"title":"T","body":"One line"}' | ergo new task
-
-# JSON via heredoc (no quoting, but needs a real shell / multiline support)
-ergo new task <<'JSON'
-{"title":"T","body":"One line"}
-JSON
-
-# JSON via echo (fine for trivial cases, but behavior varies across shells)
-echo '{"title":"T","body":"One line"}' | ergo new task
-```
-
-Notes:
-- Prefer `printf` over `echo` when you care about portability and escaping (`echo` differs across shells and may interpret backslashes or flags).
-- Prefer quoted heredoc delimiters (`<<'JSON'`) to avoid accidental `$VAR` expansion.
-- Some editor/agent command runners don’t handle heredocs or multi-line pastes reliably; `printf '%s\n' ... | ergo ...` tends to work everywhere.
-
-**3) Flags only (no stdin)**
-
-When stdin is not piped (TTY), `new` and `set` can be driven entirely by flags.
-
-```bash
-ergo new task --title "Login" --body "Implement signup" --epic ABCDEF
-ergo set GHIJKL --state done
 ```
 
 ### Execution
@@ -176,31 +119,16 @@ ergo set GHIJKL --state done
 # Find actionable work
 ergo --json list --ready
 
-# Claim a task
-# --agent should be the calling agent's identity: <model>@<hostname>
-ergo claim GHIJKL --agent sonnet@agent-host
-# Claim output includes: "When you have completed this claimed task, you MUST mark it done."
+# Claim a task (--agent identifies the caller)
+ergo claim GHIJKL --agent sonnet@hostname
 
-# Set properties of a task, like marking it "done"
-printf '%s' '{"state":"done"}' | ergo set GHIJKL
+# Mark it done
+ergo set GHIJKL --state done
 ```
 
-## Keeping plans tidy
+> **Tip:** For multi-line task bodies or automation, pipe JSON to stdin. See `ergo quickstart` for patterns.
 
-`ergo prune` removes `done`/`canceled` tasks and empty epics. Defaults to dry-run.
-
-```bash
-# See what would be removed (no writes)
-ergo prune
-
-# Apply the prune
-ergo prune --yes
-
-# Physically remove pruned history from the log
-ergo compact
-```
-
-Prune only removes tasks in `done` or `canceled`, then prunes any now-empty epics. It never removes `todo`, `blocked`, `doing`, or `error` tasks.
+---
 
 ## Data Representation
 
@@ -224,10 +152,10 @@ All state lives in `.ergo/` at your repo root:
 - Multiple agents can safely race to claim work; exactly one wins, others fail fast and should retry.
 
 **State reconstruction:**
-On each command, ergo replays `events.jsonl` to build current state in memory quickly (100 tasks: ~3ms, 1000 tasks: ~15ms) and guarantees consistency. Run `ergo compact` to collapse history if the log grows large. Verify: `go test -bench=. -benchmem`
+On each command, ergo replays `events.jsonl` to build current state in memory quickly (100 tasks: ~3ms, 1000 tasks: ~15ms) and guarantees consistency. Run `ergo compact` to collapse history if the log grows large. To verify: `go test -bench=. -benchmem`
 
 **Why not SQLite?**
-SQLite is great, but binary files don't diff well in git, and concurrent writers from multiple processes need careful handling. JSONL is trivially inspectable (`cat | jq`), merges via normal git workflows, and append-only writes with `flock` are dead simple. For a task graph of a few thousand items, replay is instant; you don't need a query engine.
+SQLite is great, but binary files don't diff well in git. JSONL is trivially inspectable (`cat | jq`), merges via git, and append-only writes with `flock` are simple. For a few thousand tasks, replay is instant.
 
 ## Is it any good?
 
