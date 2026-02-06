@@ -985,15 +985,23 @@ func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
 	icon := stateIcon(task, isReady)
 	stateColor := stateColor(task)
 
-	// Header: [icon] ID · Title
+	// Header: [icon] ID [state] · Title
 	if useColor {
 		fmt.Printf("%s%s%s %s", stateColor, icon, colorReset, colorBold)
 	} else {
 		fmt.Printf("%s ", icon)
 	}
 	fmt.Printf("%s", task.ID)
-	if task.Title != "" {
-		fmt.Printf(" · %s", task.Title)
+	if useColor {
+		fmt.Printf(" %s[%s]%s", stateColor, task.State, colorReset)
+		if task.Title != "" {
+			fmt.Printf(" %s· %s%s", colorBold, task.Title, colorReset)
+		}
+	} else {
+		fmt.Printf(" [%s]", task.State)
+		if task.Title != "" {
+			fmt.Printf(" · %s", task.Title)
+		}
 	}
 	if useColor {
 		fmt.Print(colorReset)
@@ -1005,14 +1013,6 @@ func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
 		fmt.Printf("%s%s%s\n", colorDim, strings.Repeat("─", 50), colorReset)
 	} else {
 		fmt.Println(strings.Repeat("─", 50))
-	}
-	fmt.Println()
-
-	// State
-	if useColor {
-		fmt.Printf("%sstate:%s %s%s%s\n", colorDim, colorReset, stateColor, task.State, colorReset)
-	} else {
-		fmt.Printf("state: %s\n", task.State)
 	}
 
 	// Epic
@@ -1082,13 +1082,11 @@ func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
 	}
 
 	// Separator before content
-	fmt.Println()
 	if useColor {
 		fmt.Printf("%s%s%s\n", colorDim, strings.Repeat("─", 50), colorReset)
 	} else {
 		fmt.Println(strings.Repeat("─", 50))
 	}
-	fmt.Println()
 
 	// Body with glamour rendering
 	if isTTY && task.Body != "" {
