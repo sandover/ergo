@@ -35,9 +35,9 @@ func RunInit(args []string, opts GlobalOptions) error {
 	if err := os.MkdirAll(target, 0755); err != nil {
 		return err
 	}
-	eventsPath := filepath.Join(target, "events.jsonl")
+	plansPath := filepath.Join(target, plansFileName)
 	lockPath := filepath.Join(target, "lock")
-	if err := ensureFileExists(eventsPath, 0644); err != nil {
+	if err := ensureFileExists(plansPath, 0644); err != nil {
 		return err
 	}
 	if err := ensureFileExists(lockPath, 0644); err != nil {

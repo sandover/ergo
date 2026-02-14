@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No changes yet._
+### Changed
+- Event log file renamed from `events.jsonl` to `plans.jsonl` for clarity.
+- Existing repositories with `events.jsonl` continue to work (backwards compatible).
+- New repositories initialized with `ergo init` will use `plans.jsonl`.
 
 ## [0.9.3] - 2026-02-05
 
@@ -78,7 +81,7 @@ _No changes yet._
 ## [0.7.2] - 2026-01-30
 
 ### Fixed
-- `init` is idempotent and now repairs missing `.ergo/lock` or `.ergo/events.jsonl` when `.ergo/` already exists.
+- `init` is idempotent and now repairs missing `.ergo/lock` or event log file when `.ergo/` already exists.
 - `new`/`set`/other write commands auto-create missing `.ergo/lock` on demand.
 - Event log parsing tolerates a truncated final line and reports corruption with file+line context (including git conflict marker hints).
 

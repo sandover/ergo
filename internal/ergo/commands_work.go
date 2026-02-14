@@ -281,7 +281,7 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 	}
 
 	lockPath := filepath.Join(dir, "lock")
-	eventsPath := filepath.Join(dir, "events.jsonl")
+	eventsPath := getEventsPath(dir)
 
 	reminder := "When you have completed this claimed task, you MUST mark it done."
 
@@ -398,7 +398,7 @@ func buildUpdatedFields(input *TaskInput) []string {
 
 func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, agentID string, quiet bool) error {
 	lockPath := filepath.Join(dir, "lock")
-	eventsPath := filepath.Join(dir, "events.jsonl")
+	eventsPath := getEventsPath(dir)
 
 	// Handle result.path + result.summary (requires file I/O before lock)
 	resultPath, hasPath := updates["result.path"]
@@ -1191,7 +1191,7 @@ func RunCompact(opts GlobalOptions) error {
 		return err
 	}
 	lockPath := filepath.Join(dir, "lock")
-	eventsPath := filepath.Join(dir, "events.jsonl")
+	eventsPath := getEventsPath(dir)
 	if err := withLock(lockPath, syscall.LOCK_EX, func() error {
 		events, err := readEvents(eventsPath)
 		if err != nil {
