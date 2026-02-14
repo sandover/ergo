@@ -138,13 +138,15 @@ All state lives in `.ergo/` at your repo root:
 
 ```
 .ergo/
-├── events.jsonl   # append-only event log (source of truth)
+├── plans.jsonl    # append-only event log (source of truth)
 └── lock           # flock(2) lock file for write serialization
 ```
 
+(For backwards compatibility, `events.jsonl` is also supported if it already exists.)
+
 **Why append-only JSONL?**
 - **Auditable:** Full history of every state change, who made it, when.
-- **Inspectable:** `cat .ergo/events.jsonl | jq` — no special tools needed.
+- **Inspectable:** `cat .ergo/plans.jsonl | jq` — no special tools needed.
 - **Recoverable:** Corrupt state? Replay events. Want to undo? Filter events.
 - **Diffable:** `git diff` shows exactly what changed.
 
@@ -154,7 +156,7 @@ All state lives in `.ergo/` at your repo root:
 - Multiple agents can safely race to claim work; exactly one wins, others fail fast and should retry.
 
 **State reconstruction:**
-On each command, ergo replays `events.jsonl` to build current state in memory quickly (100 tasks: ~3ms, 1000 tasks: ~15ms) and guarantees consistency. Run `ergo compact` to collapse history if the log grows large. To verify: `go test -bench=. -benchmem`
+On each command, ergo replays `plans.jsonl` to build current state in memory quickly (100 tasks: ~3ms, 1000 tasks: ~15ms) and guarantees consistency. Run `ergo compact` to collapse history if the log grows large. To verify: `go test -bench=. -benchmem`
 
 **Why not SQLite?**
 SQLite is great, but binary files don't diff well in git. JSONL is trivially inspectable (`cat | jq`), merges via git, and append-only writes with `flock` are simple. For a few thousand tasks, replay is instant.

@@ -12,8 +12,10 @@ It is not a user manual—**the user manual is `ergo --help` and `ergo quickstar
 
 ## High-level mental model
 
-ergo stores task/epic state as an **append-only JSONL event log** in `.ergo/events.jsonl`.
+ergo stores task/epic state as an **append-only JSONL event log** in `.ergo/plans.jsonl`.
 Every command rebuilds current state by **replaying** events into an in-memory graph, then performs a read or appends new events.
+
+(For backwards compatibility, `.ergo/events.jsonl` is also supported if it already exists.)
 
 This design is intentionally “boring”:
 - Plain text storage is diffable and debuggable with common tools.
@@ -24,7 +26,8 @@ This design is intentionally “boring”:
 
 ### `.ergo/` layout
 
-- `.ergo/events.jsonl`: append-only event log (source of truth).
+- `.ergo/plans.jsonl`: append-only event log (source of truth).
+  - For backwards compatibility, `.ergo/events.jsonl` is also supported if it already exists.
 - `.ergo/lock`: advisory lock file used to serialize writes.
 
 ### Event log invariants
