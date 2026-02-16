@@ -20,7 +20,9 @@ import (
 )
 
 const (
-	dataDirName = ".ergo"
+	dataDirName       = ".ergo"
+	plansFileName     = "plans.jsonl"
+	oldEventsFileName = "events.jsonl" // Legacy name, kept for backwards compatibility
 )
 
 func resolveErgoDir(start string) (string, error) {
@@ -72,8 +74,31 @@ func ergoDir(opts GlobalOptions) (string, error) {
 	return resolveErgoDir(start)
 }
 
+// getEventsPath returns the path to the events/plans file.
+// For backwards compatibility:
+// - If plans.jsonl exists, use it
+// - Otherwise if events.jsonl exists, use it
+// - For new files, default to plans.jsonl
+func getEventsPath(dir string) string {
+	plansPath := filepath.Join(dir, plansFileName)
+	oldPath := filepath.Join(dir, oldEventsFileName)
+
+	// If plans.jsonl exists, use it
+	if _, err := os.Stat(plansPath); err == nil {
+		return plansPath
+	}
+
+	// If events.jsonl exists, use it (backwards compatibility)
+	if _, err := os.Stat(oldPath); err == nil {
+		return oldPath
+	}
+
+	// Default to plans.jsonl for new files
+	return plansPath
+}
+
 func loadGraph(dir string) (*Graph, error) {
-	eventsPath := filepath.Join(dir, "events.jsonl")
+	eventsPath := getEventsPath(dir)
 	events, err := readEvents(eventsPath)
 	if err != nil {
 		return nil, err
@@ -134,7 +159,7 @@ func readEvents(path string) ([]Event, error) {
 	}
 	if err := scanner.Err(); err != nil {
 		if errors.Is(err, bufio.ErrTooLong) {
-			return nil, fmt.Errorf("%s: event line too long (> %d bytes); events.jsonl may be corrupted (e.g. missing newlines)", path, maxEventLineBytes)
+			return nil, fmt.Errorf("%s: event line too long (> %d bytes); file may be corrupted (e.g. missing newlines)", path, maxEventLineBytes)
 		}
 		return nil, err
 	}
@@ -227,7 +252,7 @@ func writeAll(w *os.File, data []byte) error {
 
 func writeLinkEvent(dir string, opts GlobalOptions, eventType, from, to string) error {
 	lockPath := filepath.Join(dir, "lock")
-	eventsPath := filepath.Join(dir, "events.jsonl")
+	eventsPath := getEventsPath(dir)
 	return withLock(lockPath, syscall.LOCK_EX, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
@@ -274,7 +299,7 @@ func writeLinkEvent(dir string, opts GlobalOptions, eventType, from, to string) 
 }
 
 func createTask(dir string, opts GlobalOptions, epicID string, isEpic bool, title, body string) (createOutput, error) {
-	eventsPath := filepath.Join(dir, "events.jsonl")
+	eventsPath := getEventsPath(dir)
 	lockPath := filepath.Join(dir, "lock")
 	return createTaskWithDir(dir, opts, lockPath, eventsPath, epicID, isEpic, title, body)
 }
@@ -457,7 +482,7 @@ func getGitHead(repoDir string) string {
 // The file must exist and be within the project root.
 func writeResultEvent(dir string, opts GlobalOptions, taskID, summary, relPath string) error {
 	lockPath := filepath.Join(dir, "lock")
-	eventsPath := filepath.Join(dir, "events.jsonl")
+	eventsPath := getEventsPath(dir)
 	repoDir := filepath.Dir(dir)
 
 	return withLock(lockPath, syscall.LOCK_EX, func() error {

@@ -137,12 +137,31 @@ func setupErgoWithEventsOnly(t *testing.T) string {
 	return dir
 }
 
+// getEventFilePath returns the path to the event log file (plans.jsonl or events.jsonl)
+func getEventFilePath(dir string) string {
+	plansPath := filepath.Join(dir, ".ergo", "plans.jsonl")
+	eventsPath := filepath.Join(dir, ".ergo", "events.jsonl")
+
+	// Prefer plans.jsonl if it exists
+	if _, err := os.Stat(plansPath); err == nil {
+		return plansPath
+	}
+
+	// Fall back to events.jsonl
+	if _, err := os.Stat(eventsPath); err == nil {
+		return eventsPath
+	}
+
+	// Default to plans.jsonl
+	return plansPath
+}
+
 func countEventLines(t *testing.T, dir string) int {
 	t.Helper()
-	path := filepath.Join(dir, ".ergo", "events.jsonl")
+	path := getEventFilePath(dir)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("failed to read events.jsonl: %v", err)
+		t.Fatalf("failed to read event log: %v", err)
 	}
 	trimmed := strings.TrimSpace(string(data))
 	if trimmed == "" {
@@ -865,9 +884,9 @@ func TestPrune_CompactRemovesHistory(t *testing.T) {
 		t.Fatalf("expected post-compact not-found error, got code=%d stderr=%q", code, stderr)
 	}
 
-	data, err := os.ReadFile(filepath.Join(dir, ".ergo", "events.jsonl"))
+	data, err := os.ReadFile(getEventFilePath(dir))
 	if err != nil {
-		t.Fatalf("failed to read events.jsonl: %v", err)
+		t.Fatalf("failed to read event log: %v", err)
 	}
 	if strings.Contains(string(data), "tombstone") || strings.Contains(string(data), taskID) {
 		t.Fatalf("expected compacted log to remove pruned history, got: %s", string(data))
@@ -962,9 +981,9 @@ func TestPrune_ConcurrentRuns(t *testing.T) {
 		t.Fatalf("expected at least one prune to succeed, got codes %d and %d", r1.code, r2.code)
 	}
 
-	data, err := os.ReadFile(filepath.Join(dir, ".ergo", "events.jsonl"))
+	data, err := os.ReadFile(getEventFilePath(dir))
 	if err != nil {
-		t.Fatalf("failed to read events.jsonl: %v", err)
+		t.Fatalf("failed to read event log: %v", err)
 	}
 	tombstones := strings.Count(string(data), "tombstone")
 	if tombstones != 1 {
