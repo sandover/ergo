@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-02-18
+
+### Changed
+- `show <epic-id>` human output is now document-first: epic body first, compact child task rows second, metadata footer last.
+- Epic child ordering in `show` now follows dependency order (matching `list`) instead of lexicographic ID order.
+
+### Documentation
+- `ergo quickstart` now explicitly notes that `ergo --json show <epic-id>` returns `epic` plus `children`, and each child includes `body`.
+
+### Tests
+- Added regression coverage for epic child ordering in both human and JSON `show` output.
+- Added regression coverage for document-first epic layout and for keeping task-level `show` formatting unchanged.
+
 ## [0.10.0] - 2026-02-16
 
 ### Changed
@@ -292,7 +305,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/sandover/ergo/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/sandover/ergo/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/sandover/ergo/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/sandover/ergo/compare/v0.9.1...v0.9.2
