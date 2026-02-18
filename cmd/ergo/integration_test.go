@@ -460,7 +460,7 @@ func TestShowTaskHeaderDense(t *testing.T) {
 		t.Fatalf("sequence failed: exit %d", code)
 	}
 
-	stdout, _, code = runErgo(t, dir, `{"claim":"agent-x"}`, "set", taskB)
+	_, _, code = runErgo(t, dir, `{"claim":"agent-x"}`, "set", taskB)
 	if code != 0 {
 		t.Fatalf("set claim failed: exit %d", code)
 	}
