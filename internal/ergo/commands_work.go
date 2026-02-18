@@ -10,11 +10,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/charmbracelet/glamour"
 )
 
 type ListOptions struct {
@@ -971,232 +970,108 @@ func buildTaskShowOutput(task *Task, meta *TaskMeta, repoDir string) taskShowOut
 	}
 }
 
-// printTaskDetails prints the human-readable show output for a single task.
-func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
-	isTTY := stdoutIsTTY()
-	useColor := isTTY
-
-	// Compute derived state
-	isReady := false // We don't have graph here, so can't compute properly
-	icon := stateIcon(task, isReady)
-	stateColor := stateColor(task)
-
-	// Header: [icon] ID [state] · Title
-	if useColor {
-		fmt.Printf("%s%s%s %s", stateColor, icon, colorReset, colorBold)
-	} else {
-		fmt.Printf("%s ", icon)
-	}
-	fmt.Printf("%s", task.ID)
-	if useColor {
-		fmt.Printf(" %s[%s]%s", stateColor, task.State, colorReset)
-		if task.Title != "" {
-			fmt.Printf(" %s· %s%s", colorBold, task.Title, colorReset)
-		}
-	} else {
-		fmt.Printf(" [%s]", task.State)
-		if task.Title != "" {
-			fmt.Printf(" · %s", task.Title)
-		}
-	}
-	if useColor {
-		fmt.Print(colorReset)
-	}
-	fmt.Println()
-
-	// Separator
-	printDimSeparator(50, useColor)
-
-	// Epic
-	if task.EpicID != "" {
-		if useColor {
-			fmt.Printf("%sepic:%s  %s\n", colorDim, colorReset, task.EpicID)
-		} else {
-			fmt.Printf("epic:  %s\n", task.EpicID)
-		}
-	}
-
-	// Claimed by
-	if task.ClaimedBy != "" {
-		if useColor {
-			fmt.Printf("%sclaim:%s %s\n", colorDim, colorReset, task.ClaimedBy)
-		} else {
-			fmt.Printf("claim: %s\n", task.ClaimedBy)
-		}
-	}
-
-	// Timestamps (dim)
-	if useColor {
-		fmt.Printf("%s", colorDim)
-	}
-	fmt.Printf("created: %s\n", relativeTime(task.CreatedAt))
-	fmt.Printf("updated: %s\n", relativeTime(task.UpdatedAt))
-	if useColor {
-		fmt.Print(colorReset)
-	}
-
-	// Dependencies (if present, dim)
-	if len(task.Deps) > 0 || len(task.RDeps) > 0 {
-		if useColor {
-			fmt.Printf("%s", colorDim)
-		}
-		if len(task.Deps) > 0 {
-			fmt.Printf("deps:  %s\n", strings.Join(task.Deps, ", "))
-		}
-		if len(task.RDeps) > 0 {
-			fmt.Printf("rdeps: %s\n", strings.Join(task.RDeps, ", "))
-		}
-		if useColor {
-			fmt.Print(colorReset)
-		}
-	}
-
-	// Results
-	if len(task.Results) > 0 {
-		fmt.Println("Results:")
-		for _, r := range task.Results {
-			fileURL := deriveFileURL(r.Path, repoDir)
-			if useColor {
-				fmt.Printf("  → %s%s%s", colorCyan, fileURL, colorReset)
-			} else {
-				fmt.Printf("  → %s", fileURL)
-			}
-			if useColor {
-				fmt.Printf(" %s— %s%s\n", colorDim, r.Summary, colorReset)
-			} else {
-				fmt.Printf(" — %s\n", r.Summary)
-			}
-		}
-	}
-
-	// Separator before content
-	printDimSeparator(50, useColor)
-
-	// Body with glamour rendering
-	if task.Body != "" {
-		printMarkdownBody(task.Body, isTTY)
-	}
+type frontMatterField struct {
+	key   string
+	value string
 }
 
-// printEpicDetails renders a document-first epic view for human output.
-func printEpicDetails(epic *Task, children []*Task, graph *Graph) {
-	isTTY := stdoutIsTTY()
-	useColor := isTTY
-	termWidth := getTerminalWidth()
-	if termWidth < 24 {
-		termWidth = 24
-	}
+// printTaskDetails prints task show output as a Markdown document.
+func printTaskDetails(task *Task, repoDir string) {
+	writeShowFrontMatter([]frontMatterField{
+		{key: "kind", value: "task"},
+		{key: "id", value: task.ID},
+		{key: "title", value: task.Title},
+		{key: "state", value: task.State},
+		{key: "epic_id", value: task.EpicID},
+		{key: "created_at", value: formatTime(task.CreatedAt)},
+		{key: "updated_at", value: formatTime(task.UpdatedAt)},
+	})
 
-	if useColor {
-		fmt.Printf("%s# %s%s\n", colorBold, epic.Title, colorReset)
-	} else {
-		fmt.Printf("# %s\n", epic.Title)
-	}
-	printDimSeparator(50, useColor)
-
-	if epic.Body != "" {
-		printMarkdownBody(epic.Body, isTTY)
+	fmt.Printf("# %s\n\n", showTitle(task.Title, task.ID))
+	if task.Body != "" {
+		printMarkdownBody(task.Body)
 		fmt.Println()
 	}
 
-	stats := computeStatsForTasks(children, graph)
-	summary := renderSummaryLine(stats, useColor)
-	if summary != "" {
-		fmt.Printf("Tasks  ·  %s\n", summary)
-	} else {
-		fmt.Println("Tasks")
-	}
-
-	rowWidth := termWidth - 2
-	if rowWidth < 20 {
-		rowWidth = 20
-	}
-	for _, child := range children {
-		row := formatEpicTaskRow(child, graph, useColor, rowWidth)
-		fmt.Printf("  %s\n", row)
-	}
-
-	printDimSeparator(50, useColor)
-	footer := fmt.Sprintf("%s  ·  created %s  ·  updated %s", epic.ID, relativeTime(epic.CreatedAt), relativeTime(epic.UpdatedAt))
-	if useColor {
-		fmt.Printf("%s%s%s\n", colorDim, footer, colorReset)
-	} else {
-		fmt.Println(footer)
-	}
+	printTaskResultsMarkdown(task.Results, repoDir, "## Results")
 }
 
-func printDimSeparator(width int, useColor bool) {
-	if width < 1 {
-		width = 1
-	}
-	if useColor {
-		fmt.Printf("%s%s%s\n", colorDim, strings.Repeat("─", width), colorReset)
-	} else {
-		fmt.Println(strings.Repeat("─", width))
-	}
-}
+// printEpicDetails renders epic show output as a Markdown document.
+func printEpicDetails(epic *Task, children []*Task, repoDir string) {
+	writeShowFrontMatter([]frontMatterField{
+		{key: "kind", value: "epic"},
+		{key: "id", value: epic.ID},
+		{key: "title", value: epic.Title},
+		{key: "created_at", value: formatTime(epic.CreatedAt)},
+		{key: "updated_at", value: formatTime(epic.UpdatedAt)},
+	})
 
-func printMarkdownBody(body string, isTTY bool) {
-	if body == "" {
-		return
+	fmt.Printf("# %s\n\n", showTitle(epic.Title, epic.ID))
+	if epic.Body != "" {
+		printMarkdownBody(epic.Body)
+		fmt.Println()
 	}
-	if isTTY {
-		r, _ := glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
-			glamour.WithWordWrap(80),
-		)
-		out, err := r.Render(body)
-		if err == nil {
-			fmt.Print(out)
-			return
+
+	fmt.Println("## Tasks")
+	fmt.Println()
+	for index, child := range children {
+		fmt.Printf("### %s - %s\n\n", child.ID, showTitle(child.Title, child.ID))
+		fmt.Printf("- state: %s\n", child.State)
+		if len(child.Results) > 0 {
+			fmt.Println("- results:")
+			for _, result := range child.Results {
+				fileURL := deriveFileURL(result.Path, repoDir)
+				fmt.Printf("  - [%s](%s): %s\n", result.Path, fileURL, result.Summary)
+			}
+		}
+		fmt.Println()
+
+		if child.Body != "" {
+			printMarkdownBody(child.Body)
+		}
+		if index < len(children)-1 {
+			fmt.Println()
 		}
 	}
+}
+
+func writeShowFrontMatter(fields []frontMatterField) {
+	fmt.Println("---")
+	for _, field := range fields {
+		fmt.Printf("%s: %s\n", field.key, yamlString(field.value))
+	}
+	fmt.Println("---")
+	fmt.Println()
+}
+
+func yamlString(value string) string {
+	return strconv.Quote(value)
+}
+
+func showTitle(title string, fallback string) string {
+	if strings.TrimSpace(title) == "" {
+		return fallback
+	}
+	return title
+}
+
+func printMarkdownBody(body string) {
 	fmt.Print(body)
 	if !strings.HasSuffix(body, "\n") {
 		fmt.Println()
 	}
 }
 
-func renderSummaryLine(stats taskStats, useColor bool) string {
-	var b strings.Builder
-	renderSummary(&b, stats, useColor, []summaryBucket{
-		summaryReady,
-		summaryInProgress,
-		summaryBlocked,
-		summaryError,
-		summaryDone,
-		summaryCanceled,
-	}, false)
-	return strings.TrimSpace(b.String())
-}
-
-func formatEpicTaskRow(task *Task, graph *Graph, useColor bool, termWidth int) string {
-	ready := isReady(task, graph)
-	icon := stateIcon(task, ready)
-	var annotations []string
-	if task.ClaimedBy != "" {
-		annotations = append(annotations, "@"+task.ClaimedBy)
+func printTaskResultsMarkdown(results []Result, repoDir string, heading string) {
+	if len(results) == 0 {
+		return
 	}
-
-	var blockerAnnotation string
-	if !ready && task.State == stateTodo {
-		blockers := getBlockers(task, graph)
-		var names []string
-		for _, blockerID := range blockers {
-			if blocker := graph.Tasks[blockerID]; blocker != nil {
-				names = append(names, abbreviate(blocker.Title, 20))
-			} else {
-				names = append(names, blockerID)
-			}
-		}
-		if len(names) > 2 {
-			blockerAnnotation = fmt.Sprintf("⧗ %d blockers", len(names))
-		} else if len(names) > 0 {
-			blockerAnnotation = "⧗ " + strings.Join(names, ", ")
-		}
+	fmt.Println(heading)
+	for _, result := range results {
+		fileURL := deriveFileURL(result.Path, repoDir)
+		fmt.Printf("- [%s](%s): %s\n", result.Path, fileURL, result.Summary)
 	}
-
-	return formatTreeLine("", "", false, icon, task.ID, task.Title, annotations, blockerAnnotation, task, ready, useColor, termWidth)
+	fmt.Println()
 }
 
 func RunShow(id string, short bool, opts GlobalOptions) error {
@@ -1262,10 +1137,10 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 	}
 
 	if isEpic(task) {
-		printEpicDetails(task, childTasks, graph)
+		printEpicDetails(task, childTasks, repoDir)
 		return nil
 	}
-	printTaskDetails(task, graph.Meta[id], repoDir)
+	printTaskDetails(task, repoDir)
 	return nil
 }
 

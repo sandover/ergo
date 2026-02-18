@@ -315,29 +315,33 @@ func TestShowEpicHumanDocumentFirstLayout(t *testing.T) {
 	}
 	epicID := strings.TrimSpace(stdout)
 
-	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"First task","epic":"%s"}`, epicID), "new", "task")
+	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"First task","body":"First body","epic":"%s"}`, epicID), "new", "task")
 	if code != 0 {
 		t.Fatalf("new task failed: exit %d", code)
 	}
 	task1 := strings.TrimSpace(stdout)
 
-	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"Claimed task","epic":"%s"}`, epicID), "new", "task")
+	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"Claimed task","body":"Second body","epic":"%s"}`, epicID), "new", "task")
 	if code != 0 {
 		t.Fatalf("new task failed: exit %d", code)
 	}
 	task2 := strings.TrimSpace(stdout)
 
-	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"Blocked task","epic":"%s"}`, epicID), "new", "task")
-	if code != 0 {
-		t.Fatalf("new task failed: exit %d", code)
+	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0755); err != nil {
+		t.Fatalf("mkdir docs failed: %v", err)
 	}
-	task3 := strings.TrimSpace(stdout)
-
+	if err := os.WriteFile(filepath.Join(dir, "docs", "r1.md"), []byte("hello"), 0644); err != nil {
+		t.Fatalf("write result file failed: %v", err)
+	}
+	_, _, code = runErgo(t, dir, `{"result_path":"docs/r1.md","result_summary":"first result"}`, "set", task1)
+	if code != 0 {
+		t.Fatalf("set result failed: exit %d", code)
+	}
 	_, _, code = runErgo(t, dir, `{"claim":"agent-x"}`, "set", task2)
 	if code != 0 {
 		t.Fatalf("set claim failed: exit %d", code)
 	}
-	_, _, code = runErgo(t, dir, "", "sequence", task1, task3)
+	_, _, code = runErgo(t, dir, "", "sequence", task1, task2)
 	if code != 0 {
 		t.Fatalf("sequence failed: exit %d", code)
 	}
@@ -347,27 +351,48 @@ func TestShowEpicHumanDocumentFirstLayout(t *testing.T) {
 		t.Fatalf("show failed: exit %d", code)
 	}
 
+	if !strings.HasPrefix(stdout, "---\n") {
+		t.Fatalf("expected front matter document start: %s", stdout)
+	}
+	if !strings.Contains(stdout, "\nkind: \"epic\"\n") || !strings.Contains(stdout, "\nid: \""+epicID+"\"\n") {
+		t.Fatalf("expected epic front matter keys in output: %s", stdout)
+	}
 	if !strings.Contains(stdout, "# Plan Epic") {
 		t.Fatalf("expected heading in show output: %s", stdout)
 	}
-	if strings.Contains(stdout, "---") {
-		t.Fatalf("did not expect legacy child separators in show output: %s", stdout)
+	if strings.Contains(stdout, "──────────────────────────────────────────────────") {
+		t.Fatalf("did not expect non-markdown separator lines in show output: %s", stdout)
 	}
-	if !strings.Contains(stdout, "@agent-x") {
-		t.Fatalf("expected claim annotation in task row: %s", stdout)
+	if !strings.Contains(stdout, "### "+task1+" - First task") || !strings.Contains(stdout, "### "+task2+" - Claimed task") {
+		t.Fatalf("expected child markdown headings in output: %s", stdout)
 	}
-	if !strings.Contains(stdout, "⧗") {
-		t.Fatalf("expected blocker annotation in task row: %s", stdout)
+	if !strings.Contains(stdout, "First body") || !strings.Contains(stdout, "Second body") {
+		t.Fatalf("expected child task bodies in epic show output: %s", stdout)
 	}
 
 	idxBody := strings.Index(stdout, "Plan body line")
-	idxTasks := strings.Index(stdout, "Tasks  ·")
-	idxFooter := strings.LastIndex(stdout, epicID+"  ·  created ")
-	if idxBody < 0 || idxTasks < 0 || idxFooter < 0 {
-		t.Fatalf("expected body, task section, and footer in output: %s", stdout)
+	idxTasks := strings.Index(stdout, "## Tasks")
+	if idxBody < 0 || idxTasks < 0 {
+		t.Fatalf("expected epic body and tasks section in output: %s", stdout)
 	}
-	if !(idxBody < idxTasks && idxTasks < idxFooter) {
-		t.Fatalf("expected body before tasks and footer last, got output: %s", stdout)
+	if !(idxBody < idxTasks) {
+		t.Fatalf("expected epic body before tasks section, got output: %s", stdout)
+	}
+
+	task1Start := strings.Index(stdout, "### "+task1+" - First task")
+	task2Start := strings.Index(stdout, "### "+task2+" - Claimed task")
+	if task1Start < 0 || task2Start < 0 || task2Start <= task1Start {
+		t.Fatalf("expected child sections in dependency order: %s", stdout)
+	}
+	task1Section := stdout[task1Start:task2Start]
+	if !strings.Contains(task1Section, "- state: ") {
+		t.Fatalf("expected child state metadata in task section: %s", task1Section)
+	}
+	if !strings.Contains(task1Section, "- results:") {
+		t.Fatalf("expected child results metadata in task section: %s", task1Section)
+	}
+	if strings.Contains(task1Section, "claim:") || strings.Contains(task1Section, "deps:") || strings.Contains(task1Section, "rdeps:") || strings.Contains(task1Section, "created:") || strings.Contains(task1Section, "updated:") {
+		t.Fatalf("expected child metadata to exclude claim/deps/rdeps/timestamps: %s", task1Section)
 	}
 }
 
@@ -389,20 +414,11 @@ func TestShowEpicOmitsBodySectionWhenEmpty(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("show failed: exit %d", code)
 	}
-
-	lines := strings.Split(stdout, "\n")
-	sepIndex := -1
-	for i, line := range lines {
-		if strings.Contains(line, "──────────────────────────────────────────────────") {
-			sepIndex = i
-			break
-		}
+	if !strings.Contains(stdout, "# No Body Epic\n\n## Tasks") {
+		t.Fatalf("expected heading followed by tasks section when epic body is empty: %s", stdout)
 	}
-	if sepIndex < 0 || sepIndex+1 >= len(lines) {
-		t.Fatalf("expected separator followed by tasks section: %s", stdout)
-	}
-	if !strings.HasPrefix(lines[sepIndex+1], "Tasks") {
-		t.Fatalf("expected tasks section immediately after separator for empty body, got: %q", lines[sepIndex+1])
+	if strings.Contains(stdout, "──────────────────────────────────────────────────") {
+		t.Fatalf("did not expect non-markdown separator lines in output: %s", stdout)
 	}
 }
 
@@ -419,18 +435,20 @@ func TestShowTaskHumanOutputUnchanged(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("show failed: exit %d", code)
 	}
-
-	if !strings.Contains(stdout, taskID+" [todo] · Standalone") {
-		t.Fatalf("expected legacy task header format in output: %s", stdout)
+	if !strings.HasPrefix(stdout, "---\n") {
+		t.Fatalf("expected markdown front matter start: %s", stdout)
 	}
-	if !strings.Contains(stdout, "created: ") || !strings.Contains(stdout, "updated: ") {
-		t.Fatalf("expected task metadata timestamps in output: %s", stdout)
+	if !strings.Contains(stdout, "\nkind: \"task\"\n") || !strings.Contains(stdout, "\nid: \""+taskID+"\"\n") {
+		t.Fatalf("expected task front matter keys in output: %s", stdout)
 	}
-	if !strings.Contains(stdout, "──────────────────────────────────────────────────") {
-		t.Fatalf("expected task separator line in output: %s", stdout)
+	if !strings.Contains(stdout, "# Standalone") || !strings.Contains(stdout, "Body text") {
+		t.Fatalf("expected task markdown heading and body in output: %s", stdout)
 	}
-	if strings.Contains(stdout, "Tasks  ·") || strings.HasPrefix(strings.TrimSpace(stdout), "# ") {
-		t.Fatalf("did not expect epic document-first layout markers in task output: %s", stdout)
+	if strings.Contains(stdout, "──────────────────────────────────────────────────") {
+		t.Fatalf("did not expect non-markdown separator lines in task output: %s", stdout)
+	}
+	if strings.Contains(stdout, "\x1b[") {
+		t.Fatalf("did not expect ANSI escape sequences in task markdown output: %s", stdout)
 	}
 }
 
@@ -464,20 +482,26 @@ func TestShowTaskHeaderDense(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("set claim failed: exit %d", code)
 	}
+	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0755); err != nil {
+		t.Fatalf("mkdir docs failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "r1.md"), []byte("hello"), 0644); err != nil {
+		t.Fatalf("write result file failed: %v", err)
+	}
+	_, _, code = runErgo(t, dir, `{"result_path":"docs/r1.md","result_summary":"first result"}`, "set", taskB)
+	if code != 0 {
+		t.Fatalf("set result failed: exit %d", code)
+	}
 
 	stdout, _, code = runErgo(t, dir, "", "show", taskB)
 	if code != 0 {
 		t.Fatalf("show failed: exit %d", code)
 	}
-
-	if strings.Contains(stdout, "\n\ncreated: ") {
-		t.Fatalf("expected no blank line before created timestamp: %s", stdout)
+	if !strings.Contains(stdout, "## Results") {
+		t.Fatalf("expected markdown results heading for task show output: %s", stdout)
 	}
-	if strings.Contains(stdout, "\n\ndeps:  ") || strings.Contains(stdout, "\n\nrdeps: ") {
-		t.Fatalf("expected no blank line before dependency metadata: %s", stdout)
-	}
-	if strings.Contains(stdout, "\n\nResults:") {
-		t.Fatalf("expected no blank line before results section: %s", stdout)
+	if !strings.Contains(stdout, "docs/r1.md") {
+		t.Fatalf("expected markdown results entry to include result path: %s", stdout)
 	}
 }
 

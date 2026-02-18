@@ -34,6 +34,10 @@ Common variants:
     {{CMD}}ergo claim ABCDEF --agent sonnet@agent-host{{RESET}}
   - Claim oldest ready task within an epic:
     {{CMD}}ergo claim --agent sonnet@agent-host --epic ABCDEF{{RESET}}
+  - Human show output is Markdown with SKILL.md-style front matter:
+    {{CMD}}ergo show ABCDEF{{RESET}}
+  - Machine output for show is unchanged and should use JSON:
+    {{CMD}}ergo --json show ABCDEF{{RESET}}
   - If no tasks are ready, claim prints “No ready ergo tasks.” and exits 0.
   - Change state (uses existing claim if present):
     {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}

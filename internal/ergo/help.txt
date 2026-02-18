@@ -9,7 +9,8 @@
   new epic                                create epic (JSON stdin; or --body-stdin)
   new task                                create task (JSON stdin; or --body-stdin)
   set <id>                                update task/epic (JSON stdin; or --body-stdin)
-  show <id>                               show epic or task details
+  show <id>                               show epic/task as Markdown document (human mode)
+                                          --json output contract is unchanged
 
   list [--epic <id>] [--ready] [--epics] [--all]
                                           list active work and in-progress epics
