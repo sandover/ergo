@@ -22,6 +22,8 @@ Core loop:
      {{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
      Never leave tasks in `doing`. Always set done, blocked, error, or canceled.
      Mutating commands return JSON objects when --json is set.
+  4) Pull full epic context in one call:
+     {{CMD}}ergo --json show EPICID{{RESET}} returns `{"epic": ..., "children": ...}` and each child includes `body`.
 
 Flags:
   - Use `--quiet` to suppress non-essential output (useful for scripts).

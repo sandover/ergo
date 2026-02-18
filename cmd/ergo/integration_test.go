@@ -229,6 +229,211 @@ func TestNewEpic_BodyStdin_Multiline(t *testing.T) {
 	}
 }
 
+func TestShowEpicChildrenDependencyOrder(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Order Epic","body":"Body"}`, "new", "epic")
+	if code != 0 {
+		t.Fatalf("new epic failed: exit %d", code)
+	}
+	epicID := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"A","epic":"%s"}`, epicID), "new", "task")
+	if code != 0 {
+		t.Fatalf("new task A failed: exit %d", code)
+	}
+	taskA := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"B","epic":"%s"}`, epicID), "new", "task")
+	if code != 0 {
+		t.Fatalf("new task B failed: exit %d", code)
+	}
+	taskB := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"C","epic":"%s"}`, epicID), "new", "task")
+	if code != 0 {
+		t.Fatalf("new task C failed: exit %d", code)
+	}
+	taskC := strings.TrimSpace(stdout)
+
+	_, _, code = runErgo(t, dir, "", "sequence", taskA, taskB, taskC)
+	if code != 0 {
+		t.Fatalf("sequence failed: exit %d", code)
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "show", epicID, "--json")
+	if code != 0 {
+		t.Fatalf("show --json failed: exit %d", code)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("failed to parse show --json: %v", err)
+	}
+	rawChildren, ok := payload["children"].([]interface{})
+	if !ok {
+		t.Fatalf("expected children array in show --json payload: %v", payload)
+	}
+	if len(rawChildren) != 3 {
+		t.Fatalf("expected 3 children, got %d", len(rawChildren))
+	}
+
+	pos := map[string]int{}
+	for i, raw := range rawChildren {
+		child, ok := raw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected child object, got %T", raw)
+		}
+		id, _ := child["id"].(string)
+		pos[id] = i
+	}
+	if !(pos[taskA] < pos[taskB] && pos[taskB] < pos[taskC]) {
+		t.Fatalf("expected child order %s -> %s -> %s, got positions %v", taskA, taskB, taskC, pos)
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "show", epicID)
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+	idxA := strings.Index(stdout, taskA)
+	idxB := strings.Index(stdout, taskB)
+	idxC := strings.Index(stdout, taskC)
+	if idxA < 0 || idxB < 0 || idxC < 0 {
+		t.Fatalf("expected all task IDs in human show output, got: %s", stdout)
+	}
+	if !(idxA < idxB && idxB < idxC) {
+		t.Fatalf("expected human show order %s -> %s -> %s", taskA, taskB, taskC)
+	}
+}
+
+func TestShowEpicHumanDocumentFirstLayout(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Plan Epic","body":"Plan body line\n\n- item"}`, "new", "epic")
+	if code != 0 {
+		t.Fatalf("new epic failed: exit %d", code)
+	}
+	epicID := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"First task","epic":"%s"}`, epicID), "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	task1 := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"Claimed task","epic":"%s"}`, epicID), "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	task2 := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"Blocked task","epic":"%s"}`, epicID), "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	task3 := strings.TrimSpace(stdout)
+
+	_, _, code = runErgo(t, dir, `{"claim":"agent-x"}`, "set", task2)
+	if code != 0 {
+		t.Fatalf("set claim failed: exit %d", code)
+	}
+	_, _, code = runErgo(t, dir, "", "sequence", task1, task3)
+	if code != 0 {
+		t.Fatalf("sequence failed: exit %d", code)
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "show", epicID)
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+
+	if !strings.Contains(stdout, "# Plan Epic") {
+		t.Fatalf("expected heading in show output: %s", stdout)
+	}
+	if strings.Contains(stdout, "---") {
+		t.Fatalf("did not expect legacy child separators in show output: %s", stdout)
+	}
+	if !strings.Contains(stdout, "@agent-x") {
+		t.Fatalf("expected claim annotation in task row: %s", stdout)
+	}
+	if !strings.Contains(stdout, "⧗") {
+		t.Fatalf("expected blocker annotation in task row: %s", stdout)
+	}
+
+	idxBody := strings.Index(stdout, "Plan body line")
+	idxTasks := strings.Index(stdout, "Tasks  ·")
+	idxFooter := strings.LastIndex(stdout, epicID+"  ·  created ")
+	if idxBody < 0 || idxTasks < 0 || idxFooter < 0 {
+		t.Fatalf("expected body, task section, and footer in output: %s", stdout)
+	}
+	if !(idxBody < idxTasks && idxTasks < idxFooter) {
+		t.Fatalf("expected body before tasks and footer last, got output: %s", stdout)
+	}
+}
+
+func TestShowEpicOmitsBodySectionWhenEmpty(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"No Body Epic"}`, "new", "epic")
+	if code != 0 {
+		t.Fatalf("new epic failed: exit %d", code)
+	}
+	epicID := strings.TrimSpace(stdout)
+
+	_, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"Task 1","epic":"%s"}`, epicID), "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "show", epicID)
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+
+	lines := strings.Split(stdout, "\n")
+	sepIndex := -1
+	for i, line := range lines {
+		if strings.Contains(line, "──────────────────────────────────────────────────") {
+			sepIndex = i
+			break
+		}
+	}
+	if sepIndex < 0 || sepIndex+1 >= len(lines) {
+		t.Fatalf("expected separator followed by tasks section: %s", stdout)
+	}
+	if !strings.HasPrefix(lines[sepIndex+1], "Tasks") {
+		t.Fatalf("expected tasks section immediately after separator for empty body, got: %q", lines[sepIndex+1])
+	}
+}
+
+func TestShowTaskHumanOutputUnchanged(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Standalone","body":"Body text"}`, "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, "", "show", taskID)
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+
+	if !strings.Contains(stdout, taskID+" [todo] · Standalone") {
+		t.Fatalf("expected legacy task header format in output: %s", stdout)
+	}
+	if !strings.Contains(stdout, "created: ") || !strings.Contains(stdout, "updated: ") {
+		t.Fatalf("expected task metadata timestamps in output: %s", stdout)
+	}
+	if !strings.Contains(stdout, "──────────────────────────────────────────────────") {
+		t.Fatalf("expected task separator line in output: %s", stdout)
+	}
+	if strings.Contains(stdout, "Tasks  ·") || strings.HasPrefix(strings.TrimSpace(stdout), "# ") {
+		t.Fatalf("did not expect epic document-first layout markers in task output: %s", stdout)
+	}
+}
+
 func TestNewTask_BodyStdin_ValidationErrors(t *testing.T) {
 	dir := setupErgo(t)
 

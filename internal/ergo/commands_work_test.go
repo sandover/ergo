@@ -102,6 +102,49 @@ func TestBuildSetEvents_StateValidation_ClaimedTaskNoAgent(t *testing.T) {
 	}
 }
 
+func TestCollectEpicChildrenSortsByDependencyOrder(t *testing.T) {
+	graph := &Graph{
+		Tasks: map[string]*Task{
+			"E1":     {ID: "E1", IsEpic: true, State: stateTodo, Title: "Epic"},
+			"A11111": {ID: "A11111", EpicID: "E1", State: stateTodo, Title: "A"},
+			"B11111": {ID: "B11111", EpicID: "E1", State: stateTodo, Title: "B"},
+			"C11111": {ID: "C11111", EpicID: "E1", State: stateTodo, Title: "C"},
+			"D11111": {ID: "D11111", EpicID: "E1", State: stateTodo, Title: "D"},
+			"X11111": {ID: "X11111", EpicID: "E2", State: stateTodo, Title: "Other epic"},
+		},
+		Deps: map[string]map[string]struct{}{
+			"A11111": {},
+			"B11111": {"A11111": {}},
+			"C11111": {"B11111": {}},
+			"D11111": {},
+			"E1":     {},
+			"X11111": {},
+		},
+	}
+
+	children := collectEpicChildren("E1", graph)
+	if len(children) != 4 {
+		t.Fatalf("expected 4 children for E1, got %d", len(children))
+	}
+
+	pos := make(map[string]int, len(children))
+	for i, task := range children {
+		pos[task.ID] = i
+	}
+
+	if !(pos["A11111"] < pos["B11111"] && pos["B11111"] < pos["C11111"]) {
+		t.Fatalf("expected dependency order A -> B -> C, got %v", []string{
+			children[0].ID, children[1].ID, children[2].ID, children[3].ID,
+		})
+	}
+	if _, ok := pos["D11111"]; !ok {
+		t.Fatalf("expected independent task D11111 to be included")
+	}
+	if pos["A11111"] > pos["D11111"] {
+		t.Fatalf("expected deterministic ID fallback among peers: A11111 before D11111")
+	}
+}
+
 func TestRunClaimRequiresAgent(t *testing.T) {
 	err := RunClaim("T1", GlobalOptions{})
 	if err == nil || !contains(err.Error(), "claim requires --agent") {

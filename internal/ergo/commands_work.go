@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -911,7 +910,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	}
 }
 
-// collectEpicChildren returns all tasks belonging to the given epic, sorted by ID.
+// collectEpicChildren returns all tasks belonging to the given epic in dependency order.
 func collectEpicChildren(epicID string, graph *Graph) []*Task {
 	var children []*Task
 	for _, t := range graph.Tasks {
@@ -919,10 +918,7 @@ func collectEpicChildren(epicID string, graph *Graph) []*Task {
 			children = append(children, t)
 		}
 	}
-	sort.Slice(children, func(i, j int) bool {
-		return children[i].ID < children[j].ID
-	})
-	return children
+	return topoSortTasks(children, graph)
 }
 
 func collectNonEpicTasks(graph *Graph) []*Task {
@@ -1009,11 +1005,7 @@ func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
 	fmt.Println()
 
 	// Separator
-	if useColor {
-		fmt.Printf("%s%s%s\n", colorDim, strings.Repeat("─", 50), colorReset)
-	} else {
-		fmt.Println(strings.Repeat("─", 50))
-	}
+	printDimSeparator(50, useColor)
 
 	// Epic
 	if task.EpicID != "" {
@@ -1082,33 +1074,133 @@ func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
 	}
 
 	// Separator before content
-	if useColor {
-		fmt.Printf("%s%s%s\n", colorDim, strings.Repeat("─", 50), colorReset)
-	} else {
-		fmt.Println(strings.Repeat("─", 50))
-	}
+	printDimSeparator(50, useColor)
 
 	// Body with glamour rendering
-	if isTTY && task.Body != "" {
+	if task.Body != "" {
+		printMarkdownBody(task.Body, isTTY)
+	}
+}
+
+// printEpicDetails renders a document-first epic view for human output.
+func printEpicDetails(epic *Task, children []*Task, graph *Graph) {
+	isTTY := stdoutIsTTY()
+	useColor := isTTY
+	termWidth := getTerminalWidth()
+	if termWidth < 24 {
+		termWidth = 24
+	}
+
+	if useColor {
+		fmt.Printf("%s# %s%s\n", colorBold, epic.Title, colorReset)
+	} else {
+		fmt.Printf("# %s\n", epic.Title)
+	}
+	printDimSeparator(50, useColor)
+
+	if epic.Body != "" {
+		printMarkdownBody(epic.Body, isTTY)
+		fmt.Println()
+	}
+
+	stats := computeStatsForTasks(children, graph)
+	summary := renderSummaryLine(stats, useColor)
+	if summary != "" {
+		fmt.Printf("Tasks  ·  %s\n", summary)
+	} else {
+		fmt.Println("Tasks")
+	}
+
+	rowWidth := termWidth - 2
+	if rowWidth < 20 {
+		rowWidth = 20
+	}
+	for _, child := range children {
+		row := formatEpicTaskRow(child, graph, useColor, rowWidth)
+		fmt.Printf("  %s\n", row)
+	}
+
+	printDimSeparator(50, useColor)
+	footer := fmt.Sprintf("%s  ·  created %s  ·  updated %s", epic.ID, relativeTime(epic.CreatedAt), relativeTime(epic.UpdatedAt))
+	if useColor {
+		fmt.Printf("%s%s%s\n", colorDim, footer, colorReset)
+	} else {
+		fmt.Println(footer)
+	}
+}
+
+func printDimSeparator(width int, useColor bool) {
+	if width < 1 {
+		width = 1
+	}
+	if useColor {
+		fmt.Printf("%s%s%s\n", colorDim, strings.Repeat("─", width), colorReset)
+	} else {
+		fmt.Println(strings.Repeat("─", width))
+	}
+}
+
+func printMarkdownBody(body string, isTTY bool) {
+	if body == "" {
+		return
+	}
+	if isTTY {
 		r, _ := glamour.NewTermRenderer(
 			glamour.WithAutoStyle(),
 			glamour.WithWordWrap(80),
 		)
-		out, err := r.Render(task.Body)
+		out, err := r.Render(body)
 		if err == nil {
 			fmt.Print(out)
-		} else {
-			fmt.Print(task.Body)
-			if !strings.HasSuffix(task.Body, "\n") {
-				fmt.Println()
-			}
-		}
-	} else if task.Body != "" {
-		fmt.Print(task.Body)
-		if !strings.HasSuffix(task.Body, "\n") {
-			fmt.Println()
+			return
 		}
 	}
+	fmt.Print(body)
+	if !strings.HasSuffix(body, "\n") {
+		fmt.Println()
+	}
+}
+
+func renderSummaryLine(stats taskStats, useColor bool) string {
+	var b strings.Builder
+	renderSummary(&b, stats, useColor, []summaryBucket{
+		summaryReady,
+		summaryInProgress,
+		summaryBlocked,
+		summaryError,
+		summaryDone,
+		summaryCanceled,
+	}, false)
+	return strings.TrimSpace(b.String())
+}
+
+func formatEpicTaskRow(task *Task, graph *Graph, useColor bool, termWidth int) string {
+	ready := isReady(task, graph)
+	icon := stateIcon(task, ready)
+	var annotations []string
+	if task.ClaimedBy != "" {
+		annotations = append(annotations, "@"+task.ClaimedBy)
+	}
+
+	var blockerAnnotation string
+	if !ready && task.State == stateTodo {
+		blockers := getBlockers(task, graph)
+		var names []string
+		for _, blockerID := range blockers {
+			if blocker := graph.Tasks[blockerID]; blocker != nil {
+				names = append(names, abbreviate(blocker.Title, 20))
+			} else {
+				names = append(names, blockerID)
+			}
+		}
+		if len(names) > 2 {
+			blockerAnnotation = fmt.Sprintf("⧗ %d blockers", len(names))
+		} else if len(names) > 0 {
+			blockerAnnotation = "⧗ " + strings.Join(names, ", ")
+		}
+	}
+
+	return formatTreeLine("", "", false, icon, task.ID, task.Title, annotations, blockerAnnotation, task, ready, useColor, termWidth)
 }
 
 func RunShow(id string, short bool, opts GlobalOptions) error {
@@ -1173,15 +1265,11 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 		return nil
 	}
 
-	// Print the main task/epic
-	printTaskDetails(task, graph.Meta[id], repoDir)
-
-	// Print child tasks if this is an epic
-	for _, child := range childTasks {
-		fmt.Println("---")
-		printTaskDetails(child, graph.Meta[child.ID], repoDir)
+	if isEpic(task) {
+		printEpicDetails(task, childTasks, graph)
+		return nil
 	}
-
+	printTaskDetails(task, graph.Meta[id], repoDir)
 	return nil
 }
 
