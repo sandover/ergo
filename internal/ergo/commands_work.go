@@ -1025,8 +1025,6 @@ func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
 		}
 	}
 
-	fmt.Println()
-
 	// Timestamps (dim)
 	if useColor {
 		fmt.Printf("%s", colorDim)
@@ -1039,7 +1037,6 @@ func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
 
 	// Dependencies (if present, dim)
 	if len(task.Deps) > 0 || len(task.RDeps) > 0 {
-		fmt.Println()
 		if useColor {
 			fmt.Printf("%s", colorDim)
 		}
@@ -1056,7 +1053,6 @@ func printTaskDetails(task *Task, meta *TaskMeta, repoDir string) {
 
 	// Results
 	if len(task.Results) > 0 {
-		fmt.Println()
 		fmt.Println("Results:")
 		for _, r := range task.Results {
 			fileURL := deriveFileURL(r.Path, repoDir)

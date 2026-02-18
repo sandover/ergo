@@ -434,6 +434,53 @@ func TestShowTaskHumanOutputUnchanged(t *testing.T) {
 	}
 }
 
+func TestShowTaskHeaderDense(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runErgo(t, dir, `{"title":"Epic"}`, "new", "epic")
+	if code != 0 {
+		t.Fatalf("new epic failed: exit %d", code)
+	}
+	epicID := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"Task A","epic":"%s"}`, epicID), "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskA := strings.TrimSpace(stdout)
+
+	stdout, _, code = runErgo(t, dir, fmt.Sprintf(`{"title":"Task B","epic":"%s"}`, epicID), "new", "task")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskB := strings.TrimSpace(stdout)
+
+	_, _, code = runErgo(t, dir, "", "sequence", taskA, taskB)
+	if code != 0 {
+		t.Fatalf("sequence failed: exit %d", code)
+	}
+
+	stdout, _, code = runErgo(t, dir, `{"claim":"agent-x"}`, "set", taskB)
+	if code != 0 {
+		t.Fatalf("set claim failed: exit %d", code)
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "show", taskB)
+	if code != 0 {
+		t.Fatalf("show failed: exit %d", code)
+	}
+
+	if strings.Contains(stdout, "\n\ncreated: ") {
+		t.Fatalf("expected no blank line before created timestamp: %s", stdout)
+	}
+	if strings.Contains(stdout, "\n\ndeps:  ") || strings.Contains(stdout, "\n\nrdeps: ") {
+		t.Fatalf("expected no blank line before dependency metadata: %s", stdout)
+	}
+	if strings.Contains(stdout, "\n\nResults:") {
+		t.Fatalf("expected no blank line before results section: %s", stdout)
+	}
+}
+
 func TestNewTask_BodyStdin_ValidationErrors(t *testing.T) {
 	dir := setupErgo(t)
 
