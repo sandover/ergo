@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-02-28
+
+### Added
+- New `ergo plan` command to create one epic, many tasks, and dependency edges from a single JSON document.
+- Plan-mode JSON output contract (`kind=plan`) with epic metadata, ordered task IDs/titles, and dependency edges (`from_id`, `to_id`, `type`).
+- Dedicated plan input parser/validator covering duplicate titles, dangling `after` references, self-dependencies, and cycle rejection.
+
+### Changed
+- Multi-event mutation writes now use transaction-style atomic replacement helpers (temp file + fsync + rename) under a single lock.
+- `compact` now uses the shared atomic replacement path to keep write behavior consistent.
+- Task runner descriptions in `Taskfile.yml` were rewritten to be intent-focused and more informative.
+
+### Fixed
+- `ergo plan` now preserves user-provided title/body text exactly, matching existing `new task` / `new epic` behavior.
+
+### Documentation
+- Updated `ergo --help`, `ergo quickstart`, and `docs/spec.md` for `plan` semantics, error taxonomy (`parse_error` vs `validation_failed`), and v1 scope.
+- Added and refined proposal notes in `docs/proposal-ergo-plan.md` to match implemented behavior and contracts.
+
+### Tests
+- Added unit coverage for plan parse/validation edge cases (unknown fields, malformed JSON, duplicate/dangling/cycle/self-dependency).
+- Added internal `RunPlan` tests to improve command-path coverage and verify error JSON behavior directly.
+- Added integration tests for successful plan creation, dependency/readiness progression, and no-partial-write guarantees on failure.
+- Added storage tests for atomic append success/rollback semantics.
+
+## [0.10.3] - 2026-02-18
+
+### Changed
+- `show <id>` human output is Markdown-first while preserving the existing JSON show contract.
+
 ## [0.10.2] - 2026-02-18
 
 ### Fixed
@@ -313,7 +343,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/sandover/ergo/compare/v0.10.3...v0.11.0
+[0.10.3]: https://github.com/sandover/ergo/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/sandover/ergo/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/sandover/ergo/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/sandover/ergo/compare/v0.9.3...v0.10.0
