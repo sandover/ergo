@@ -230,6 +230,27 @@ func writeEventsFile(path string, events []Event) error {
 	return file.Sync()
 }
 
+func replaceEventsAtomically(path string, events []Event) error {
+	tmpPath := path + ".tmp"
+	if err := writeEventsFile(tmpPath, events); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(path))
+}
+
+func appendEventsAtomically(path string, existing, appended []Event) error {
+	if len(appended) == 0 {
+		return nil
+	}
+	merged := make([]Event, 0, len(existing)+len(appended))
+	merged = append(merged, existing...)
+	merged = append(merged, appended...)
+	return replaceEventsAtomically(path, merged)
+}
+
 func syncDir(path string) error {
 	dir, err := os.Open(path)
 	if err != nil {

@@ -233,3 +233,117 @@ func TestLoadGraph_WorksWithPlansJsonl(t *testing.T) {
 		t.Fatal("expected task T2 to exist")
 	}
 }
+
+func TestAppendEventsAtomically_AppendsAndReplays(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, plansFileName)
+	now := time.Now().UTC()
+
+	initial := []Event{
+		mustNewEvent("new_task", now, NewTaskEvent{
+			ID:        "T1",
+			UUID:      "uuid-1",
+			State:     stateTodo,
+			Title:     "Task 1",
+			Body:      "Task 1 body",
+			CreatedAt: formatTime(now),
+		}),
+	}
+	appended := []Event{
+		mustNewEvent("new_task", now.Add(time.Second), NewTaskEvent{
+			ID:        "T2",
+			UUID:      "uuid-2",
+			State:     stateTodo,
+			Title:     "Task 2",
+			Body:      "Task 2 body",
+			CreatedAt: formatTime(now.Add(time.Second)),
+		}),
+	}
+
+	if err := writeEventsFile(path, initial); err != nil {
+		t.Fatalf("writeEventsFile initial: %v", err)
+	}
+	if err := appendEventsAtomically(path, initial, appended); err != nil {
+		t.Fatalf("appendEventsAtomically: %v", err)
+	}
+
+	events, err := readEvents(path)
+	if err != nil {
+		t.Fatalf("readEvents: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+
+	graph, err := replayEvents(events)
+	if err != nil {
+		t.Fatalf("replayEvents: %v", err)
+	}
+	if graph.Tasks["T1"] == nil || graph.Tasks["T2"] == nil {
+		t.Fatalf("expected T1 and T2 after replay, got tasks: %v", len(graph.Tasks))
+	}
+}
+
+func TestAppendEventsAtomically_FailureLeavesOriginalFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, plansFileName)
+	now := time.Now().UTC()
+
+	initial := []Event{
+		mustNewEvent("new_task", now, NewTaskEvent{
+			ID:        "T1",
+			UUID:      "uuid-1",
+			State:     stateTodo,
+			Title:     "Task 1",
+			Body:      "Task 1 body",
+			CreatedAt: formatTime(now),
+		}),
+	}
+	appended := []Event{
+		mustNewEvent("new_task", now.Add(time.Second), NewTaskEvent{
+			ID:        "T2",
+			UUID:      "uuid-2",
+			State:     stateTodo,
+			Title:     "Task 2",
+			Body:      "Task 2 body",
+			CreatedAt: formatTime(now.Add(time.Second)),
+		}),
+	}
+
+	if err := writeEventsFile(path, initial); err != nil {
+		t.Fatalf("writeEventsFile initial: %v", err)
+	}
+
+	if err := os.Chmod(dir, 0555); err != nil {
+		t.Fatalf("chmod readonly: %v", err)
+	}
+	defer func() {
+		_ = os.Chmod(dir, 0755)
+	}()
+
+	if err := appendEventsAtomically(path, initial, appended); err == nil {
+		t.Fatal("expected appendEventsAtomically to fail in readonly dir")
+	}
+
+	if err := os.Chmod(dir, 0755); err != nil {
+		t.Fatalf("chmod writable: %v", err)
+	}
+
+	events, err := readEvents(path)
+	if err != nil {
+		t.Fatalf("readEvents: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected original file to remain at 1 event, got %d", len(events))
+	}
+	graph, err := replayEvents(events)
+	if err != nil {
+		t.Fatalf("replayEvents: %v", err)
+	}
+	if graph.Tasks["T1"] == nil {
+		t.Fatal("expected T1 to remain after failed append")
+	}
+	if graph.Tasks["T2"] != nil {
+		t.Fatal("did not expect T2 after failed append")
+	}
+}

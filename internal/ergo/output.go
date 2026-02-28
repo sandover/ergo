@@ -67,6 +67,25 @@ type createOutput struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type planEntityOutput struct {
+	ID        string `json:"id"`
+	UUID      string `json:"uuid"`
+	Title     string `json:"title"`
+	CreatedAt string `json:"created_at"`
+}
+
+type planTaskOutput struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+type planOutput struct {
+	Kind  string               `json:"kind"`
+	Epic  planEntityOutput     `json:"epic"`
+	Tasks []planTaskOutput     `json:"tasks"`
+	Edges []sequenceEdgeOutput `json:"edges"`
+}
+
 type setOutput struct {
 	Kind          string   `json:"kind"`
 	ID            string   `json:"id"`

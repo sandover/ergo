@@ -28,6 +28,8 @@ func init() {
 	rootCmd.AddCommand(claimCmd)
 	// ergo set
 	rootCmd.AddCommand(setCmd)
+	// ergo plan
+	rootCmd.AddCommand(planCmd)
 	// ergo sequence
 	rootCmd.AddCommand(sequenceCmd)
 	// ergo where
@@ -230,6 +232,16 @@ var sequenceCmd = &cobra.Command{
 	Short: "Enforce task order (A then B then C)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return ergo.RunSequence(args, globalOpts)
+	},
+}
+
+// -- plan --
+var planCmd = &cobra.Command{
+	Use:   "plan",
+	Short: "Create an epic and task graph from a JSON plan on stdin",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return ergo.RunPlan(args, globalOpts)
 	},
 }
 

@@ -25,6 +25,13 @@ For `new epic`, `new task`, and `set`:
   - `--body` and `--body-stdin` are mutually exclusive.
   - `new epic --body-stdin` and `new task --body-stdin` require `--title`.
 
+For `plan`:
+
+- Input is a single JSON object on stdin.
+- v1 does not support `--body-stdin` or flags-only plan authoring.
+- Parse failures (malformed JSON, unknown keys, multiple top-level values) use `parse_error`.
+- Semantic validation failures (missing fields, duplicate task titles, dangling refs, cycles) use `validation_failed`.
+
 ### General
 
 - Success returns exit code `0`.
@@ -110,7 +117,7 @@ When `--json` is set and a command succeeds:
 Commands that are expected to be machine-used should offer a useful JSON shape:
 - `list --json`: array of items
 - `show --json`: object (or object-with-children for epics)
-- Mutations (`new`, `set`, `sequence`, `prune`, `compact`, `claim`): JSON object(s)
+- Mutations (`new`, `set`, `plan`, `sequence`, `prune`, `compact`, `claim`): JSON object(s)
 
 ### “No ready tasks” for `claim`
 

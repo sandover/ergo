@@ -9,6 +9,7 @@
   new epic                                create epic (JSON stdin; or --body-stdin)
   new task                                create task (JSON stdin; or --body-stdin)
   set <id>                                update task/epic (JSON stdin; or --body-stdin)
+  plan                                    create epic+tasks+deps from one JSON document
   show <id>                               show epic/task as Markdown document (human mode)
                                           --json output contract is unchanged
 
@@ -55,6 +56,7 @@
 
 {{HEADER}}JSON INPUT FIELDS (all strings){{RESET}}
   Unknown keys are rejected (with suggestions for close matches).
+  For `plan` input schema, see `ergo quickstart` (feature planning section).
   Epics only support: title, body
   title           required for new, optional for set
   body            optional details (omit if empty)

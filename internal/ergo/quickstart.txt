@@ -77,6 +77,15 @@ Create a task (no stdin):
 Mark done (no stdin):
   {{CMD}}ergo set ABCDEF --state done{{RESET}}
 
+{{HEADER}}3d. PLAN A FEATURE (single JSON document){{RESET}}
+
+Use `plan` to create one epic, its tasks, and dependencies in a single mutation.
+`after` references task titles in the same payload (exact, case-sensitive).
+
+{{CMD}}printf '%s' '{"title":"Auth","tasks":[{"title":"Middleware"},{"title":"Login","after":["Middleware"]}]}' | ergo --json plan{{RESET}}
+
+Edge semantics match `sequence`: when `B.after=["A"]`, output includes an edge where `B` depends on `A` (`from_id=B`, `to_id=A`).
+
 {{HEADER}}4. DEPENDENCIES{{RESET}}
 
 Enforce order (A happens before B):

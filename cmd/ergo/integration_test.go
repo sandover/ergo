@@ -2231,3 +2231,234 @@ func TestListQuietSuppressesSummaryAndHints(t *testing.T) {
 		t.Errorf("expected hints suppressed in quiet mode, got: %s", stderr)
 	}
 }
+
+func TestPlan_JSONOutput_HappyPathAndDependencyReadiness(t *testing.T) {
+	dir := setupErgo(t)
+	planInput := `{
+		"title":"Add user auth",
+		"body":"Epic body",
+		"tasks":[
+			{"title":"Add auth middleware"},
+			{"title":"Add login endpoint","after":["Add auth middleware"]},
+			{"title":"Add signup endpoint","after":["Add auth middleware"]},
+			{"title":"Write integration tests","after":["Add login endpoint","Add signup endpoint"]}
+		]
+	}`
+
+	stdout, stderr, code := runErgo(t, dir, planInput, "plan", "--json")
+	if code != 0 {
+		t.Fatalf("plan --json failed: exit %d, stderr=%s, stdout=%s", code, stderr, stdout)
+	}
+
+	var out map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("failed to parse plan --json output: %v", err)
+	}
+	if out["kind"] != "plan" {
+		t.Fatalf("expected kind=plan, got %v", out["kind"])
+	}
+
+	epic, ok := out["epic"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected epic object, got %T", out["epic"])
+	}
+	if strings.TrimSpace(fmt.Sprint(epic["id"])) == "" {
+		t.Fatalf("expected non-empty epic id, got %v", epic["id"])
+	}
+	if epic["title"] != "Add user auth" {
+		t.Fatalf("expected epic title, got %v", epic["title"])
+	}
+
+	tasksRaw, ok := out["tasks"].([]interface{})
+	if !ok {
+		t.Fatalf("expected tasks array, got %T", out["tasks"])
+	}
+	if len(tasksRaw) != 4 {
+		t.Fatalf("expected 4 tasks, got %d", len(tasksRaw))
+	}
+
+	titleToID := map[string]string{}
+	for _, raw := range tasksRaw {
+		task, ok := raw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected task object, got %T", raw)
+		}
+		title := fmt.Sprint(task["title"])
+		id := fmt.Sprint(task["id"])
+		if title == "" || id == "" {
+			t.Fatalf("expected non-empty task title/id, got %v", task)
+		}
+		titleToID[title] = id
+	}
+
+	edgesRaw, ok := out["edges"].([]interface{})
+	if !ok {
+		t.Fatalf("expected edges array, got %T", out["edges"])
+	}
+	if len(edgesRaw) != 4 {
+		t.Fatalf("expected 4 edges, got %d", len(edgesRaw))
+	}
+	expectedEdges := map[string]bool{
+		titleToID["Add login endpoint"] + "->" + titleToID["Add auth middleware"]:      false,
+		titleToID["Add signup endpoint"] + "->" + titleToID["Add auth middleware"]:     false,
+		titleToID["Write integration tests"] + "->" + titleToID["Add login endpoint"]:  false,
+		titleToID["Write integration tests"] + "->" + titleToID["Add signup endpoint"]: false,
+	}
+	for _, raw := range edgesRaw {
+		edge, ok := raw.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected edge object, got %T", raw)
+		}
+		if edge["type"] != "depends" {
+			t.Fatalf("expected edge type=depends, got %v", edge["type"])
+		}
+		key := fmt.Sprint(edge["from_id"]) + "->" + fmt.Sprint(edge["to_id"])
+		if _, exists := expectedEdges[key]; !exists {
+			t.Fatalf("unexpected edge %s in %v", key, expectedEdges)
+		}
+		expectedEdges[key] = true
+	}
+	for key, seen := range expectedEdges {
+		if !seen {
+			t.Fatalf("expected edge %s not found", key)
+		}
+	}
+
+	stdout, _, code = runErgo(t, dir, "", "list", "--ready", "--json")
+	if code != 0 {
+		t.Fatalf("list --ready --json failed: exit %d", code)
+	}
+	var ready []map[string]interface{}
+	if err := json.Unmarshal([]byte(stdout), &ready); err != nil {
+		t.Fatalf("failed to parse ready list: %v", err)
+	}
+	if len(ready) != 1 {
+		t.Fatalf("expected 1 ready task before deps clear, got %d", len(ready))
+	}
+	if ready[0]["id"] != titleToID["Add auth middleware"] {
+		t.Fatalf("expected middleware to be ready first, got %v", ready[0]["id"])
+	}
+
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", titleToID["Add auth middleware"])
+	if code != 0 {
+		t.Fatalf("set middleware done failed: exit %d", code)
+	}
+	stdout, _, code = runErgo(t, dir, "", "list", "--ready", "--json")
+	if code != 0 {
+		t.Fatalf("list --ready --json after middleware done failed: exit %d", code)
+	}
+	if err := json.Unmarshal([]byte(stdout), &ready); err != nil {
+		t.Fatalf("failed to parse ready list after middleware done: %v", err)
+	}
+	if len(ready) != 2 {
+		t.Fatalf("expected 2 ready tasks after middleware done, got %d", len(ready))
+	}
+
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", titleToID["Add login endpoint"])
+	if code != 0 {
+		t.Fatalf("set login done failed: exit %d", code)
+	}
+	_, _, code = runErgo(t, dir, `{"state":"done"}`, "set", titleToID["Add signup endpoint"])
+	if code != 0 {
+		t.Fatalf("set signup done failed: exit %d", code)
+	}
+	stdout, _, code = runErgo(t, dir, "", "list", "--ready", "--json")
+	if code != 0 {
+		t.Fatalf("list --ready --json after leaf done failed: exit %d", code)
+	}
+	if err := json.Unmarshal([]byte(stdout), &ready); err != nil {
+		t.Fatalf("failed to parse ready list after leaf done: %v", err)
+	}
+	if len(ready) != 1 || ready[0]["id"] != titleToID["Write integration tests"] {
+		t.Fatalf("expected integration tests to become ready, got %v", ready)
+	}
+}
+
+func TestPlan_FailuresReturnStructuredErrorsAndDoNotWritePartialState(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		expectedError string
+	}{
+		{
+			name:          "duplicate task title",
+			expectedError: "validation_failed",
+			input: `{
+				"title":"Epic",
+				"tasks":[{"title":"A"},{"title":"A"}]
+			}`,
+		},
+		{
+			name:          "dangling after reference",
+			expectedError: "validation_failed",
+			input: `{
+				"title":"Epic",
+				"tasks":[{"title":"A"},{"title":"B","after":["Missing"]}]
+			}`,
+		},
+		{
+			name:          "cycle in after graph",
+			expectedError: "validation_failed",
+			input: `{
+				"title":"Epic",
+				"tasks":[{"title":"A","after":["B"]},{"title":"B","after":["A"]}]
+			}`,
+		},
+		{
+			name:          "unknown key",
+			expectedError: "parse_error",
+			input: `{
+				"title":"Epic",
+				"tasks":[{"title":"A"}],
+				"unknown":"x"
+			}`,
+		},
+		{
+			name:          "malformed json",
+			expectedError: "parse_error",
+			input:         `{"title":"Epic","tasks":[{"title":"A"}]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setupErgo(t)
+
+			stdout, _, code := runErgo(t, dir, tt.input, "plan", "--json")
+			if code == 0 {
+				t.Fatalf("expected non-zero exit for %s", tt.name)
+			}
+			var out map[string]interface{}
+			if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+				t.Fatalf("expected JSON error output, got parse error: %v (stdout=%q)", err, stdout)
+			}
+			if out["error"] != tt.expectedError {
+				t.Fatalf("expected error=%s, got %v", tt.expectedError, out["error"])
+			}
+
+			stdout, _, code = runErgo(t, dir, "", "list", "--json")
+			if code != 0 {
+				t.Fatalf("list --json failed: exit %d", code)
+			}
+			var tasks []map[string]interface{}
+			if err := json.Unmarshal([]byte(stdout), &tasks); err != nil {
+				t.Fatalf("failed to parse list --json output: %v", err)
+			}
+			if len(tasks) != 0 {
+				t.Fatalf("expected no tasks after failed plan command, got %d", len(tasks))
+			}
+
+			stdout, _, code = runErgo(t, dir, "", "list", "--epics", "--json")
+			if code != 0 {
+				t.Fatalf("list --epics --json failed: exit %d", code)
+			}
+			var epics []map[string]interface{}
+			if err := json.Unmarshal([]byte(stdout), &epics); err != nil {
+				t.Fatalf("failed to parse list --epics --json output: %v", err)
+			}
+			if len(epics) != 0 {
+				t.Fatalf("expected no epics after failed plan command, got %d", len(epics))
+			}
+		})
+	}
+}

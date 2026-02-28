@@ -24,7 +24,7 @@ import (
 	"strings"
 )
 
-var knownJSONFields = []string{
+var knownTaskJSONFields = []string{
 	"title",
 	"body",
 	"epic",
@@ -167,11 +167,15 @@ func extractUnknownField(err error) (string, bool) {
 }
 
 func suggestFieldName(unknown string) (string, bool) {
+	return suggestFieldNameFrom(unknown, knownTaskJSONFields)
+}
+
+func suggestFieldNameFrom(unknown string, candidates []string) (string, bool) {
 	unknown = strings.ToLower(unknown)
 	best := ""
 	bestDist := 99
 	secondBest := 99
-	for _, cand := range knownJSONFields {
+	for _, cand := range candidates {
 		dist := levenshteinDistance(unknown, cand)
 		if dist < bestDist {
 			secondBest = bestDist

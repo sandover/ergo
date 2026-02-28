@@ -1164,14 +1164,7 @@ func RunCompact(opts GlobalOptions) error {
 		if err != nil {
 			return err
 		}
-		tmpPath := eventsPath + ".tmp"
-		if err := writeEventsFile(tmpPath, compacted); err != nil {
-			return err
-		}
-		if err := os.Rename(tmpPath, eventsPath); err != nil {
-			return err
-		}
-		return syncDir(dir)
+		return replaceEventsAtomically(eventsPath, compacted)
 	}); err != nil {
 		return err
 	}
