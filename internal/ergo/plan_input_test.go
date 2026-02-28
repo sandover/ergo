@@ -45,6 +45,22 @@ func TestParsePlanInput_RejectsUnknownNestedField_WithSuggestion(t *testing.T) {
 	}
 }
 
+func TestParsePlanInput_UnknownTopLevelDoesNotSuggestNestedField(t *testing.T) {
+	restoreStdin := setStdin(t, `{"title":"Epic","tasks":[{"title":"A"}],"aftr":"x"}`)
+	defer restoreStdin()
+
+	_, err := ParsePlanInput()
+	if err == nil {
+		t.Fatal("expected parse error for unknown field, got nil")
+	}
+	if err.Error != "parse_error" {
+		t.Fatalf("expected parse_error, got %q", err.Error)
+	}
+	if strings.Contains(err.Message, "did you mean: after") {
+		t.Fatalf("expected no suggestion for nested-only field, got %q", err.Message)
+	}
+}
+
 func TestParsePlanInput_RejectsMultipleJSONValues(t *testing.T) {
 	restoreStdin := setStdin(t, `{"title":"Epic","tasks":[{"title":"A"}]}{"title":"Extra"}`)
 	defer restoreStdin()

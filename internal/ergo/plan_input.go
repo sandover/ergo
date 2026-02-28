@@ -14,11 +14,10 @@ import (
 	"strings"
 )
 
-var knownPlanJSONFields = []string{
+var knownPlanTopLevelJSONFields = []string{
 	"title",
 	"body",
 	"tasks",
-	"after",
 }
 
 // PlanInput is the JSON schema for `ergo plan`.
@@ -61,7 +60,7 @@ func ParsePlanInput() (*PlanInput, *ValidationError) {
 			invalid := map[string]string{
 				unknownField: "unknown field",
 			}
-			if suggestion, ok := suggestFieldNameFrom(unknownField, knownPlanJSONFields); ok {
+			if suggestion, ok := suggestFieldNameFrom(unknownField, knownPlanTopLevelJSONFields); ok {
 				message = fmt.Sprintf("invalid JSON: unknown field %q (did you mean: %s?)", unknownField, suggestion)
 				invalid[unknownField] = fmt.Sprintf("unknown field (did you mean: %s?)", suggestion)
 			}
