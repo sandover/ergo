@@ -60,6 +60,9 @@ func ParsePlanInput() (*PlanInput, *ValidationError) {
 			invalid := map[string]string{
 				unknownField: "unknown field",
 			}
+			// json.Decoder.DisallowUnknownFields reports only the field name, not the JSON path.
+			// We intentionally scope suggestions to top-level keys so we never suggest a nested-only
+			// field (like tasks[].after) for a top-level typo.
 			if suggestion, ok := suggestFieldNameFrom(unknownField, knownPlanTopLevelJSONFields); ok {
 				message = fmt.Sprintf("invalid JSON: unknown field %q (did you mean: %s?)", unknownField, suggestion)
 				invalid[unknownField] = fmt.Sprintf("unknown field (did you mean: %s?)", suggestion)

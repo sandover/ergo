@@ -29,7 +29,7 @@ func TestParsePlanInput_RejectsUnknownField_WithSuggestion(t *testing.T) {
 	}
 }
 
-func TestParsePlanInput_RejectsUnknownNestedField_WithSuggestion(t *testing.T) {
+func TestParsePlanInput_RejectsUnknownNestedField(t *testing.T) {
 	restoreStdin := setStdin(t, `{"title":"Epic","tasks":[{"title":"A","aftre":["B"]}]}`)
 	defer restoreStdin()
 
