@@ -10,11 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.11.1] - 2026-03-01
 
 ### Fixed
-- `ergo plan` unknown-field suggestions are now scope-aware: top-level typos suggest top-level keys, and task-level typos can suggest task keys like `after`.
-- Plan parsing now handles adjacent transposition typos for scoped suggestions (for example `aftre` -> `after`) without loosening strict unknown-key rejection.
+- `ergo plan` gives better typo hints in JSON input.
+- Top-level typos now suggest top-level fields only (`title`, `body`, `tasks`).
+- Typos inside task objects can now suggest task fields, including `after`.
+- Common transposed typos like `aftre` now get the expected hint: `after`.
+
+### Why this matters
+- Less guesswork when writing plan JSON by hand.
+- Fewer misleading “did you mean …” messages.
+
+### Compatibility
+- No command or flag changes.
+- Unknown fields are still rejected; this only improves hint quality.
+- Error shape is unchanged (`parse_error` + `invalid` map).
 
 ### Tests
-- Added regression coverage for plan unknown-field scope detection and scoped suggestion behavior for both top-level and nested task fields.
+- Added regression tests for top-level and nested typo hints so this behavior stays stable.
 
 ## [0.11.0] - 2026-02-28
 
