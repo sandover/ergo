@@ -10,6 +10,28 @@ import (
 	"testing"
 )
 
+func TestDetectPlanUnknownFieldScope(t *testing.T) {
+	taskScopeJSON := []byte(`{"title":"Epic","tasks":[{"title":"A","aftre":["B"]}]}`)
+	if got := detectPlanUnknownFieldScope(taskScopeJSON, "aftre"); got != planUnknownFieldScopeTask {
+		t.Fatalf("expected task scope for aftre, got %d", got)
+	}
+
+	topLevelScopeJSON := []byte(`{"title":"Epic","tasks":[{"title":"A"}],"aftr":"x"}`)
+	if got := detectPlanUnknownFieldScope(topLevelScopeJSON, "aftr"); got != planUnknownFieldScopeTopLevel {
+		t.Fatalf("expected top-level scope for aftr, got %d", got)
+	}
+}
+
+func TestSuggestPlanFieldName_ForNestedAfterTypo(t *testing.T) {
+	suggestion, ok := suggestPlanFieldName("aftre", knownPlanTaskJSONFields)
+	if !ok {
+		t.Fatal("expected suggestion for aftre, got none")
+	}
+	if suggestion != "after" {
+		t.Fatalf("expected after suggestion, got %q", suggestion)
+	}
+}
+
 func TestParsePlanInput_RejectsUnknownField_WithSuggestion(t *testing.T) {
 	restoreStdin := setStdin(t, `{"title":"Epic","tasks":[{"title":"A"}],"boddy":"oops"}`)
 	defer restoreStdin()
@@ -40,8 +62,11 @@ func TestParsePlanInput_RejectsUnknownNestedField(t *testing.T) {
 	if err.Error != "parse_error" {
 		t.Fatalf("expected parse_error, got %q", err.Error)
 	}
-	if !strings.Contains(err.Message, "unknown field") {
-		t.Fatalf("expected unknown field parse error, got %q", err.Message)
+	if !strings.Contains(err.Message, "did you mean: after") {
+		t.Fatalf("expected nested suggestion in message, got %q", err.Message)
+	}
+	if err.Invalid["aftre"] == "" {
+		t.Fatalf("expected invalid map entry for aftre, got %v", err.Invalid)
 	}
 }
 

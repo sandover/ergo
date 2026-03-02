@@ -20,6 +20,20 @@ var knownPlanTopLevelJSONFields = []string{
 	"tasks",
 }
 
+var knownPlanTaskJSONFields = []string{
+	"title",
+	"body",
+	"after",
+}
+
+type planUnknownFieldScope int
+
+const (
+	planUnknownFieldScopeUnknown planUnknownFieldScope = iota
+	planUnknownFieldScopeTopLevel
+	planUnknownFieldScopeTask
+)
+
 // PlanInput is the JSON schema for `ergo plan`.
 type PlanInput struct {
 	Title *string         `json:"title,omitempty"` // epic title (required)
@@ -60,10 +74,11 @@ func ParsePlanInput() (*PlanInput, *ValidationError) {
 			invalid := map[string]string{
 				unknownField: "unknown field",
 			}
-			// json.Decoder.DisallowUnknownFields reports only the field name, not the JSON path.
-			// We intentionally scope suggestions to top-level keys so we never suggest a nested-only
-			// field (like tasks[].after) for a top-level typo.
-			if suggestion, ok := suggestFieldNameFrom(unknownField, knownPlanTopLevelJSONFields); ok {
+			suggestionCandidates := knownPlanTopLevelJSONFields
+			if detectPlanUnknownFieldScope(jsonBytes, unknownField) == planUnknownFieldScopeTask {
+				suggestionCandidates = knownPlanTaskJSONFields
+			}
+			if suggestion, ok := suggestPlanFieldName(unknownField, suggestionCandidates); ok {
 				message = fmt.Sprintf("invalid JSON: unknown field %q (did you mean: %s?)", unknownField, suggestion)
 				invalid[unknownField] = fmt.Sprintf("unknown field (did you mean: %s?)", suggestion)
 			}
@@ -87,6 +102,82 @@ func ParsePlanInput() (*PlanInput, *ValidationError) {
 	}
 
 	return &input, nil
+}
+
+func detectPlanUnknownFieldScope(jsonBytes []byte, field string) planUnknownFieldScope {
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(jsonBytes, &root); err != nil {
+		return planUnknownFieldScopeUnknown
+	}
+	if _, exists := root[field]; exists {
+		return planUnknownFieldScopeTopLevel
+	}
+
+	tasksRaw, hasTasks := root["tasks"]
+	if !hasTasks {
+		return planUnknownFieldScopeUnknown
+	}
+
+	var tasks []map[string]json.RawMessage
+	if err := json.Unmarshal(tasksRaw, &tasks); err != nil {
+		return planUnknownFieldScopeUnknown
+	}
+	for _, task := range tasks {
+		if _, exists := task[field]; exists {
+			return planUnknownFieldScopeTask
+		}
+	}
+
+	return planUnknownFieldScopeUnknown
+}
+
+func suggestPlanFieldName(unknown string, candidates []string) (string, bool) {
+	if suggestion, ok := suggestFieldNameFrom(unknown, candidates); ok {
+		return suggestion, true
+	}
+
+	unknown = strings.ToLower(unknown)
+	match := ""
+	for _, candidate := range candidates {
+		if !isSingleAdjacentSwap(unknown, candidate) {
+			continue
+		}
+		if match != "" {
+			return "", false
+		}
+		match = candidate
+	}
+	if match == "" {
+		return "", false
+	}
+	return match, true
+}
+
+func isSingleAdjacentSwap(a, b string) bool {
+	if len(a) != len(b) || len(a) < 2 || a == b {
+		return false
+	}
+
+	first := -1
+	second := -1
+	for i := 0; i < len(a); i++ {
+		if a[i] == b[i] {
+			continue
+		}
+		if first == -1 {
+			first = i
+			continue
+		}
+		if second == -1 {
+			second = i
+			continue
+		}
+		return false
+	}
+	if first == -1 || second == -1 || second != first+1 {
+		return false
+	}
+	return a[first] == b[second] && a[second] == b[first]
 }
 
 // Validate validates the parsed plan payload.
