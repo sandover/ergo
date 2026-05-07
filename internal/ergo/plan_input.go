@@ -78,7 +78,7 @@ func ParsePlanInput() (*PlanInput, *ValidationError) {
 			if detectPlanUnknownFieldScope(jsonBytes, unknownField) == planUnknownFieldScopeTask {
 				suggestionCandidates = knownPlanTaskJSONFields
 			}
-			if suggestion, ok := suggestPlanFieldName(unknownField, suggestionCandidates); ok {
+			if suggestion, ok := suggestFieldNameFrom(unknownField, suggestionCandidates); ok {
 				message = fmt.Sprintf("invalid JSON: unknown field %q (did you mean: %s?)", unknownField, suggestion)
 				invalid[unknownField] = fmt.Sprintf("unknown field (did you mean: %s?)", suggestion)
 			}
@@ -129,55 +129,6 @@ func detectPlanUnknownFieldScope(jsonBytes []byte, field string) planUnknownFiel
 	}
 
 	return planUnknownFieldScopeUnknown
-}
-
-func suggestPlanFieldName(unknown string, candidates []string) (string, bool) {
-	if suggestion, ok := suggestFieldNameFrom(unknown, candidates); ok {
-		return suggestion, true
-	}
-
-	unknown = strings.ToLower(unknown)
-	match := ""
-	for _, candidate := range candidates {
-		if !isSingleAdjacentSwap(unknown, candidate) {
-			continue
-		}
-		if match != "" {
-			return "", false
-		}
-		match = candidate
-	}
-	if match == "" {
-		return "", false
-	}
-	return match, true
-}
-
-func isSingleAdjacentSwap(a, b string) bool {
-	if len(a) != len(b) || len(a) < 2 || a == b {
-		return false
-	}
-
-	first := -1
-	second := -1
-	for i := 0; i < len(a); i++ {
-		if a[i] == b[i] {
-			continue
-		}
-		if first == -1 {
-			first = i
-			continue
-		}
-		if second == -1 {
-			second = i
-			continue
-		}
-		return false
-	}
-	if first == -1 || second == -1 || second != first+1 {
-		return false
-	}
-	return a[first] == b[second] && a[second] == b[first]
 }
 
 // Validate validates the parsed plan payload.

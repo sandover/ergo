@@ -22,8 +22,8 @@ func TestDetectPlanUnknownFieldScope(t *testing.T) {
 	}
 }
 
-func TestSuggestPlanFieldName_ForNestedAfterTypo(t *testing.T) {
-	suggestion, ok := suggestPlanFieldName("aftre", knownPlanTaskJSONFields)
+func TestSuggestFieldNameFrom_ForNestedAfterTypo(t *testing.T) {
+	suggestion, ok := suggestFieldNameFrom("aftre", knownPlanTaskJSONFields)
 	if !ok {
 		t.Fatal("expected suggestion for aftre, got none")
 	}

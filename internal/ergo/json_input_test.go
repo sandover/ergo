@@ -12,6 +12,25 @@ func ptr(s string) *string {
 	return &s
 }
 
+func TestSuggestFieldNameFrom_AdjacentSwapFallback(t *testing.T) {
+	t.Run("suggests single adjacent swap", func(t *testing.T) {
+		suggestion, ok := suggestFieldNameFrom("aftre", knownPlanTaskJSONFields)
+		if !ok {
+			t.Fatal("expected suggestion for aftre, got none")
+		}
+		if suggestion != "after" {
+			t.Fatalf("expected after, got %q", suggestion)
+		}
+	})
+
+	t.Run("rejects ambiguous adjacent swap", func(t *testing.T) {
+		suggestion, ok := suggestFieldNameFrom("acbd", []string{"abcd", "acdb"})
+		if ok {
+			t.Fatalf("expected no ambiguous suggestion, got %q", suggestion)
+		}
+	})
+}
+
 func TestTaskInput_ValidateForNewTask(t *testing.T) {
 	tests := []struct {
 		name        string

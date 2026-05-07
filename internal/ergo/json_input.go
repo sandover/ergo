@@ -193,7 +193,54 @@ func suggestFieldNameFrom(unknown string, candidates []string) (string, bool) {
 	if bestDist <= 2 && (secondBest-bestDist >= 2 || secondBest > 3) {
 		return best, true
 	}
-	return "", false
+	// Levenshtein ambiguity guard rejected the match; try adjacent-swap
+	// detection as a tiebreaker (e.g. "aftre" -> "after").
+	return suggestByAdjacentSwap(unknown, candidates)
+}
+
+// suggestByAdjacentSwap returns a candidate if `unknown` is exactly one
+// adjacent-character transposition away from a single candidate.
+func suggestByAdjacentSwap(unknown string, candidates []string) (string, bool) {
+	match := ""
+	for _, cand := range candidates {
+		if !isAdjacentSwap(unknown, cand) {
+			continue
+		}
+		if match != "" {
+			return "", false // ambiguous
+		}
+		match = cand
+	}
+	if match == "" {
+		return "", false
+	}
+	return match, true
+}
+
+func isAdjacentSwap(a, b string) bool {
+	if len(a) != len(b) || len(a) < 2 || a == b {
+		return false
+	}
+	first := -1
+	second := -1
+	for i := 0; i < len(a); i++ {
+		if a[i] == b[i] {
+			continue
+		}
+		if first == -1 {
+			first = i
+			continue
+		}
+		if second == -1 {
+			second = i
+			continue
+		}
+		return false
+	}
+	if first == -1 || second == -1 || second != first+1 {
+		return false
+	}
+	return a[first] == b[second] && a[second] == b[first]
 }
 
 func levenshteinDistance(a, b string) int {
