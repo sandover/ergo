@@ -45,7 +45,7 @@ Or, on Linux: `go install github.com/sandover/ergo/cmd/ergo@latest`
 Add this instruction into your `AGENTS.md` or `CLAUDE.md` file
 > Use 'ergo' for all feature planning, run "ergo --help" to learn it
 
-**Optional:** Install the [ergo-feature-planning skill](https://github.com/sandover/codex-skills/blob/main/skills/ergo-feature-planning/SKILL.md) to give your agent deeper guidance on writing well-structured plans — task sizing, acceptance criteria, validation gates, and dependency ordering.
+**Optional:** This repo bundles an agent skill at [`skills/ergo-feature-planning/SKILL.md`](skills/ergo-feature-planning/SKILL.md). Install or reference it from your agent setup when you want deeper guidance on writing well-structured plans: task sizing, acceptance criteria, validation gates, and dependency ordering.
 
 #### Step 3
 Once you have a description of what you want to build (your spec), use a prompt like this:
