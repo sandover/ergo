@@ -1,36 +1,40 @@
-{{BOLD}}ergo{{RESET}} — fast, concurrency-safe task orchestration for agents. humans welcome.
+{{BOLD}}ergo{{RESET}} — task orchestration for AI agents. humans welcome.
 
-{{HEADER}}USAGE{{RESET}}
-  ergo <command> [args] [global flags]   (Global flags can appear anywhere.)
+Append-only task graph stored in .ergo/ (JSONL). Epics contain tasks.
+Tasks have states (todo→doing→done). IDs are 6-char uppercase (e.g. OFKSTE).
+Input: pipe JSON or use flags. Output: JSON objects with --json.
+
+{{HEADER}}EXAMPLE: FULL LIFECYCLE{{RESET}}
+
+  printf '%s' '{"title":"Add login"}' | ergo --json new task
+  → {"id":"ABCDEF","state":"todo",...}
+
+  ergo --json claim ABCDEF --agent sonnet@myhost
+  → {"id":"ABCDEF","state":"doing","claim":"sonnet@myhost",...}
+
+  printf '%s' '{"state":"done"}' | ergo --json set ABCDEF
+  → {"id":"ABCDEF","state":"done",...}
+
+For multi-line Markdown bodies, use --body-stdin (stdin is the raw text):
+  printf '%s\n' '## Goal' '- Implement login' | ergo --json new task --body-stdin --title "Add login"
 
 {{HEADER}}COMMANDS{{RESET}}
   init [dir]                              create .ergo/ in dir (default: .)
-
   new epic                                create epic (JSON stdin; or --body-stdin)
   new task                                create task (JSON stdin; or --body-stdin)
   set <id>                                update task/epic (JSON stdin; or --body-stdin)
   plan                                    create epic+tasks+deps from one JSON document
-  show <id>                               show epic/task as Markdown document (human mode)
-                                          --json output contract is unchanged
-
+                                          JSON-only; for rich bodies, create graph first,
+                                          then set each body with --body-stdin
+  show <id>                               show task/epic (Markdown default; --json for agents)
   list [--epic <id>] [--ready] [--epics] [--all]
-                                          list active work and in-progress epics
-                                          shows done tasks within active epics for progress context
-                                          hides orphan done tasks and fully-done epics
-                                          --all includes done and canceled
-                                          --epics shows only epics
-
+                                          list active work (--ready = unblocked todo tasks)
   claim [<id>] --agent <identity> [--epic <id>]
-                                          claim oldest ready task, or by ID
-                                          sets to "doing"; --agent required
-                                          if none ready: prints message, exit 0
-
-  sequence <A> <B> [<C>...]               enforce order A then B then C
+                                          claim oldest ready task (or by ID); sets to doing
+  sequence <A> <B> [<C>...]               enforce order: A before B before C
   sequence rm <A> <B>                     remove edge where B depends on A
-
   where                                   print active .ergo directory path
-  prune [--yes] [--json]                  remove done/canceled tasks + empty epics
-                                          default dry-run; run with --yes to apply
+  prune [--yes] [--json]                  remove done/canceled tasks (dry-run default)
   compact                                 collapse log to current state
   quickstart                              complete reference manual
 
@@ -43,37 +47,31 @@
   -h, --help                              show help
   -V, --version                           print version
 
-{{HEADER}}COMMON FLAGS (new/set){{RESET}}
-  --body-stdin                            read body from stdin (raw text, non-empty); other fields via flags
-  --title <text>                          set title (required for new * with --body-stdin)
+{{HEADER}}FLAGS FOR new/set{{RESET}}
+  --body-stdin                            read body from stdin (raw text, non-empty)
+  --title <text>                          set title (required for new with --body-stdin)
   --body <text>                           inline body text (mutually exclusive with --body-stdin)
-  --epic <id>                             assign to epic ("" unassign only via JSON)
-  --state <state>                         set state (todo|doing|done|blocked|canceled|error)
-  --claim <agent>                         set claim ("" unclaim only via JSON)
-  --result-path <path>                    attach result file path (requires --result-summary)
-  --result-summary <text>                 attach one-line result summary (requires --result-path)
-  When stdin is a TTY (not piped), `new`/`set` can be driven entirely by flags (no stdin).
+  --epic <id>                             assign to epic
+  --state <state>                         todo|doing|done|blocked|canceled|error
+  --claim <agent>                         set claim
+  --result-path <path>                    attach result file (requires --result-summary)
+  --result-summary <text>                 one-line result summary (requires --result-path)
+  When stdin is a TTY (not piped), new/set can be driven entirely by flags.
 
 {{HEADER}}JSON INPUT FIELDS (all strings){{RESET}}
   Unknown keys are rejected (with suggestions for close matches).
-  For `plan` input schema, see `ergo quickstart` (feature planning section).
   Epics only support: title, body
   title           required for new, optional for set
-  body            optional details (omit if empty)
+  body            optional (for multi-line, prefer --body-stdin over JSON escaping)
   epic            epic ID or "" to unassign
-  state           (tasks only) todo|doing|done|blocked|canceled|error
+  state           todo|doing|done|blocked|canceled|error
                   doing/error require claim; todo/done/canceled clear claim
-  claim           (tasks only) agent ID or "" to unclaim
-                  claim implies state=doing (unless state provided)
-                  state=doing/error on unclaimed needs --agent or claim
+  claim           agent ID or "" to unclaim
+                  claim implies state=doing unless state is also set
   result_path     file path (requires result_summary)
   result_summary  one-liner (requires result_path)
+  For plan input schema, see ergo quickstart §4d.
 
-{{HEADER}}FOR AGENTS{{RESET}}
-  ALWAYS use --json for structured output.
-  Mutating commands return a JSON object when --json is set.
-  ALWAYS pass --agent when claiming (e.g. haiku@agent-host).
-  Claim output includes: "When you have completed this claimed task, you MUST mark it done."
-  ALWAYS set done, blocked, error, or canceled when finished (never leave doing).
-  For multiline bodies, prefer --body-stdin (stdin is the literal body text).
-  Before starting, run 'ergo quickstart' for the complete reference.
+{{HEADER}}RULES{{RESET}}
+  Never leave a task in doing — always finish with done, blocked, error, or canceled.
+  Do not hand-escape Markdown into JSON. Use --body-stdin for multi-line bodies.
