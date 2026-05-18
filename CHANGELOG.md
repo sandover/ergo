@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-05-18
+
+### Changed
+- Redesigned `--help` for cold-start model comprehension: mental model up top,
+  worked lifecycle example before command reference, trimmed command descriptions.
+- Replaced FOR AGENTS prose with a 2-line RULES section (negative constraints only).
+- Added "CHOOSE INPUT MODE" section to quickstart for multi-line body guidance.
+- Clarified sequential ergo usage in the bundled planning skill.
+
+### Fixed
+- Models no longer agonize over heredocs vs printf vs jq for multi-line input;
+  `--body-stdin` pattern is now demonstrated inline in `--help`.
+
 ## [0.11.1] - 2026-03-01
 
 ### Fixed
