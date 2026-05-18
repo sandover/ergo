@@ -20,6 +20,7 @@ Turn a feature request into a repo-local plan tracked by `ergo`: a backlog of we
 
 1. Expect `ergo` to be globally installed. If missing, ask the user to install it.
 2. Run `ergo --help` and `ergo quickstart` to learn the CLI before creating plans.
+3. Use `ergo` sequentially and synchronously in the main agent. Do not split `ergo` work across subagents or run concurrent `ergo` mutations; shared plan state is easier to reason about when one agent owns it at a time.
 
 ## Planning
 
