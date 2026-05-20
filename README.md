@@ -102,11 +102,14 @@ Run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
 ### Planning
 
 ```bash
-# Create an epic
-ergo new epic --title "User login" --body "Let users sign in with email+pw."
+# Create a feature with tasks in one shot
+printf '%s' '{"title":"User login","body":"Let users sign in with email+pw.","tasks":[{"title":"Password hashing","body":"Use bcrypt with cost=12"},{"title":"Session tokens","body":"1h access, 24h refresh","after":["Password hashing"]}]}' | ergo --json new task
+# => creates container ABCDEF with children GHIJKL, MNOPQR (sequenced)
+
+# Or incrementally: create a task, then add children
+ergo new task --title "User login" --body "Let users sign in with email+pw."
 # => ABCDEF
 
-# Add tasks to it
 ergo new task --title "Password hashing" --body "Use bcrypt with cost=12" --epic ABCDEF
 # => GHIJKL
 

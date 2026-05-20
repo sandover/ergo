@@ -1,6 +1,6 @@
 {{BOLD}}ergo{{RESET}} — task orchestration for AI agents. humans welcome.
 
-Append-only task graph stored in .ergo/ (JSONL). Epics contain tasks.
+Append-only task graph stored in .ergo/ (JSONL). Containers are tasks with children.
 Tasks have states (todo→doing→done). IDs are 6-char uppercase (e.g. OFKSTE).
 Input: pipe JSON or use flags. Output: JSON objects with --json.
 
@@ -20,14 +20,11 @@ For multi-line Markdown bodies, use --body-stdin (stdin is the raw text):
 
 {{HEADER}}COMMANDS{{RESET}}
   init [dir]                              create .ergo/ in dir (default: .)
-  new epic                                create epic (JSON stdin; or --body-stdin)
   new task                                create task (JSON stdin; or --body-stdin)
-  set <id>                                update task/epic (JSON stdin; or --body-stdin)
-  plan                                    create epic+tasks+deps from one JSON document
-                                          JSON-only; for rich bodies, create graph first,
-                                          then set each body with --body-stdin
-  show <id>                               show task/epic (Markdown default; --json for agents)
-  list [--epic <id>] [--ready] [--epics] [--all]
+                                          include tasks:[...] to create container+children+deps
+  set <id>                                update task (JSON stdin; or --body-stdin)
+  show <id>                               show task (Markdown default; --json for agents)
+  list [--epic <id>] [--ready] [--containers] [--all]
                                           list active work (--ready = unblocked todo tasks)
   claim [<id>] --agent <identity> [--epic <id>]
                                           claim oldest ready task (or by ID); sets to doing
@@ -51,7 +48,7 @@ For multi-line Markdown bodies, use --body-stdin (stdin is the raw text):
   --body-stdin                            read body from stdin (raw text, non-empty)
   --title <text>                          set title (required for new with --body-stdin)
   --body <text>                           inline body text (mutually exclusive with --body-stdin)
-  --epic <id>                             assign/reassign to epic ("" to unassign)
+  --epic <id>                             assign/reassign to container ("" to unassign)
   --state <state>                         todo|doing|done|blocked|canceled|error
   --claim <agent>                         set claim
   --result-path <path>                    attach result file (requires --result-summary)
@@ -60,17 +57,17 @@ For multi-line Markdown bodies, use --body-stdin (stdin is the raw text):
 
 {{HEADER}}JSON INPUT FIELDS (all strings){{RESET}}
   Unknown keys are rejected (with suggestions for close matches).
-  Epics only support: title, body
+  Containers cannot have: state, claim, results (these are leaf-task only)
   title           required for new, optional for set
   body            optional (for multi-line, prefer --body-stdin over JSON escaping)
-  epic            epic ID or "" to unassign
+  epic            container ID or "" to unassign
   state           todo|doing|done|blocked|canceled|error
                   doing/error require claim; todo/done/canceled clear claim
   claim           agent ID or "" to unclaim
                   claim implies state=doing unless state is also set
   result_path     file path (requires result_summary)
   result_summary  one-liner (requires result_path)
-  For plan input schema, see ergo quickstart §4d.
+  tasks           array of {title, body?, after?} for bulk creation (see quickstart §4d)
 
 {{HEADER}}RULES{{RESET}}
   Never leave a task in doing — always finish with done, blocked, error, or canceled.

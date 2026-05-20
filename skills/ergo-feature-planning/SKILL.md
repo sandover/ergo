@@ -1,12 +1,12 @@
 ---
 name: ergo-feature-planning
 description: >-
-  Plan software tasks with `ergo` (local task dependency graph + epics) when the work spans 3+ commits or involves multiple concerns. Run "ergo --help" to learn it.
+  Plan software tasks with `ergo` (local task dependency graph + containers) when the work spans 3+ commits or involves multiple concerns. Run "ergo --help" to learn it.
 ---
 
 # Ergo Feature Planning
 
-Turn a feature request into a repo-local plan tracked by `ergo`: a backlog of well-scoped tasks, with dependency edges, grouped into epics.
+Turn a feature request into a repo-local plan tracked by `ergo`: a backlog of well-scoped tasks, with dependency edges, grouped into containers.
 
 ## When to use
 
@@ -32,9 +32,9 @@ If a task's shape depends on an unresolved decision and the user can't or won't 
 
 Critique continuously as you build the plan. When writing one task reveals that earlier tasks should be merged or split, fix it immediately rather than deferring to a review pass.
 
-### Epics
+### Containers
 
-One per coherent feature area. Body includes scope, non-goals, constraints, and if it makes sense, key decisions and assumptions. Tasks are grouped into epics, but dependencies can cross epic boundaries when needed.
+One per coherent feature area. Body includes scope, non-goals, constraints, and if it makes sense, key decisions and assumptions. Tasks are grouped into containers, but dependencies can cross container boundaries when needed.
 
 Tasks that don't fit a larger feature area can be left ungrouped. Use judgment.
 

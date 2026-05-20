@@ -16,19 +16,19 @@ This spec covers:
 
 ## Input mode contracts (stdin)
 
-For `new epic`, `new task`, and `set`:
+For `new task` and `set`:
 
 - Default input mode reads a single JSON object from stdin (entire stdin; trailing newlines are allowed).
 - When stdin is a TTY (not piped), these commands may be driven entirely by flags (e.g. `--title`, `--body`, `--state`) without any stdin.
 - With `--body-stdin`, stdin is treated as literal body text (non-empty) and is **not** parsed as JSON.
   - In this mode, the body comes from stdin and other updates come from flags (e.g. `--title`, `--state`, `--epic`, `--claim`, results).
   - `--body` and `--body-stdin` are mutually exclusive.
-  - `new epic --body-stdin` and `new task --body-stdin` require `--title`.
+  - `new task --body-stdin` requires `--title`.
 
-For `plan`:
+For `new task` with `tasks:[...]` (bulk creation):
 
-- Input is a single JSON object on stdin.
-- v1 does not support `--body-stdin` or flags-only plan authoring.
+- Input is a single JSON object on stdin with a `tasks` array.
+- v1 does not support `--body-stdin` or flags-only bulk authoring.
 - Parse failures (malformed JSON, unknown keys, multiple top-level values) use `parse_error`.
 - Semantic validation failures (missing fields, duplicate task titles, dangling refs, cycles) use `validation_failed`.
 
@@ -87,11 +87,11 @@ Mixed-mode layout:
 
 Flag conflicts:
 - `--ready` and `--all` are mutually exclusive.
-- `--epics` cannot be combined with `--ready`, `--all`, or `--epic <id>`.
+- `--containers` cannot be combined with `--ready`, `--all`, or `--epic <id>`.
 
-`list --epics` (human output):
-- Epics-only view renders each epic as a root row using the same list visual language (includes `Ⓔ` and right-aligned ID).
-- When there are no epics, print `No epics.`.
+`list --containers` (human output):
+- Containers-only view renders each container as a root row using the same list visual language (includes `Ⓔ` and right-aligned ID).
+- When there are no containers, print `No containers.`.
 
 #### `list --epic <id>` (human output)
 
@@ -99,7 +99,7 @@ When `--epic <id>` is provided and `--json` is not set:
 - Output is an epic-focused view: show the epic header line plus its child tasks only.
 - Orphan tasks are excluded.
 - The epic header is always shown, even if no children match the current filters.
-- Invalid epic IDs are errors (non-zero exit) with a clear stderr message (e.g., `no such epic: <id>`).
+- Invalid epic IDs are errors (non-zero exit) with a clear stderr message (e.g., `no such container: <id>`).
 - By default, epic-focused view shows **all** tasks within the epic (including `done`/`canceled`).
 - `--ready` filters to ready tasks within the epic.
 - `--all` is accepted but redundant in epic-focused view.

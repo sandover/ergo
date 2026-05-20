@@ -13,7 +13,7 @@ Prints the active `.ergo/` path (useful when running with `--dir`).
 
 - Short, one-line fields: use flags or JSON stdin.
 - Multi-line Markdown bodies: use --body-stdin. Do not hand-escape rich bodies into JSON unless your tool generates JSON safely.
-- Whole feature graph: use `ergo --json plan` for the epic, task titles, and dependencies.
+- Whole feature graph: use `ergo --json new task` with `tasks:[...]` for the container, task titles, and dependencies.
 - Whole feature graph with rich bodies: create the graph first, then update each body with `ergo set <id> --body-stdin`.
 
 {{HEADER}}3. AGENT WORKFLOW{{RESET}}
@@ -29,8 +29,8 @@ Core loop:
      {{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
      Never leave tasks in `doing`. Always set done, blocked, error, or canceled.
      Mutating commands return JSON objects when --json is set.
-  4) Pull full epic context in one call:
-     {{CMD}}ergo --json show EPICID{{RESET}} returns `{"epic": ..., "children": ...}` and each child includes `body`.
+  4) Pull full container context in one call:
+     {{CMD}}ergo --json show CONTAINERID{{RESET}} returns `{"container": ..., "children": ...}` and each child includes `body`.
 
 Flags:
   - Use `--quiet` to suppress non-essential output (useful for scripts).
@@ -39,26 +39,27 @@ Flags:
 Common variants:
   - Claim a specific task by ID:
     {{CMD}}ergo claim ABCDEF --agent sonnet@agent-host{{RESET}}
-  - Claim oldest ready task within an epic:
+  - Claim oldest ready task within a container:
     {{CMD}}ergo claim --agent sonnet@agent-host --epic ABCDEF{{RESET}}
-  - Human show output is Markdown with SKILL.md-style front matter:
+  - Human show output is Markdown with front matter:
     {{CMD}}ergo show ABCDEF{{RESET}}
   - Machine output for show is unchanged and should use JSON:
     {{CMD}}ergo --json show ABCDEF{{RESET}}
-  - If no tasks are ready, claim prints “No ready ergo tasks.” and exits 0.
+  - If no tasks are ready, claim prints "No ready ergo tasks." and exits 0.
   - Change state (uses existing claim if present):
     {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
 
 {{HEADER}}4. CREATE WORK (JSON stdin){{RESET}}
 
-Use `printf '%s'` for reliable JSON delivery. Heredocs (`<<'JSON'`) can work too, but some terminals/tooling don’t support them reliably. All fields are strings.
+Use `printf '%s'` for reliable JSON delivery. Heredocs (`<<'JSON'`) can work too, but some terminals/tooling don't support them reliably. All fields are strings.
 Unknown keys are rejected (with suggestions for close matches).
 
 Create a task:
   {{CMD}}printf '%s' '{"title":"Login","body":"Implement signup","epic":"OFKSTE"}' | ergo new task{{RESET}}
 
-Create an epic (prints ID, e.g. OFKSTE):
-  {{CMD}}printf '%s' '{"title":"Auth","body":"Signup/Login epic"}' | ergo new epic{{RESET}}
+Create a container (task that holds children):
+  {{CMD}}printf '%s' '{"title":"Auth","body":"Signup/Login feature","tasks":[{"title":"Middleware"},{"title":"Login"}]}' | ergo new task{{RESET}}
+  Any task with children is automatically a container. No separate command needed.
 
 Atomic create-and-claim (preferred for dynamic tasking):
   {{CMD}}printf '%s' '{"title":"Fix CVE","claim":"sonnet@agent-host"}' | ergo new task{{RESET}}
@@ -86,15 +87,14 @@ Mark done (no stdin):
 
 {{HEADER}}4d. PLAN A FEATURE (single JSON document){{RESET}}
 
-Use `plan` to create one epic, its tasks, and dependencies in a single mutation.
-`plan` accepts JSON stdin only. Use it for graph shape: epic metadata, task titles, and dependencies.
+Use `new task` with `tasks:[...]` to create one container, its child tasks, and dependencies in a single mutation.
 `after` references task titles in the same payload (exact, case-sensitive).
 
-{{CMD}}printf '%s' '{"title":"Auth","tasks":[{"title":"Middleware"},{"title":"Login","after":["Middleware"]}]}' | ergo --json plan{{RESET}}
+{{CMD}}printf '%s' '{"title":"Auth","tasks":[{"title":"Middleware"},{"title":"Login","after":["Middleware"]}]}' | ergo --json new task{{RESET}}
 
 Edge semantics match `sequence`: when `B.after=["A"]`, output includes an edge where `B` depends on `A` (`from_id=B`, `to_id=A`).
 
-If task bodies are long or multi-line, keep them short or empty in `plan`, then update each task body:
+If task bodies are long or multi-line, keep them short or empty in the bulk create, then update each task body:
   {{CMD}}printf '%s\n' '## Goal' '- ...' | ergo set TASKID --body-stdin{{RESET}}
 
 {{HEADER}}5. DEPENDENCIES{{RESET}}
@@ -115,7 +115,7 @@ Find ready work (all deps done or canceled):
 
 Any field accepted by `new task` (epic, title, body, state, claim, results) can be changed later with `set`.
 
-Reassign a task to a different epic (or unassign with ""):
+Reassign a task to a different container (or unassign with ""):
   {{CMD}}printf '%s' '{"epic":"OFKSTE"}' | ergo set ABCDEF{{RESET}}
 
 Mark blocked (waiting on human/external):
@@ -131,11 +131,11 @@ Mark error (requires claim to show who failed):
 
 What gets pruned:
   - Tasks in `done` or `canceled`
-  - Epics with no remaining children
+  - Containers with no remaining children
 
 What is preserved (never pruned):
   - Tasks in `todo`, `blocked`, `doing`, or `error`
-  - Epics with active children
+  - Containers with active children
 
 Dry-run (preview):
   {{CMD}}ergo prune{{RESET}}
@@ -155,16 +155,21 @@ Attach results (multiple calls accumulate, newest first):
 Inspect results:
   {{CMD}}ergo show GHIJKL --json | jq '.results[]'{{RESET}}
 
-{{HEADER}}9. EPIC HIERARCHIES{{RESET}}
+{{HEADER}}9. CONTAINERS{{RESET}}
 
-Epics complete when all children are done or canceled. They have no own state.
-Epic-to-epic deps block all tasks in the dependent epic.
+A task becomes a container when it has children. Containers have no own state —
+they complete when all children are done or canceled.
 
-{{CMD}}ergo sequence EPIC_A EPIC_B{{RESET}}
+Containers cannot have state, claim, or results set directly.
+One level of nesting only: a child cannot itself be a container.
+
+Dependencies between any non-ancestor tasks are allowed (cycles forbidden).
+
+{{CMD}}ergo sequence CONTAINER_A CONTAINER_B{{RESET}}
 
 {{HEADER}}REFERENCE: TITLE + BODY{{RESET}}
 Use `title` for the task name; `body` for details.
-Title is required for new tasks/epics. Legacy tasks without titles are auto-derived on load.
+Title is required for new tasks. Legacy tasks without titles are auto-derived on load.
 
 {{HEADER}}REFERENCE: STATE MACHINE{{RESET}}
 States: todo, doing, blocked, error, done, canceled
@@ -175,5 +180,5 @@ Invariants:
 
 {{HEADER}}REFERENCE: RULES{{RESET}}
 
-- deps: task-to-task or epic-to-epic only; cycles forbidden
+- deps: any non-ancestor tasks; cycles forbidden
 - agent ID format: <model>@<hostname> (recommended, not enforced)
