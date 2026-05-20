@@ -183,6 +183,21 @@ func TestNewTask_HappyPath(t *testing.T) {
 	}
 }
 
+func TestRemovedNewEpicCommandFails(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, stderr, code := runErgo(t, dir, "", "new", "epic")
+	if code == 0 {
+		t.Fatalf("expected removed new epic command to fail, got stdout=%q stderr=%q", stdout, stderr)
+	}
+	if !strings.Contains(stderr, `unknown command "epic" for "ergo new"`) {
+		t.Fatalf("expected removed-command error, got stderr=%q", stderr)
+	}
+	if strings.Contains(stdout, "COMMANDS") {
+		t.Fatalf("expected no parent help on removed command, got stdout=%q", stdout)
+	}
+}
+
 func TestNewTask_BodyStdin_Multiline(t *testing.T) {
 	dir := setupErgo(t)
 	body := "line1\nline2\n"
@@ -2289,6 +2304,13 @@ func TestBulkCreate_JSONOutput_HappyPathAndDependencyReadiness(t *testing.T) {
 	if _, hasEpic := out["epic"]; hasEpic {
 		t.Fatalf("expected no 'epic' field in bulk-create output")
 	}
+	eventLog, err := os.ReadFile(getEventFilePath(dir))
+	if err != nil {
+		t.Fatalf("failed to read event log: %v", err)
+	}
+	if strings.Contains(string(eventLog), `"type":"new_epic"`) {
+		t.Fatalf("expected bulk-create to write unified new_task events, got log: %s", eventLog)
+	}
 
 	childrenRaw, ok := out["children"].([]interface{})
 	if !ok {
@@ -2673,67 +2695,67 @@ func TestDepSemantics_ContainerReadiness(t *testing.T) {
 // asserting it exits cleanly and produces a graph with at least one container.
 // This catches fixture drift the moment a script uses removed CLI syntax.
 func TestFixtureScripts(t *testing.T) {
-repoRoot, err := filepath.Abs("../..")
-if err != nil {
-t.Fatalf("could not resolve repo root: %v", err)
-}
+	repoRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatalf("could not resolve repo root: %v", err)
+	}
 
-scripts, err := filepath.Glob(filepath.Join(repoRoot, "testdata", "*.sh"))
-if err != nil {
-t.Fatalf("could not glob fixture scripts: %v", err)
-}
-if len(scripts) == 0 {
-t.Fatal("no fixture scripts found in testdata/")
-}
+	scripts, err := filepath.Glob(filepath.Join(repoRoot, "testdata", "*.sh"))
+	if err != nil {
+		t.Fatalf("could not glob fixture scripts: %v", err)
+	}
+	if len(scripts) == 0 {
+		t.Fatal("no fixture scripts found in testdata/")
+	}
 
-for _, script := range scripts {
-script := script
-t.Run(filepath.Base(script), func(t *testing.T) {
-t.Parallel()
-workDir := t.TempDir()
+	for _, script := range scripts {
+		script := script
+		t.Run(filepath.Base(script), func(t *testing.T) {
+			t.Parallel()
+			workDir := t.TempDir()
 
-// Run the fixture script with ERGO pointing at the test binary
-ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-defer cancel()
+			// Run the fixture script with ERGO pointing at the test binary
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
 
-cmd := exec.CommandContext(ctx, "bash", script)
-cmd.Dir = workDir
-cmd.Env = append(os.Environ(), "ERGO="+ergoBinary)
+			cmd := exec.CommandContext(ctx, "bash", script)
+			cmd.Dir = workDir
+			cmd.Env = append(os.Environ(), "ERGO="+ergoBinary)
 
-var outBuf, errBuf bytes.Buffer
-cmd.Stdout = &outBuf
-cmd.Stderr = &errBuf
+			var outBuf, errBuf bytes.Buffer
+			cmd.Stdout = &outBuf
+			cmd.Stderr = &errBuf
 
-if err := cmd.Run(); err != nil {
-t.Fatalf("fixture script %s failed:\nstdout: %s\nstderr: %s\nerr: %v",
-filepath.Base(script), outBuf.String(), errBuf.String(), err)
-}
+			if err := cmd.Run(); err != nil {
+				t.Fatalf("fixture script %s failed:\nstdout: %s\nstderr: %s\nerr: %v",
+					filepath.Base(script), outBuf.String(), errBuf.String(), err)
+			}
 
-// Find the .ergo directory created by the script (may be nested)
-listDir := ""
-_ = filepath.WalkDir(workDir, func(path string, d os.DirEntry, err error) error {
-if err != nil || !d.IsDir() || d.Name() != ".ergo" {
-return nil
-}
-listDir = filepath.Dir(path)
-return filepath.SkipAll
-})
-if listDir == "" {
-t.Fatalf("fixture script %s did not create an .ergo directory", filepath.Base(script))
-}
+			// Find the .ergo directory created by the script (may be nested)
+			listDir := ""
+			_ = filepath.WalkDir(workDir, func(path string, d os.DirEntry, err error) error {
+				if err != nil || !d.IsDir() || d.Name() != ".ergo" {
+					return nil
+				}
+				listDir = filepath.Dir(path)
+				return filepath.SkipAll
+			})
+			if listDir == "" {
+				t.Fatalf("fixture script %s did not create an .ergo directory", filepath.Base(script))
+			}
 
-// Verify the resulting graph has at least one container
-stdout, stderr, code := runErgo(t, listDir, "", "list", "--containers", "--json")
-if code != 0 {
-t.Fatalf("list --containers --json failed: exit %d, stderr=%s", code, stderr)
-}
-var containers []map[string]interface{}
-if err := json.Unmarshal([]byte(stdout), &containers); err != nil {
-t.Fatalf("failed to parse containers JSON: %v (stdout=%q)", err, stdout)
-}
-if len(containers) == 0 {
-t.Fatalf("expected at least one container after running fixture script %s", filepath.Base(script))
-}
-})
-}
+			// Verify the resulting graph has at least one container
+			stdout, stderr, code := runErgo(t, listDir, "", "list", "--containers", "--json")
+			if code != 0 {
+				t.Fatalf("list --containers --json failed: exit %d, stderr=%s", code, stderr)
+			}
+			var containers []map[string]interface{}
+			if err := json.Unmarshal([]byte(stdout), &containers); err != nil {
+				t.Fatalf("failed to parse containers JSON: %v (stdout=%q)", err, stdout)
+			}
+			if len(containers) == 0 {
+				t.Fatalf("expected at least one container after running fixture script %s", filepath.Base(script))
+			}
+		})
+	}
 }

@@ -319,26 +319,26 @@ func writeLinkEvent(dir string, opts GlobalOptions, eventType, from, to string) 
 	})
 }
 
-func createTask(dir string, opts GlobalOptions, epicID string, isEpic bool, title, body string) (createOutput, error) {
+func createTask(dir string, opts GlobalOptions, epicID string, title, body string) (createOutput, error) {
 	eventsPath := getEventsPath(dir)
 	lockPath := filepath.Join(dir, "lock")
-	return createTaskWithDir(dir, opts, lockPath, eventsPath, epicID, isEpic, title, body)
+	return createTaskWithDir(dir, opts, lockPath, eventsPath, epicID, title, body)
 }
 
-func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epicID string, isEpic bool, title, body string) (createOutput, error) {
+func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epicID string, title, body string) (createOutput, error) {
 	var output createOutput
 	err := withLock(lockPath, syscall.LOCK_EX, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
 		}
-		if !isEpic && epicID != "" {
+		if epicID != "" {
 			epic, ok := graph.Tasks[epicID]
 			if !ok {
-				return fmt.Errorf("unknown epic id %s", epicID)
+				return fmt.Errorf("unknown container id %s", epicID)
 			}
 			if epic.EpicID != "" {
-				return fmt.Errorf("task %s is not an epic", epicID)
+				return fmt.Errorf("task %s is not a container", epicID)
 			}
 			// Reject first-child assignment to a dirty leaf: once promoted to a
 			// container, leaf-only semantics (state/claim/results) no longer apply.
@@ -372,14 +372,7 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 			Body:      body,
 			CreatedAt: formatTime(now),
 		}
-		if isEpic {
-			payload.EpicID = ""
-		}
-		eventType := "new_task"
-		if isEpic {
-			eventType = "new_epic"
-		}
-		event, err := newEvent(eventType, now, payload)
+		event, err := newEvent("new_task", now, payload)
 		if err != nil {
 			return err
 		}

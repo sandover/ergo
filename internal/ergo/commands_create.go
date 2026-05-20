@@ -77,7 +77,7 @@ func RunNewTask(opts GlobalOptions) error {
 		if err != nil {
 			return err
 		}
-		created, err := createTask(dir, opts, opts.EpicFlag, false, title, body)
+		created, err := createTask(dir, opts, opts.EpicFlag, title, body)
 		if err != nil {
 			return err
 		}
@@ -103,7 +103,9 @@ func RunNewTask(opts GlobalOptions) error {
 		opts.BodyFlag != "" ||
 		opts.EpicFlag != "" ||
 		opts.StateFlag != "" ||
-		opts.ClaimFlag != ""
+		opts.ClaimFlag != "" ||
+		opts.ResultPathFlag != "" ||
+		opts.ResultSummaryFlag != ""
 	if !stdinIsPiped() && hasFlagInput {
 		title := strings.TrimSpace(opts.TitleFlag)
 		if title == "" {
@@ -114,7 +116,7 @@ func RunNewTask(opts GlobalOptions) error {
 		if err != nil {
 			return err
 		}
-		created, err := createTask(dir, opts, opts.EpicFlag, false, title, opts.BodyFlag)
+		created, err := createTask(dir, opts, opts.EpicFlag, title, opts.BodyFlag)
 		if err != nil {
 			return err
 		}
@@ -164,7 +166,7 @@ func RunNewTask(opts GlobalOptions) error {
 	}
 
 	// Create the task
-	created, err := createTask(dir, opts, input.GetEpic(), false, input.GetTitle(), input.GetBody())
+	created, err := createTask(dir, opts, input.GetEpic(), input.GetTitle(), input.GetBody())
 	if err != nil {
 		return err
 	}
@@ -228,9 +230,9 @@ func runBulkCreate(dir string, opts GlobalOptions, input *TaskInput) error {
 		if err != nil {
 			return err
 		}
-		workingIDs[containerID] = &Task{ID: containerID, IsEpic: true}
+		workingIDs[containerID] = &Task{ID: containerID}
 		createdAt := formatTime(now)
-		containerEvent, err := newEvent("new_epic", now, NewTaskEvent{
+		containerEvent, err := newEvent("new_task", now, NewTaskEvent{
 			ID:        containerID,
 			UUID:      containerUUID,
 			EpicID:    "",

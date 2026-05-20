@@ -50,7 +50,7 @@ var knownTaskJSONFields = []string{
 type TaskInput struct {
 	Title *string `json:"title,omitempty"` // required for new; optional for set
 	Body  *string `json:"body,omitempty"`  // optional details (cannot be empty if provided)
-	Epic  *string `json:"epic,omitempty"`  // epic ID or "" to unassign
+	Epic  *string `json:"epic,omitempty"`  // container ID or "" to unassign
 	State *string `json:"state,omitempty"` // todo|doing|done|blocked|canceled|error
 	Claim *string `json:"claim,omitempty"` // agent ID or "" to unclaim
 
@@ -485,7 +485,7 @@ func (t *TaskInput) GetBody() string {
 	return ""
 }
 
-// GetEpic returns epic ID or empty string.
+// GetEpic returns container ID or empty string.
 func (t *TaskInput) GetEpic() string {
 	if t.Epic != nil {
 		return *t.Epic

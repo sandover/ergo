@@ -2,7 +2,7 @@
 // Exports: none (package-internal graph helpers).
 // Role: Core domain logic for state reconstruction and queries.
 // Invariants: Tombstones remove tasks; results are ordered newest-first.
-// Notes: Readiness checks dependencies and epic-deps.
+// Notes: Readiness checks direct deps and inherited container deps.
 package ergo
 
 import (
@@ -300,6 +300,18 @@ func applyTombstone(graph *Graph, id string, info TombstoneInfo) {
 	}
 }
 
+func hasChildren(id string, graph *Graph) bool {
+	if graph == nil {
+		return false
+	}
+	for _, task := range graph.Tasks {
+		if task.EpicID == id {
+			return true
+		}
+	}
+	return false
+}
+
 func applyLegacyTitleMigration(graph *Graph) {
 	for _, task := range graph.Tasks {
 		if strings.TrimSpace(task.Title) != "" {
@@ -311,9 +323,9 @@ func applyLegacyTitleMigration(graph *Graph) {
 	}
 }
 
-// applyContainerDerivation sets IsEpic=true for any task that has children.
-// This ensures tree_view and other code that checks task.IsEpic works for
-// dynamically-derived containers (tasks that acquired children after creation).
+// applyContainerDerivation refreshes the compatibility/display cache for any
+// task with children. Current writes use new_task; legacy new_epic remains
+// read-compatible.
 func applyContainerDerivation(graph *Graph) {
 	for _, task := range graph.Tasks {
 		if task.EpicID != "" {
@@ -406,7 +418,7 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			CreatedAt: formatTime(createdAt),
 		}
 		eventType := "new_task"
-		if task.IsEpic {
+		if task.IsEpic && !hasChildren(task.ID, graph) {
 			eventType = "new_epic"
 		}
 		event, err := newEvent(eventType, createdAt, payload)

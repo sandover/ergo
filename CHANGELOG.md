@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.12.0] - 2026-06-05
+## [0.12.0] - 2026-05-20
 
 ### Changed
 - **BREAKING**: Removed `new epic` command. Use `new task` — any task with children

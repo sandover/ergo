@@ -1,7 +1,7 @@
 // Purpose: Compute and apply prune plans for closed work.
 // Exports: RunPrunePlan, RunPruneApply, PrunePlan, PruneItem.
 // Role: Prune policy logic used by the CLI and tests.
-// Invariants: Only done/canceled tasks are pruned; empty epics pruned after tasks.
+// Invariants: Only done/canceled tasks are pruned; empty containers follow.
 // Notes: Planning is deterministic and sorted by ID.
 package ergo
 

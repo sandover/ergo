@@ -24,7 +24,7 @@ Turn a feature request into a repo-local plan tracked by `ergo`: a backlog of we
 
 ## Planning
 
-Planning naturally surfaces unknowns, ambiguities, and decisions. **Resolve them now, during planning, by asking the user.** Present options clearly with tradeoffs, get an answer, and write the decision into the epic body or task AC. Do not write "Consult Me" or "TBD" into task bodies as a way to defer a conversation you could have right now -- that just creates a mid-implementation block for a future agent that has less context than you do.
+Planning naturally surfaces unknowns, ambiguities, and decisions. **Resolve them now, during planning, by asking the user.** Present options clearly with tradeoffs, get an answer, and write the decision into the container body or task AC. Do not write "Consult Me" or "TBD" into task bodies as a way to defer a conversation you could have right now -- that just creates a mid-implementation block for a future agent that has less context than you do.
 
 The test: if you can describe the options and tradeoffs to the user today, ask today. The only decisions that belong in task bodies as checkpoints are ones that literally require an implementation artifact to evaluate, for example "produce a UI mockup, then get approval before proceeding." For those, write a **Checkpoint** section with the specific artifact to produce and the specific question to answer -- not a vague "consult me."
 
@@ -86,7 +86,7 @@ Before presenting to the user, do a final confirmation pass:
 - **Open calls** -- every judgment call resolved with the user, not deferred to task bodies?
 - **Cruft** -- will the planned work leave behind unowned debt?
 
-Fix what you find, then present an executive summary to the user for approval. Keep it concise: epics, key tasks, and major decisions in high-level language.
+Fix what you find, then present an executive summary to the user for approval. Keep it concise: containers, key tasks, and major decisions in high-level language.
 
 ## Executing ergo plans
 
@@ -99,4 +99,4 @@ Fix what you find, then present an executive summary to the user for approval. K
    - After completing a spike, update dependent tasks with what was learned so the knowledge flows forward.
    - If a task can't be completed, mark it blocked or error. Never leave tasks in progress.
 5. If the plan needs to change, update the plan and note why. Plans are living documents, not contracts.
-6. When an epic is done, commit the `.ergo/` state with a message like `plan: complete <epic name>`. Otherwise, go to 1.
+6. When a container is done, commit the `.ergo/` state with a message like `plan: complete <feature name>`. Otherwise, go to 1.

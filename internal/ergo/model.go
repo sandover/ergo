@@ -24,8 +24,9 @@ const (
 	dependsLinkType = "depends"
 )
 
-// isContainer returns true if the task is a container (has children or was created as an epic).
-// Derived at query time from graph state — not stored as a flag.
+// isContainer returns true if the task is a container.
+// Current containers are derived from children; legacy new_epic events also
+// mark IsEpic so old empty containers remain visible after replay.
 func isContainer(task *Task, graph *Graph) bool {
 	if task == nil || graph == nil {
 		return false
@@ -41,17 +42,6 @@ func isContainer(task *Task, graph *Graph) bool {
 		}
 	}
 	return false
-}
-
-// isEpic checks the legacy IsEpic flag (set from new_epic event type during replay
-// and propagated by applyContainerDerivation). Only use where direct field access is
-// needed for event-log compatibility; prefer isContainer(task, graph) for all
-// behavioral checks.
-func isEpic(task *Task) bool {
-	if task == nil {
-		return false
-	}
-	return task.IsEpic
 }
 
 var (
@@ -172,13 +162,12 @@ type GlobalOptions struct {
 }
 
 type Task struct {
-	ID        string
-	UUID      string
-	EpicID    string
-	// IsEpic is set during event replay for tasks created via new_epic events,
-	// and propagated by applyContainerDerivation for tasks that acquire children.
-	// Do not use for behavioral checks — use isContainer(task, graph) instead.
-	// This field is kept only for event-log compatibility and display code.
+	ID     string
+	UUID   string
+	EpicID string
+	// IsEpic is a compatibility/display cache set during replay for legacy
+	// new_epic events and derived containers. Behavioral checks should prefer
+	// isContainer(task, graph).
 	IsEpic    bool
 	State     string
 	Title     string

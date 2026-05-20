@@ -6,6 +6,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/sandover/ergo/internal/ergo"
 	"github.com/spf13/cobra"
 )
@@ -55,6 +57,15 @@ var initCmd = &cobra.Command{
 var newCmd = &cobra.Command{
 	Use:   "new",
 	Short: "Create a new task",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return nil
+		}
+		return fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath())
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmd.Help()
+	},
 }
 
 var newTaskCmd = &cobra.Command{
@@ -69,26 +80,32 @@ var newTaskCmd = &cobra.Command{
 		opts.EpicFlag = newTaskEpic
 		opts.StateFlag = newTaskState
 		opts.ClaimFlag = newTaskClaim
+		opts.ResultPathFlag = newTaskResultPath
+		opts.ResultSummaryFlag = newTaskResultSummary
 		return ergo.RunNewTask(opts)
 	},
 }
 
 var (
-	newTaskBodyStdin bool
-	newTaskTitle     string
-	newTaskBody      string
-	newTaskEpic      string
-	newTaskState     string
-	newTaskClaim     string
+	newTaskBodyStdin     bool
+	newTaskTitle         string
+	newTaskBody          string
+	newTaskEpic          string
+	newTaskState         string
+	newTaskClaim         string
+	newTaskResultPath    string
+	newTaskResultSummary string
 )
 
 func init() {
 	newTaskCmd.Flags().BoolVar(&newTaskBodyStdin, "body-stdin", false, "Read body from stdin (raw text); metadata via flags")
 	newTaskCmd.Flags().StringVar(&newTaskTitle, "title", "", "Task title (required with --body-stdin)")
 	newTaskCmd.Flags().StringVar(&newTaskBody, "body", "", "Inline body text (mutually exclusive with --body-stdin)")
-	newTaskCmd.Flags().StringVar(&newTaskEpic, "epic", "", "Epic ID to assign this task to")
+	newTaskCmd.Flags().StringVar(&newTaskEpic, "epic", "", "Container ID to assign this task to")
 	newTaskCmd.Flags().StringVar(&newTaskState, "state", "", "Initial state (todo|doing|done|blocked|canceled|error)")
 	newTaskCmd.Flags().StringVar(&newTaskClaim, "claim", "", "Initial claim identity (agent id)")
+	newTaskCmd.Flags().StringVar(&newTaskResultPath, "result-path", "", "Attach result file path (requires --result-summary)")
+	newTaskCmd.Flags().StringVar(&newTaskResultSummary, "result-summary", "", "Attach one-line result summary (requires --result-path)")
 }
 
 // -- list --
@@ -110,7 +127,7 @@ var listCmd = &cobra.Command{
 }
 
 func init() {
-	listCmd.Flags().String("epic", "", "Filter by epic ID")
+	listCmd.Flags().String("epic", "", "Filter by container ID")
 	listCmd.Flags().Bool("ready", false, "Show only ready tasks")
 	listCmd.Flags().Bool("containers", false, "Show only containers")
 	listCmd.Flags().Bool("all", false, "Show all tasks (including canceled/done)")
@@ -154,7 +171,7 @@ var claimCmd = &cobra.Command{
 
 func init() {
 	claimCmd.Flags().String("agent", "", "Claim identity (required; suggested: model@host)")
-	claimCmd.Flags().String("epic", "", "Filter to tasks in this epic")
+	claimCmd.Flags().String("epic", "", "Filter to tasks in this container")
 }
 
 // -- set --
@@ -191,7 +208,7 @@ func init() {
 	setCmd.Flags().BoolVar(&setBodyStdin, "body-stdin", false, "Read body from stdin (raw text); other fields via flags")
 	setCmd.Flags().StringVar(&setTitle, "title", "", "New title")
 	setCmd.Flags().StringVar(&setBody, "body", "", "Inline body text (mutually exclusive with --body-stdin)")
-	setCmd.Flags().StringVar(&setEpic, "epic", "", "Epic ID to assign this task to (\"\" unassign only via JSON)")
+	setCmd.Flags().StringVar(&setEpic, "epic", "", "Container ID to assign this task to (\"\" unassign only via JSON)")
 	setCmd.Flags().StringVar(&setState, "state", "", "Set state (todo|doing|done|blocked|canceled|error)")
 	setCmd.Flags().StringVar(&setClaim, "claim", "", "Set claim identity (\"\" unclaim only via JSON)")
 	setCmd.Flags().StringVar(&setResultPath, "result-path", "", "Attach result file path (requires --result-summary)")

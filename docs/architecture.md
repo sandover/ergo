@@ -12,7 +12,7 @@ It is not a user manual—**the user manual is `ergo --help` and `ergo quickstar
 
 ## High-level mental model
 
-ergo stores task/epic state as an **append-only JSONL event log** in `.ergo/plans.jsonl`.
+ergo stores task graph state as an **append-only JSONL event log** in `.ergo/plans.jsonl`.
 Every command rebuilds current state by **replaying** events into an in-memory graph, then performs a read or appends new events.
 
 (For backwards compatibility, `.ergo/events.jsonl` is also supported if it already exists.)
@@ -50,8 +50,11 @@ This yields two key properties:
 
 ### Entities
 
-- **Task**: unit of work, has state and (optional) claim.
-- **Epic**: grouping/structure only (no state/claim), can have dependencies on other epics.
+- **Task**: the only stored entity type.
+- **Leaf task**: a task with no children; it has state and may be claimed.
+- **Container task**: a task with children. Containers are derived from child assignment, have no direct state/claim/results semantics, and complete when all children are done or canceled.
+
+The CLI still uses `--epic <id>` as the parent-assignment flag for compatibility with existing ergonomics. In current behavior, that value is a container task ID.
 
 ### State machine
 
@@ -62,10 +65,10 @@ The allowed transitions and claim invariants live in code (the model layer) and 
 
 ### Dependencies
 
-- Task-to-task dependencies are allowed.
-- Epic-to-epic dependencies are allowed.
-- Cross-kind dependencies (task↔epic) are forbidden.
+- Dependencies are allowed between any two non-ancestor tasks.
+- A task cannot depend on its own container, and a container cannot depend on one of its own children.
 - Cycles are forbidden.
+- If a dependency points at a container, the dependency is complete only when all children of that container are done or canceled.
 
 ## Code organization
 
