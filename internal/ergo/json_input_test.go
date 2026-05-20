@@ -14,7 +14,7 @@ func ptr(s string) *string {
 
 func TestSuggestFieldNameFrom_AdjacentSwapFallback(t *testing.T) {
 	t.Run("suggests single adjacent swap", func(t *testing.T) {
-		suggestion, ok := suggestFieldNameFrom("aftre", knownPlanTaskJSONFields)
+		suggestion, ok := suggestFieldNameFrom("aftre", []string{"title", "body", "after"})
 		if !ok {
 			t.Fatal("expected suggestion for aftre, got none")
 		}
