@@ -297,7 +297,7 @@ func writeLinkEvent(dir string, opts GlobalOptions, eventType, from, to string) 
 		if err := validateDepSelf(from, to); err != nil {
 			return err
 		}
-		if err := validateDepKinds(isEpic(fromItem), isEpic(toItem)); err != nil {
+		if err := validateDepAncestry(fromItem, toItem); err != nil {
 			return err
 		}
 		// Cycle detection for new links
@@ -373,12 +373,7 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 		if err := appendEvents(eventsPath, []Event{event}); err != nil {
 			return err
 		}
-		kind := "task"
-		if isEpic {
-			kind = "epic"
-		}
 		output = createOutput{
-			Kind:      kind,
 			ID:        id,
 			UUID:      uuid,
 			EpicID:    payload.EpicID,
@@ -518,8 +513,8 @@ func writeResultEvent(dir string, opts GlobalOptions, taskID, summary, relPath s
 		if !ok {
 			return fmt.Errorf("unknown task id %s", taskID)
 		}
-		if isEpic(task) {
-			return errors.New("cannot attach result to epic")
+		if isContainer(task, graph) {
+			return errors.New("cannot attach result to container")
 		}
 		if err := validateResultSummary(summary); err != nil {
 			return err

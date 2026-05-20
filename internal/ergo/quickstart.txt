@@ -9,7 +9,14 @@ Creates `.ergo/` in the current directory.
 {{CMD}}ergo where{{RESET}}
 Prints the active `.ergo/` path (useful when running with `--dir`).
 
-{{HEADER}}2. AGENT WORKFLOW{{RESET}}
+{{HEADER}}2. CHOOSE INPUT MODE{{RESET}}
+
+- Short, one-line fields: use flags or JSON stdin.
+- Multi-line Markdown bodies: use --body-stdin. Do not hand-escape rich bodies into JSON unless your tool generates JSON safely.
+- Whole feature graph: use `ergo --json plan` for the epic, task titles, and dependencies.
+- Whole feature graph with rich bodies: create the graph first, then update each body with `ergo set <id> --body-stdin`.
+
+{{HEADER}}3. AGENT WORKFLOW{{RESET}}
 
 Your identity is <model>@<hostname> (e.g. sonnet@agent-host).
 
@@ -42,7 +49,7 @@ Common variants:
   - Change state (uses existing claim if present):
     {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
 
-{{HEADER}}3. CREATE WORK (JSON stdin){{RESET}}
+{{HEADER}}4. CREATE WORK (JSON stdin){{RESET}}
 
 Use `printf '%s'` for reliable JSON delivery. Heredocs (`<<'JSON'`) can work too, but some terminals/tooling don’t support them reliably. All fields are strings.
 Unknown keys are rejected (with suggestions for close matches).
@@ -57,7 +64,7 @@ Atomic create-and-claim (preferred for dynamic tasking):
   {{CMD}}printf '%s' '{"title":"Fix CVE","claim":"sonnet@agent-host"}' | ergo new task{{RESET}}
   `claim` implies `state=doing` unless `state` is explicitly set.
 
-{{HEADER}}3b. CREATE WORK (body from stdin){{RESET}}
+{{HEADER}}4b. CREATE WORK (body from stdin){{RESET}}
 
 Use `--body-stdin` when the body is multi-line markdown. In this mode, stdin is the literal body text (non-empty) and metadata is passed via flags.
 
@@ -67,7 +74,7 @@ Create a task with a multi-line body:
 Update a task body (and state) from stdin:
   {{CMD}}printf '%s\n' '## Status' '- Waiting on review' | ergo set ABCDEF --body-stdin --state blocked{{RESET}}
 
-{{HEADER}}3c. CREATE/UPDATE (flags only){{RESET}}
+{{HEADER}}4c. CREATE/UPDATE (flags only){{RESET}}
 
 When stdin is not piped (TTY), you can use flags for simple inputs (short titles/bodies, state changes).
 
@@ -77,16 +84,20 @@ Create a task (no stdin):
 Mark done (no stdin):
   {{CMD}}ergo set ABCDEF --state done{{RESET}}
 
-{{HEADER}}3d. PLAN A FEATURE (single JSON document){{RESET}}
+{{HEADER}}4d. PLAN A FEATURE (single JSON document){{RESET}}
 
 Use `plan` to create one epic, its tasks, and dependencies in a single mutation.
+`plan` accepts JSON stdin only. Use it for graph shape: epic metadata, task titles, and dependencies.
 `after` references task titles in the same payload (exact, case-sensitive).
 
 {{CMD}}printf '%s' '{"title":"Auth","tasks":[{"title":"Middleware"},{"title":"Login","after":["Middleware"]}]}' | ergo --json plan{{RESET}}
 
 Edge semantics match `sequence`: when `B.after=["A"]`, output includes an edge where `B` depends on `A` (`from_id=B`, `to_id=A`).
 
-{{HEADER}}4. DEPENDENCIES{{RESET}}
+If task bodies are long or multi-line, keep them short or empty in `plan`, then update each task body:
+  {{CMD}}printf '%s\n' '## Goal' '- ...' | ergo set TASKID --body-stdin{{RESET}}
+
+{{HEADER}}5. DEPENDENCIES{{RESET}}
 
 Enforce order (A happens before B):
   {{CMD}}ergo sequence TASK_A TASK_B{{RESET}}
@@ -100,7 +111,12 @@ Remove order between A and B (remove edge where B depends on A):
 Find ready work (all deps done or canceled):
   {{CMD}}ergo list --ready{{RESET}}
 
-{{HEADER}}5. UPDATE & FAILURES{{RESET}}
+{{HEADER}}6. UPDATE & FAILURES{{RESET}}
+
+Any field accepted by `new task` (epic, title, body, state, claim, results) can be changed later with `set`.
+
+Reassign a task to a different epic (or unassign with ""):
+  {{CMD}}printf '%s' '{"epic":"OFKSTE"}' | ergo set ABCDEF{{RESET}}
 
 Mark blocked (waiting on human/external):
   {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
@@ -109,7 +125,7 @@ Mark error (requires claim to show who failed):
   {{CMD}}printf '%s' '{"state":"error"}' | ergo set ABCDEF{{RESET}}
   If unclaimed, pass --agent or set claim in JSON.
 
-{{HEADER}}6. PRUNE + COMPACT{{RESET}}
+{{HEADER}}7. PRUNE + COMPACT{{RESET}}
 
 `ergo prune` logically deletes completed work. Default is dry-run.
 
@@ -129,7 +145,7 @@ Apply:
 
 `ergo compact` rewrites the log to physically remove pruned history.
 
-{{HEADER}}7. ATTACH RESULTS{{RESET}}
+{{HEADER}}8. ATTACH RESULTS{{RESET}}
 
 Results are pointers to project files (relative paths).
 
@@ -139,7 +155,7 @@ Attach results (multiple calls accumulate, newest first):
 Inspect results:
   {{CMD}}ergo show GHIJKL --json | jq '.results[]'{{RESET}}
 
-{{HEADER}}8. EPIC HIERARCHIES{{RESET}}
+{{HEADER}}9. EPIC HIERARCHIES{{RESET}}
 
 Epics complete when all children are done or canceled. They have no own state.
 Epic-to-epic deps block all tasks in the dependent epic.

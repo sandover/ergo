@@ -32,11 +32,13 @@ var knownTaskJSONFields = []string{
 	"claim",
 	"result_path",
 	"result_summary",
+	"tasks",
 }
 
-// TaskInput is the unified JSON schema for creating and updating tasks/epics.
+// TaskInput is the unified JSON schema for creating and updating tasks.
 //
-// For `new task` / `new epic`: title is required; body is optional (details).
+// For `new task`: title is required; body is optional.
+// For `new task` with tasks:[...]: creates a container with child tasks and deps.
 // For `set`: all fields are optional; provided fields override existing values.
 //
 // Validation rules (apply to both new and set):
@@ -55,6 +57,9 @@ type TaskInput struct {
 	// Result attachment (both required together)
 	ResultPath    *string `json:"result_path,omitempty"`    // path to result file
 	ResultSummary *string `json:"result_summary,omitempty"` // one-line summary
+
+	// Bulk creation: create container with child tasks (new task only)
+	Tasks []PlanTaskInput `json:"tasks,omitempty"`
 }
 
 // ValidationError is a structured error for JSON input validation.
@@ -285,24 +290,19 @@ func minInt(a, b int) int {
 
 // ValidateForNewTask validates TaskInput for new task creation.
 func (t *TaskInput) ValidateForNewTask() *ValidationError {
-	return t.validate(true, false)
+	return t.validate(true)
 }
 
-// ValidateForNewEpic validates TaskInput for new epic creation.
-func (t *TaskInput) ValidateForNewEpic() *ValidationError {
-	return t.validate(true, true)
-}
-
-// ValidateForSet validates TaskInput for updating an existing task/epic.
+// ValidateForSet validates TaskInput for updating an existing task.
 func (t *TaskInput) ValidateForSet() *ValidationError {
-	return t.validate(false, false)
+	return t.validate(false)
 }
 
-func (t *TaskInput) validate(requireTitle bool, isEpic bool) *ValidationError {
+func (t *TaskInput) validate(requireTitle bool) *ValidationError {
 	var missing []string
 	invalid := make(map[string]string)
 
-	// Title validation - required for new tasks/epics
+	// Title validation - required for new tasks
 	hasTitle := t.Title != nil && strings.TrimSpace(*t.Title) != ""
 	if requireTitle {
 		if !hasTitle {
@@ -346,16 +346,58 @@ func (t *TaskInput) validate(requireTitle bool, isEpic bool) *ValidationError {
 		invalid["result_path"] = "required when result_summary is provided"
 	}
 
-	// Epic-only restrictions
-	if isEpic {
-		if t.Epic != nil {
-			invalid["epic"] = "epics cannot be assigned to other epics"
+	// Bulk tasks validation (for new task with tasks:[...])
+	if requireTitle && len(t.Tasks) > 0 {
+		titleToIndex := map[string]int{}
+		depsByTitle := map[string][]string{}
+
+		for i, task := range t.Tasks {
+			fieldPrefix := fmt.Sprintf("tasks[%d]", i)
+			if task.Title == nil || strings.TrimSpace(*task.Title) == "" {
+				missing = append(missing, fieldPrefix+".title")
+			} else {
+				taskTitle := *task.Title
+				if prior, exists := titleToIndex[taskTitle]; exists {
+					invalid[fieldPrefix+".title"] = fmt.Sprintf("duplicate title %q (already used by tasks[%d].title)", taskTitle, prior)
+				} else {
+					titleToIndex[taskTitle] = i
+				}
+			}
+			if task.Body != nil && strings.TrimSpace(*task.Body) == "" {
+				invalid[fieldPrefix+".body"] = "cannot be empty"
+			}
 		}
-		if t.State != nil {
-			invalid["state"] = "epics do not have state (use epic-deps)"
+
+		for i, task := range t.Tasks {
+			if task.Title == nil || strings.TrimSpace(*task.Title) == "" {
+				continue
+			}
+			taskTitle := *task.Title
+			seenDeps := map[string]struct{}{}
+			for j, rawDep := range task.After {
+				field := fmt.Sprintf("tasks[%d].after[%d]", i, j)
+				if strings.TrimSpace(rawDep) == "" {
+					invalid[field] = "cannot be empty"
+					continue
+				}
+				if err := validateDepSelf(taskTitle, rawDep); err != nil {
+					invalid[field] = err.Error()
+					continue
+				}
+				if _, ok := titleToIndex[rawDep]; !ok {
+					invalid[field] = fmt.Sprintf("unknown task title %q", rawDep)
+					continue
+				}
+				if _, duplicate := seenDeps[rawDep]; duplicate {
+					continue
+				}
+				seenDeps[rawDep] = struct{}{}
+				depsByTitle[taskTitle] = append(depsByTitle[taskTitle], rawDep)
+			}
 		}
-		if t.Claim != nil {
-			invalid["claim"] = "epics cannot be claimed"
+
+		if len(invalid) == 0 && len(missing) == 0 && hasPlanCycle(titleToIndex, depsByTitle) {
+			invalid["tasks"] = "after graph contains a cycle"
 		}
 	}
 

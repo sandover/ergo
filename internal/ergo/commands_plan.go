@@ -87,7 +87,6 @@ func RunPlan(args []string, opts GlobalOptions) error {
 		}
 
 		out = planOutput{
-			Kind: "plan",
 			Epic: planEntityOutput{
 				ID:        epicID,
 				UUID:      epicUUID,

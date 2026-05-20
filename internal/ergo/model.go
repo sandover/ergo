@@ -24,24 +24,27 @@ const (
 	dependsLinkType = "depends"
 )
 
-type Kind string
-
-const (
-	kindAny  Kind = "any"
-	kindTask Kind = "task"
-	kindEpic Kind = "epic"
-)
-
-func kindForTask(task *Task) Kind {
-	if task == nil {
-		return kindTask
+// isContainer returns true if the task is a container (has children or was created as an epic).
+// Derived at query time from graph state — not stored as a flag.
+func isContainer(task *Task, graph *Graph) bool {
+	if task == nil || graph == nil {
+		return false
 	}
+	// Legacy: tasks created via new_epic event have IsEpic=true
 	if task.IsEpic {
-		return kindEpic
+		return true
 	}
-	return kindTask
+	// Derived: any task with children assigned to it is a container
+	for _, t := range graph.Tasks {
+		if t.EpicID == task.ID {
+			return true
+		}
+	}
+	return false
 }
 
+// isEpic checks the legacy IsEpic flag (set from event type during replay).
+// Prefer isContainer for behavioral checks; isEpic is used during migration/compat.
 func isEpic(task *Task) bool {
 	if task == nil {
 		return false
@@ -118,22 +121,23 @@ func validateClaimInvariant(state, claimedBy string) error {
 }
 
 // Dependency rules: defines valid dependency relationships.
-// Design decisions:
-// - task→task: allowed (standard dependency)
-// - epic→epic: allowed (epic hierarchies)
-// - task→epic: forbidden (tasks cannot depend on epics)
-// - epic→task: forbidden (epics cannot depend on tasks)
+// Design decisions (v0.12 unified model):
+// - Any two non-ancestor tasks may depend on each other
+// - A task cannot depend on its own container (parent) or vice versa
 // - self-dep: forbidden (A cannot depend on A)
 // - cycles: forbidden (A→B→...→A not allowed)
 
-// validateDepKinds checks if a dependency between from and to is valid based on their kinds.
-// Both must be the same kind (both tasks or both epics).
-func validateDepKinds(fromIsEpic, toIsEpic bool) error {
-	if fromIsEpic != toIsEpic {
-		if fromIsEpic {
-			return errors.New("epic cannot depend on task")
-		}
-		return errors.New("task cannot depend on epic")
+// validateDepAncestry checks that neither task is the other's container.
+// A task cannot depend on its parent epic, nor can a parent depend on its child.
+func validateDepAncestry(from, to *Task) error {
+	if from == nil || to == nil {
+		return nil
+	}
+	if from.EpicID == to.ID {
+		return errors.New("task cannot depend on its own container")
+	}
+	if to.EpicID == from.ID {
+		return errors.New("container cannot depend on its own child")
 	}
 	return nil
 }

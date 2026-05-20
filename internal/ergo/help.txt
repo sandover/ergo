@@ -51,7 +51,7 @@ For multi-line Markdown bodies, use --body-stdin (stdin is the raw text):
   --body-stdin                            read body from stdin (raw text, non-empty)
   --title <text>                          set title (required for new with --body-stdin)
   --body <text>                           inline body text (mutually exclusive with --body-stdin)
-  --epic <id>                             assign to epic
+  --epic <id>                             assign/reassign to epic ("" to unassign)
   --state <state>                         todo|doing|done|blocked|canceled|error
   --claim <agent>                         set claim
   --result-path <path>                    attach result file (requires --result-summary)

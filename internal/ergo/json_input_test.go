@@ -173,61 +173,6 @@ func TestTaskInput_ValidateForNewTask(t *testing.T) {
 	}
 }
 
-func TestTaskInput_ValidateForNewEpic(t *testing.T) {
-	tests := []struct {
-		name        string
-		input       TaskInput
-		expectError bool
-		invalidKeys []string
-	}{
-		{
-			name:        "valid minimal",
-			input:       TaskInput{Title: ptr("Auth system"), Body: ptr("Auth system")},
-			expectError: false,
-		},
-		{
-			name:        "epic cannot have epic",
-			input:       TaskInput{Title: ptr("X"), Body: ptr("X"), Epic: ptr("E1")},
-			expectError: true,
-			invalidKeys: []string{"epic"},
-		},
-		{
-			name:        "epic cannot have state",
-			input:       TaskInput{Title: ptr("X"), Body: ptr("X"), State: ptr("todo")},
-			expectError: true,
-			invalidKeys: []string{"state"},
-		},
-		{
-			name:        "epic cannot have claim",
-			input:       TaskInput{Title: ptr("X"), Body: ptr("X"), Claim: ptr("agent-1")},
-			expectError: true,
-			invalidKeys: []string{"claim"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			verr := tt.input.ValidateForNewEpic()
-
-			if tt.expectError {
-				if verr == nil {
-					t.Error("expected validation error, got nil")
-					return
-				}
-				for _, k := range tt.invalidKeys {
-					if _, ok := verr.Invalid[k]; !ok {
-						t.Errorf("expected invalid field %q, got invalid=%v", k, verr.Invalid)
-					}
-				}
-			} else {
-				if verr != nil {
-					t.Errorf("expected no error, got %v", verr)
-				}
-			}
-		})
-	}
-}
-
 func TestTaskInput_ValidateForSet(t *testing.T) {
 	tests := []struct {
 		name        string

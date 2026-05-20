@@ -188,10 +188,10 @@ func TestBuildSetEvents_ClaimHandling(t *testing.T) {
 			expectEvents: 1,
 		},
 		{
-			name:         "claim on epic ignored",
-			task:         &Task{ID: "E1", State: stateTodo, ClaimedBy: "", EpicID: "", IsEpic: true}, // epic has IsEpic=true
+			name:         "claim on container goes through (guarded by caller)",
+			task:         &Task{ID: "E1", State: stateTodo, ClaimedBy: "", EpicID: "", IsEpic: true},
 			updates:      map[string]string{"claim": "agent-1"},
-			expectEvents: 0,
+			expectEvents: 2, // claim event + implicit state=doing (buildSetEvents doesn't guard containers; applySetUpdates does)
 		},
 	}
 

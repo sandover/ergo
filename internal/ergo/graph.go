@@ -276,6 +276,9 @@ func replayEvents(events []Event) (*Graph, error) {
 
 	applyLegacyTitleMigration(graph)
 
+	// Derive container status: any task with children is a container
+	applyContainerDerivation(graph)
+
 	return graph, nil
 }
 
@@ -305,6 +308,19 @@ func applyLegacyTitleMigration(graph *Graph) {
 		title, body := deriveTitleAndBodyFromLegacy(task.Body)
 		task.Title = title
 		task.Body = body
+	}
+}
+
+// applyContainerDerivation sets IsEpic=true for any task that has children.
+// This ensures tree_view and other code that checks task.IsEpic works for
+// dynamically-derived containers (tasks that acquired children after creation).
+func applyContainerDerivation(graph *Graph) {
+	for _, task := range graph.Tasks {
+		if task.EpicID != "" {
+			if parent, ok := graph.Tasks[task.EpicID]; ok {
+				parent.IsEpic = true
+			}
+		}
 	}
 }
 
@@ -503,12 +519,13 @@ func compactEvents(graph *Graph) ([]Event, error) {
 	return events, nil
 }
 
-func readyTasks(graph *Graph, epicID string, kind Kind) []*Task {
+func readyTasks(graph *Graph, epicID string) []*Task {
 	tasks := listTasks(graph, epicID, true)
 	if len(tasks) == 0 {
 		return nil
 	}
-	tasks = filterTasksByKind(tasks, kind)
+	// Exclude containers from ready list (they complete implicitly)
+	tasks = filterNonContainers(tasks, graph)
 	if len(tasks) == 0 {
 		return nil
 	}
@@ -521,13 +538,11 @@ func readyTasks(graph *Graph, epicID string, kind Kind) []*Task {
 	return tasks
 }
 
-func filterTasksByKind(tasks []*Task, kind Kind) []*Task {
-	if kind == "" || kind == kindAny {
-		return tasks
-	}
+// filterNonContainers removes tasks that are containers (have children).
+func filterNonContainers(tasks []*Task, graph *Graph) []*Task {
 	filtered := tasks[:0]
 	for _, task := range tasks {
-		if kindForTask(task) == kind {
+		if !isContainer(task, graph) {
 			filtered = append(filtered, task)
 		}
 	}

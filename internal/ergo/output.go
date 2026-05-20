@@ -14,15 +14,15 @@ import (
 )
 
 type taskListItem struct {
-	Kind       string `json:"kind,omitempty"`
-	ID         string `json:"id"`
-	EpicID     string `json:"epic_id,omitempty"`
-	State      string `json:"state"`
-	ClaimedBy  string `json:"claimed_by,omitempty"`
-	Title      string `json:"title"`
-	Ready      bool   `json:"ready"`
-	Blocked    bool   `json:"blocked"`
-	HasResults bool   `json:"has_results,omitempty"`
+	Container bool   `json:"container,omitempty"`
+	ID        string `json:"id"`
+	EpicID    string `json:"epic_id,omitempty"`
+	State     string `json:"state"`
+	ClaimedBy string `json:"claimed_by,omitempty"`
+	Title     string `json:"title"`
+	Ready     bool   `json:"ready"`
+	Blocked   bool   `json:"blocked"`
+	HasResults bool  `json:"has_results,omitempty"`
 }
 
 // resultOutputItem is the JSON representation of a result with derived file_url.
@@ -57,7 +57,7 @@ type initOutput struct {
 }
 
 type createOutput struct {
-	Kind      string `json:"kind"`
+	Container bool   `json:"container,omitempty"`
 	ID        string `json:"id"`
 	UUID      string `json:"uuid"`
 	EpicID    string `json:"epic_id"`
@@ -172,7 +172,7 @@ func buildTaskListItems(tasks []*Task, graph *Graph, repoDir string) []taskListI
 	items := make([]taskListItem, 0, len(tasks))
 	for _, task := range tasks {
 		item := taskListItem{
-			Kind:       string(kindForTask(task)),
+			Container:  isContainer(task, graph),
 			ID:         task.ID,
 			EpicID:     task.EpicID,
 			State:      task.State,

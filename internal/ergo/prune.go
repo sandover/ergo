@@ -18,10 +18,10 @@ type PrunePlan struct {
 }
 
 type PruneItem struct {
-	ID     string
-	Title  string
-	State  string
-	IsEpic bool
+	ID          string
+	Title       string
+	State       string
+	IsContainer bool
 }
 
 // RunPrunePlan computes the prune plan under the lock without writing events.
@@ -68,7 +68,7 @@ func selectPruneTargets(graph *Graph) []string {
 	}
 	eligibleTasks := map[string]struct{}{}
 	for _, task := range graph.Tasks {
-		if task.IsEpic {
+		if isContainer(task, graph) {
 			continue
 		}
 		if task.State == stateDone || task.State == stateCanceled {
@@ -78,7 +78,7 @@ func selectPruneTargets(graph *Graph) []string {
 
 	remainingChildren := map[string]int{}
 	for _, task := range graph.Tasks {
-		if task.IsEpic {
+		if isContainer(task, graph) {
 			continue
 		}
 		if _, willPrune := eligibleTasks[task.ID]; willPrune {
@@ -89,21 +89,21 @@ func selectPruneTargets(graph *Graph) []string {
 		}
 	}
 
-	eligibleEpics := map[string]struct{}{}
+	eligibleContainers := map[string]struct{}{}
 	for _, task := range graph.Tasks {
-		if !task.IsEpic {
+		if !isContainer(task, graph) {
 			continue
 		}
 		if remainingChildren[task.ID] == 0 {
-			eligibleEpics[task.ID] = struct{}{}
+			eligibleContainers[task.ID] = struct{}{}
 		}
 	}
 
-	ids := make([]string, 0, len(eligibleTasks)+len(eligibleEpics))
+	ids := make([]string, 0, len(eligibleTasks)+len(eligibleContainers))
 	for id := range eligibleTasks {
 		ids = append(ids, id)
 	}
-	for id := range eligibleEpics {
+	for id := range eligibleContainers {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
@@ -121,10 +121,10 @@ func buildPruneItems(graph *Graph, ids []string) []PruneItem {
 			continue
 		}
 		items = append(items, PruneItem{
-			ID:     id,
-			Title:  task.Title,
-			State:  task.State,
-			IsEpic: task.IsEpic,
+			ID:          id,
+			Title:       task.Title,
+			State:       task.State,
+			IsContainer: isContainer(task, graph),
 		})
 	}
 	return items
