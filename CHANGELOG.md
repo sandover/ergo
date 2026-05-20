@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-06-05
+
+### Changed
+- **BREAKING**: Removed `new epic` command. Use `new task` — any task with children
+  is automatically a container.
+- **BREAKING**: Removed `plan` command. Use `new task` with `tasks:[...]` for bulk
+  creation of a container with children and dependency edges.
+- **BREAKING**: Renamed `--epics` flag to `--containers` in `list`.
+- **BREAKING**: JSON output: replaced `kind` field in list items with `container: bool`.
+- Relaxed dependency rules: any non-ancestor tasks can have deps (was: same-kind only).
+- Containers are now derived (has-children) rather than declared (was: explicit `new epic`).
+- Rewrote `--help` and `quickstart` for the unified model.
+
+### Removed
+- `ergo new epic` command
+- `ergo plan` command
+- `--epics` flag (replaced by `--containers`)
+- `kind` field from task list JSON output
+
 ## [0.11.2] - 2026-05-18
 
 ### Changed
