@@ -9,7 +9,7 @@ rm -rf "$FIXTURE_DIR"
 mkdir -p "$FIXTURE_DIR"
 cd "$FIXTURE_DIR"
 
-ERGO="../../ergo"
+ERGO="${ERGO:-../../ergo}"
 
 # Initialize
 $ERGO init
@@ -17,7 +17,7 @@ $ERGO init
 # ============================================
 # PHASE 1: Research & Design
 # ============================================
-DESIGN_EPIC=$(printf '%s' '{"title":"Research & Design"}' | $ERGO new epic)
+DESIGN_EPIC=$(printf '%s' '{"title":"Research & Design"}' | $ERGO new task)
 
 # Research tasks - some done, one in progress
 REQ_TASK=$(printf '%s' '{"title":"Define product requirements","epic":"'"$DESIGN_EPIC"'"}' | $ERGO new task)
@@ -71,7 +71,7 @@ $ERGO sequence "$REQ_TASK" "$DESIGN_TASK"  # Design doc needs requirements first
 # ============================================
 # PHASE 2: Implementation (blocked by Design)
 # ============================================
-IMPL_EPIC=$(printf '%s' '{"title":"Implementation"}' | $ERGO new epic)
+IMPL_EPIC=$(printf '%s' '{"title":"Implementation"}' | $ERGO new task)
 $ERGO sequence "$DESIGN_EPIC" "$IMPL_EPIC"
 
 # Backend tasks
@@ -95,7 +95,7 @@ $ERGO sequence "$API_TASK" "$SEC_TASK"
 # ============================================
 # PHASE 3: Launch (blocked by Implementation)
 # ============================================
-LAUNCH_EPIC=$(printf '%s' '{"title":"Launch"}' | $ERGO new epic)
+LAUNCH_EPIC=$(printf '%s' '{"title":"Launch"}' | $ERGO new task)
 $ERGO sequence "$IMPL_EPIC" "$LAUNCH_EPIC"
 
 STAGING_TASK=$(printf '%s' '{"title":"Deploy to staging","epic":"'"$LAUNCH_EPIC"'"}' | $ERGO new task)

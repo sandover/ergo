@@ -43,8 +43,10 @@ func isContainer(task *Task, graph *Graph) bool {
 	return false
 }
 
-// isEpic checks the legacy IsEpic flag (set from event type during replay).
-// Prefer isContainer for behavioral checks; isEpic is used during migration/compat.
+// isEpic checks the legacy IsEpic flag (set from new_epic event type during replay
+// and propagated by applyContainerDerivation). Only use where direct field access is
+// needed for event-log compatibility; prefer isContainer(task, graph) for all
+// behavioral checks.
 func isEpic(task *Task) bool {
 	if task == nil {
 		return false
@@ -173,6 +175,10 @@ type Task struct {
 	ID        string
 	UUID      string
 	EpicID    string
+	// IsEpic is set during event replay for tasks created via new_epic events,
+	// and propagated by applyContainerDerivation for tasks that acquire children.
+	// Do not use for behavioral checks — use isContainer(task, graph) instead.
+	// This field is kept only for event-log compatibility and display code.
 	IsEpic    bool
 	State     string
 	Title     string

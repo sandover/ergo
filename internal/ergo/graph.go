@@ -580,6 +580,20 @@ func sortByCreatedAt(tasks []*Task) {
 	})
 }
 
+// isDepComplete returns true if the dependency identified by depID is fully satisfied.
+// For containers: all children must be done or canceled.
+// For leaves: the task must be done or canceled.
+func isDepComplete(depID string, graph *Graph) bool {
+	dep, ok := graph.Tasks[depID]
+	if !ok {
+		return true // unknown deps don't block
+	}
+	if isContainer(dep, graph) {
+		return isEpicComplete(depID, graph)
+	}
+	return dep.State == stateDone || dep.State == stateCanceled
+}
+
 func isReady(task *Task, graph *Graph) bool {
 	if task == nil {
 		return false
@@ -590,19 +604,17 @@ func isReady(task *Task, graph *Graph) bool {
 	if task.ClaimedBy != "" {
 		return false
 	}
-	for dep := range graph.Deps[task.ID] {
-		other, ok := graph.Tasks[dep]
-		if !ok {
-			continue
-		}
-		if other.State != stateDone && other.State != stateCanceled {
+	for depID := range graph.Deps[task.ID] {
+		if !isDepComplete(depID, graph) {
 			return false
 		}
 	}
-	// For tasks in an epic, check if epic's epic-deps are complete
+	// Tasks in a container inherit the container's external deps.
 	if task.EpicID != "" {
-		if !areEpicDepsComplete(task.EpicID, graph) {
-			return false
+		for depID := range graph.Deps[task.EpicID] {
+			if !isDepComplete(depID, graph) {
+				return false
+			}
 		}
 	}
 	return true
@@ -618,19 +630,17 @@ func isBlocked(task *Task, graph *Graph) bool {
 	if task.State != stateTodo || task.ClaimedBy != "" {
 		return false
 	}
-	for dep := range graph.Deps[task.ID] {
-		other, ok := graph.Tasks[dep]
-		if !ok {
-			continue
-		}
-		if other.State != stateDone && other.State != stateCanceled {
+	for depID := range graph.Deps[task.ID] {
+		if !isDepComplete(depID, graph) {
 			return true
 		}
 	}
-	// For tasks in an epic, check if epic's epic-deps are incomplete
+	// Tasks in a container inherit the container's external deps.
 	if task.EpicID != "" {
-		if !areEpicDepsComplete(task.EpicID, graph) {
-			return true
+		for depID := range graph.Deps[task.EpicID] {
+			if !isDepComplete(depID, graph) {
+				return true
+			}
 		}
 	}
 	return false
@@ -644,23 +654,6 @@ func isEpicComplete(epicID string, graph *Graph) bool {
 			if task.State != stateDone && task.State != stateCanceled {
 				return false
 			}
-		}
-	}
-	return true
-}
-
-// areEpicDepsComplete returns true if all epics that the given epic depends on are complete.
-func areEpicDepsComplete(epicID string, graph *Graph) bool {
-	for depID := range graph.Deps[epicID] {
-		depEpic, ok := graph.Tasks[depID]
-		if !ok {
-			continue
-		}
-		if !isEpic(depEpic) {
-			continue
-		}
-		if !isEpicComplete(depID, graph) {
-			return false
 		}
 	}
 	return true

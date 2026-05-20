@@ -67,23 +67,24 @@ type createOutput struct {
 	CreatedAt string `json:"created_at"`
 }
 
-type planEntityOutput struct {
-	ID        string `json:"id"`
-	UUID      string `json:"uuid"`
-	Title     string `json:"title"`
-	CreatedAt string `json:"created_at"`
-}
-
-type planTaskOutput struct {
+// bulkCreateChildOutput is a compact child task entry in a bulk-create response.
+type bulkCreateChildOutput struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 }
 
-type planOutput struct {
-	Kind  string               `json:"kind"`
-	Epic  planEntityOutput     `json:"epic"`
-	Tasks []planTaskOutput     `json:"tasks"`
-	Edges []sequenceEdgeOutput `json:"edges"`
+// bulkCreateOutput is the JSON response for `new task` with tasks:[...].
+// Uses the same vocabulary as single-task creation, with children and edges added.
+type bulkCreateOutput struct {
+	Kind      string                  `json:"kind"`
+	Container bool                    `json:"container"`
+	ID        string                  `json:"id"`
+	UUID      string                  `json:"uuid"`
+	Title     string                  `json:"title"`
+	State     string                  `json:"state"`
+	CreatedAt string                  `json:"created_at"`
+	Children  []bulkCreateChildOutput `json:"children"`
+	Edges     []sequenceEdgeOutput    `json:"edges"`
 }
 
 type setOutput struct {

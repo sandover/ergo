@@ -1,3 +1,5 @@
+> **Historical proposal** — the `ergo plan` command described here was implemented as `ergo new task` with a `tasks:[...]` payload in v0.12. See `help.txt` for current behavior.
+
 # Proposal: `ergo plan` — create an epic + task graph from one JSON document
 
 ## Problem

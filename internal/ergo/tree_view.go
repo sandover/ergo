@@ -658,19 +658,17 @@ func stateIcon(task *Task, isReady bool) string {
 func getBlockers(task *Task, graph *Graph) []string {
 	var blockers []string
 
-	// Check task deps
+	// Check task's own direct deps
 	for depID := range graph.Deps[task.ID] {
-		dep := graph.Tasks[depID]
-		if dep != nil && dep.State != stateDone && dep.State != stateCanceled {
+		if !isDepComplete(depID, graph) {
 			blockers = append(blockers, depID)
 		}
 	}
 
-	// Check epic deps (if task is in an epic)
+	// Inherited blocking: if the task's container has external deps, propagate them
 	if task.EpicID != "" {
 		for epicDepID := range graph.Deps[task.EpicID] {
-			epicDep := graph.Tasks[epicDepID]
-			if epicDep != nil && epicDep.IsEpic && !isEpicComplete(epicDepID, graph) {
+			if !isDepComplete(epicDepID, graph) {
 				blockers = append(blockers, epicDepID)
 			}
 		}

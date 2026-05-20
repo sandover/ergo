@@ -530,6 +530,8 @@ func buildSetEvents(id string, task *Task, updates map[string]string, agentID st
 
 	// Handle epic assignment
 	if epicID, ok := remainingUpdates["epic"]; ok {
+		// task.IsEpic is set by applyContainerDerivation during graph load;
+		// buildSetEvents has no graph access so we rely on the field directly here.
 		if task.IsEpic {
 			return nil, nil, errors.New("containers cannot be assigned to other containers")
 		}

@@ -347,60 +347,83 @@ func (t *TaskInput) validate(requireTitle bool) *ValidationError {
 	}
 
 	// Bulk tasks validation (for new task with tasks:[...])
-	if requireTitle && len(t.Tasks) > 0 {
-		titleToIndex := map[string]int{}
-		depsByTitle := map[string][]string{}
+	if requireTitle && t.Tasks != nil {
+		// Reject explicit empty tasks array
+		if len(t.Tasks) == 0 {
+			invalid["tasks"] = "array must not be empty"
+		}
 
-		for i, task := range t.Tasks {
-			fieldPrefix := fmt.Sprintf("tasks[%d]", i)
-			if task.Title == nil || strings.TrimSpace(*task.Title) == "" {
-				missing = append(missing, fieldPrefix+".title")
-			} else {
-				taskTitle := *task.Title
-				if prior, exists := titleToIndex[taskTitle]; exists {
-					invalid[fieldPrefix+".title"] = fmt.Sprintf("duplicate title %q (already used by tasks[%d].title)", taskTitle, prior)
+		// Reject leaf-only fields in bulk mode
+		if t.State != nil {
+			invalid["state"] = "cannot be set on the container; omit or set on individual child tasks"
+		}
+		if t.Claim != nil {
+			invalid["claim"] = "cannot claim a container directly; containers do not have claim semantics"
+		}
+		if t.Epic != nil {
+			invalid["epic"] = "cannot assign a container to another container"
+		}
+		if t.ResultPath != nil {
+			invalid["result_path"] = "cannot attach results to a container"
+		}
+		if t.ResultSummary != nil {
+			invalid["result_summary"] = "cannot attach results to a container"
+		}
+
+		if len(t.Tasks) > 0 {
+			titleToIndex := map[string]int{}
+			depsByTitle := map[string][]string{}
+
+			for i, task := range t.Tasks {
+				fieldPrefix := fmt.Sprintf("tasks[%d]", i)
+				if task.Title == nil || strings.TrimSpace(*task.Title) == "" {
+					missing = append(missing, fieldPrefix+".title")
 				} else {
-					titleToIndex[taskTitle] = i
+					taskTitle := *task.Title
+					if prior, exists := titleToIndex[taskTitle]; exists {
+						invalid[fieldPrefix+".title"] = fmt.Sprintf("duplicate title %q (already used by tasks[%d].title)", taskTitle, prior)
+					} else {
+						titleToIndex[taskTitle] = i
+					}
+				}
+				if task.Body != nil && strings.TrimSpace(*task.Body) == "" {
+					invalid[fieldPrefix+".body"] = "cannot be empty"
 				}
 			}
-			if task.Body != nil && strings.TrimSpace(*task.Body) == "" {
-				invalid[fieldPrefix+".body"] = "cannot be empty"
-			}
-		}
 
-		for i, task := range t.Tasks {
-			if task.Title == nil || strings.TrimSpace(*task.Title) == "" {
-				continue
+			for i, task := range t.Tasks {
+				if task.Title == nil || strings.TrimSpace(*task.Title) == "" {
+					continue
+				}
+				taskTitle := *task.Title
+				seenDeps := map[string]struct{}{}
+				for j, rawDep := range task.After {
+					field := fmt.Sprintf("tasks[%d].after[%d]", i, j)
+					if strings.TrimSpace(rawDep) == "" {
+						invalid[field] = "cannot be empty"
+						continue
+					}
+					if err := validateDepSelf(taskTitle, rawDep); err != nil {
+						invalid[field] = err.Error()
+						continue
+					}
+					if _, ok := titleToIndex[rawDep]; !ok {
+						invalid[field] = fmt.Sprintf("unknown task title %q", rawDep)
+						continue
+					}
+					if _, duplicate := seenDeps[rawDep]; duplicate {
+						continue
+					}
+					seenDeps[rawDep] = struct{}{}
+					depsByTitle[taskTitle] = append(depsByTitle[taskTitle], rawDep)
+				}
 			}
-			taskTitle := *task.Title
-			seenDeps := map[string]struct{}{}
-			for j, rawDep := range task.After {
-				field := fmt.Sprintf("tasks[%d].after[%d]", i, j)
-				if strings.TrimSpace(rawDep) == "" {
-					invalid[field] = "cannot be empty"
-					continue
-				}
-				if err := validateDepSelf(taskTitle, rawDep); err != nil {
-					invalid[field] = err.Error()
-					continue
-				}
-				if _, ok := titleToIndex[rawDep]; !ok {
-					invalid[field] = fmt.Sprintf("unknown task title %q", rawDep)
-					continue
-				}
-				if _, duplicate := seenDeps[rawDep]; duplicate {
-					continue
-				}
-				seenDeps[rawDep] = struct{}{}
-				depsByTitle[taskTitle] = append(depsByTitle[taskTitle], rawDep)
-			}
-		}
 
-		if len(invalid) == 0 && len(missing) == 0 && hasPlanCycle(titleToIndex, depsByTitle) {
-			invalid["tasks"] = "after graph contains a cycle"
+			if len(invalid) == 0 && len(missing) == 0 && hasPlanCycle(titleToIndex, depsByTitle) {
+				invalid["tasks"] = "after graph contains a cycle"
+			}
 		}
 	}
-
 	if len(missing) > 0 || len(invalid) > 0 {
 		message := "invalid input"
 		if len(missing) > 0 && len(invalid) == 0 {

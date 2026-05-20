@@ -340,6 +340,19 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 			if epic.EpicID != "" {
 				return fmt.Errorf("task %s is not an epic", epicID)
 			}
+			// Reject first-child assignment to a dirty leaf: once promoted to a
+			// container, leaf-only semantics (state/claim/results) no longer apply.
+			if !isContainer(epic, graph) {
+				if epic.ClaimedBy != "" {
+					return fmt.Errorf("cannot add child to task %s: task is claimed by %q", epicID, epic.ClaimedBy)
+				}
+				if epic.State != stateTodo {
+					return fmt.Errorf("cannot add child to task %s: state is %q (must be todo to promote to container)", epicID, epic.State)
+				}
+				if len(epic.Results) > 0 {
+					return fmt.Errorf("cannot add child to task %s: task has results attached", epicID)
+				}
+			}
 		}
 		id, err := newShortID(graph.Tasks)
 		if err != nil {
