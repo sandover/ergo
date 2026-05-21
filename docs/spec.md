@@ -16,21 +16,28 @@ This spec covers:
 
 ## Input mode contracts (stdin)
 
-For `new task` and `set`:
+For `new task`, `set`, and `plan`:
 
-- Default input mode reads a single JSON object from stdin (entire stdin; trailing newlines are allowed).
-- When stdin is a TTY (not piped), these commands may be driven entirely by flags (e.g. `--title`, `--body`, `--state`) without any stdin.
-- With `--body-stdin`, stdin is treated as literal body text (non-empty) and is **not** parsed as JSON.
-  - In this mode, the body comes from stdin and other updates come from flags (e.g. `--title`, `--state`, `--epic`, `--claim`, results).
-  - `--body` and `--body-stdin` are mutually exclusive.
-  - `new task --body-stdin` requires `--title`.
+- The command accepts at most one positional JSON object argument.
+- `new task [json]`
+  - `title` is required in the JSON argument.
+  - If stdin is piped, stdin becomes the task body.
+- `set <id> [json]`
+  - Any subset of `title`, `epic`, `state`, `claim`, and `result` may be provided.
+  - If stdin is piped, stdin replaces the task body.
+- `plan --file <path> [json]`
+  - `--file` is required.
+  - The JSON argument must include the top-level container `title`.
+  - The markdown file defines child tasks; stdin is not part of the plan input contract.
 
-For `new task` with `tasks:[...]` (bulk creation):
+General stdin rules:
 
-- Input is a single JSON object on stdin with a `tasks` array.
-- v1 does not support `--body-stdin` or flags-only bulk authoring.
-- Parse failures (malformed JSON, unknown keys, multiple top-level values) use `parse_error`.
-- Semantic validation failures (missing fields, duplicate task titles, dangling refs, cycles) use `validation_failed`.
+- Stdin is never used for mutation metadata JSON on the forward surface.
+- If stdin is piped to `new task` or `set`, it is treated as literal body text.
+- Empty piped stdin is allowed: it creates an empty body on `new task` and clears the body on `set`.
+- When stdin is a TTY, body text is left unchanged unless new stdin is piped in.
+- Parse failures for positional JSON use `parse_error`.
+- Semantic validation failures use `validation_failed`.
 
 ### General
 
@@ -87,11 +94,6 @@ Mixed-mode layout:
 
 Flag conflicts:
 - `--ready` and `--all` are mutually exclusive.
-- `--containers` cannot be combined with `--ready`, `--all`, or `--epic <id>`.
-
-`list --containers` (human output):
-- Containers-only view renders each container as a root row using the same list visual language (includes `Ⓔ` and right-aligned ID).
-- When there are no containers, print `No containers.`.
 
 #### `list --epic <id>` (human output)
 

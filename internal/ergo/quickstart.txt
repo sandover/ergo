@@ -7,178 +7,157 @@
 Creates `.ergo/` in the current directory.
 
 {{CMD}}ergo where{{RESET}}
-Prints the active `.ergo/` path (useful when running with `--dir`).
+Prints the active `.ergo/` path.
 
-{{HEADER}}2. CHOOSE INPUT MODE{{RESET}}
+{{HEADER}}2. INSPECT WORK{{RESET}}
 
-- Short, one-line fields: use flags or JSON stdin.
-- Multi-line Markdown bodies: use --body-stdin. Do not hand-escape rich bodies into JSON unless your tool generates JSON safely.
-- Whole feature graph: use `ergo --json new task` with `tasks:[...]` for the container, task titles, and dependencies.
-- Whole feature graph with rich bodies: create the graph first, then update each body with `ergo set <id> --body-stdin`.
+Human overview:
+  {{CMD}}ergo list{{RESET}}
 
-{{HEADER}}3. AGENT WORKFLOW{{RESET}}
+Machine inventory:
+  {{CMD}}ergo --json list{{RESET}}
 
-Your identity is <model>@<hostname> (e.g. sonnet@agent-host).
+Only actionable work:
+  {{CMD}}ergo --json list --ready{{RESET}}
 
-Core loop:
-  1) Claim oldest ready work:
-     {{CMD}}ergo --json claim --agent sonnet@agent-host{{RESET}}
-     Claim output includes: "When you have completed this claimed task, you MUST mark it done."
-  2) Do the work described in the task (write to project files)
-  3) Attach results and set state:
-     {{CMD}}printf '%s' '{"result_path":"docs/x.md","result_summary":"Spec v1","state":"done"}' | ergo set ABCDEF{{RESET}}
-     Never leave tasks in `doing`. Always set done, blocked, error, or canceled.
-     Mutating commands return JSON objects when --json is set.
-  4) Pull full container context in one call:
-     {{CMD}}ergo --json show CONTAINERID{{RESET}} returns `{"container": ..., "children": ...}` and each child includes `body`.
+Full detail for one task or container:
+  {{CMD}}ergo --json show ABCDEF{{RESET}}
 
-Flags:
-  - Use `--quiet` to suppress non-essential output (useful for scripts).
-  - Use `--verbose` for debug traces on stderr.
+Short human summary for one task:
+  {{CMD}}ergo show ABCDEF --short{{RESET}}
 
-Common variants:
-  - Claim a specific task by ID:
-    {{CMD}}ergo claim ABCDEF --agent sonnet@agent-host{{RESET}}
-  - Claim oldest ready task within a container:
-    {{CMD}}ergo claim --agent sonnet@agent-host --epic ABCDEF{{RESET}}
-  - Human show output is Markdown with front matter:
-    {{CMD}}ergo show ABCDEF{{RESET}}
-  - Machine output for show is unchanged and should use JSON:
-    {{CMD}}ergo --json show ABCDEF{{RESET}}
-  - If no tasks are ready, claim prints "No ready ergo tasks." and exits 0.
-  - Change state (uses existing claim if present):
-    {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
+Use `show` before mutating when you need the body, child tasks, or dependencies.
 
-{{HEADER}}4. CREATE WORK (JSON stdin){{RESET}}
+{{HEADER}}3. AGENT LOOP{{RESET}}
 
-Use `printf '%s'` for reliable JSON delivery. Heredocs (`<<'JSON'`) can work too, but some terminals/tooling don't support them reliably. All fields are strings.
-Unknown keys are rejected (with suggestions for close matches).
+Your identity should be `<model>@<hostname>`.
 
-Create a task:
-  {{CMD}}printf '%s' '{"title":"Login","body":"Implement signup","epic":"OFKSTE"}' | ergo new task{{RESET}}
+Claim oldest ready work:
+  {{CMD}}ergo --json claim --agent sonnet@agent-host{{RESET}}
 
-Create a container (task that holds children):
-  {{CMD}}printf '%s' '{"title":"Auth","body":"Signup/Login feature","tasks":[{"title":"Middleware"},{"title":"Login"}]}' | ergo new task{{RESET}}
-  Any task with children is automatically a container. No separate command needed.
+Claim a specific task:
+  {{CMD}}ergo --json claim ABCDEF --agent sonnet@agent-host{{RESET}}
 
-Atomic create-and-claim (preferred for dynamic tasking):
-  {{CMD}}printf '%s' '{"title":"Fix CVE","claim":"sonnet@agent-host"}' | ergo new task{{RESET}}
-  `claim` implies `state=doing` unless `state` is explicitly set.
+Claim inside one container:
+  {{CMD}}ergo --json claim --agent sonnet@agent-host --epic ABCDEF{{RESET}}
 
-{{HEADER}}4b. CREATE WORK (body from stdin){{RESET}}
+Finish the task. Never leave it in `doing`.
 
-Use `--body-stdin` when the body is multi-line markdown. In this mode, stdin is the literal body text (non-empty) and metadata is passed via flags.
+Mark blocked:
+  {{CMD}}ergo --json set ABCDEF '{"state":"blocked"}'{{RESET}}
+
+Mark done and attach a result file:
+  {{CMD}}ergo --json set ABCDEF '{"state":"done","result":"docs/spec.md"}'{{RESET}}
+
+Claim and `doing` move together. Finishing (`done` or `canceled`) clears the claim. `error` retains it.
+
+{{HEADER}}4. CREATE WORK{{RESET}}
+
+`new task [json]` creates exactly one task. The JSON argument carries metadata. If stdin is piped, it becomes the body.
+
+Create a small task:
+  {{CMD}}ergo new task '{"title":"Login"}'{{RESET}}
+
+Create a task inside a container:
+  {{CMD}}ergo new task '{"title":"Session tokens","epic":"OFKSTE"}'{{RESET}}
 
 Create a task with a multi-line body:
-  {{CMD}}printf '%s\n' '## Goal' '- Do the thing' '' '## Acceptance criteria' '- Thing is done' | ergo new task --body-stdin --title "Do the thing"{{RESET}}
+  {{CMD}}printf '%s\n' '## Goal' '- Implement signup' '' '## Acceptance Criteria' '- Password reset works' | ergo new task '{"title":"Login"}'{{RESET}}
 
-Update a task body (and state) from stdin:
-  {{CMD}}printf '%s\n' '## Status' '- Waiting on review' | ergo set ABCDEF --body-stdin --state blocked{{RESET}}
+Create and claim in one step:
+  {{CMD}}ergo --json new task '{"title":"Fix CVE","claim":"sonnet@agent-host"}'{{RESET}}
 
-{{HEADER}}4c. CREATE/UPDATE (flags only){{RESET}}
+Unknown keys are rejected. `new task` requires `title`.
 
-When stdin is not piped (TTY), you can use flags for simple inputs (short titles/bodies, state changes).
+{{HEADER}}5. UPDATE WORK{{RESET}}
 
-Create a task (no stdin):
-  {{CMD}}ergo new task --title "Login" --body "Implement signup" --epic OFKSTE{{RESET}}
+`set <id> [json]` updates exactly one task. The JSON argument changes metadata. If stdin is piped, it replaces the body.
 
-Mark done (no stdin):
-  {{CMD}}ergo set ABCDEF --state done{{RESET}}
+Rename or reparent:
+  {{CMD}}ergo set ABCDEF '{"title":"Login API","epic":"OFKSTE"}'{{RESET}}
 
-{{HEADER}}4d. PLAN A FEATURE (single JSON document){{RESET}}
+Replace the body with markdown from stdin:
+  {{CMD}}printf '%s\n' '## Status' '- Waiting on review' | ergo set ABCDEF '{"state":"blocked"}'{{RESET}}
 
-Use `new task` with `tasks:[...]` to create one container, its child tasks, and dependencies in a single mutation.
-`after` references task titles in the same payload (exact, case-sensitive).
+Clear the body:
+  {{CMD}}printf '' | ergo set ABCDEF{{RESET}}
 
-{{CMD}}printf '%s' '{"title":"Auth","tasks":[{"title":"Middleware"},{"title":"Login","after":["Middleware"]}]}' | ergo --json new task{{RESET}}
+Attach another result later:
+  {{CMD}}ergo set ABCDEF '{"result":"docs/followup.md"}'{{RESET}}
 
-Edge semantics match `sequence`: when `B.after=["A"]`, output includes an edge where `B` depends on `A` (`from_id=B`, `to_id=A`).
+{{HEADER}}6. PLAN A FEATURE{{RESET}}
 
-If task bodies are long or multi-line, keep them short or empty in the bulk create, then update each task body:
-  {{CMD}}printf '%s\n' '## Goal' '- ...' | ergo set TASKID --body-stdin{{RESET}}
+`plan --file <path> [json]` creates one container and child tasks from markdown.
 
-{{HEADER}}5. DEPENDENCIES{{RESET}}
+Example command:
+  {{CMD}}ergo --json plan --file tasks.md '{"title":"Auth system"}'{{RESET}}
 
-Enforce order (A happens before B):
+Example file:
+  {{CMD}}cat > tasks.md <<'EOF'
+# Schema
+Create the tables and indexes.
+---
+# Endpoints
+Add signup and login handlers.
+---
+# Docs
+Document the auth flow.
+EOF{{RESET}}
+
+Rules:
+  - Split chunks on a line that is exactly `---`.
+  - Each chunk must start with `# Title`.
+  - The heading becomes the child title.
+  - The remaining markdown becomes the child body.
+  - The command JSON must include the top-level container `title`.
+  - File order does not create dependencies.
+
+Add dependencies explicitly after planning:
+  {{CMD}}ergo sequence TASK_SCHEMA TASK_ENDPOINTS TASK_DOCS{{RESET}}
+
+{{HEADER}}7. DEPENDENCIES{{RESET}}
+
+Enforce order (A before B):
   {{CMD}}ergo sequence TASK_A TASK_B{{RESET}}
 
-Chain order (A then B then C):
+Chain order (A before B before C):
   {{CMD}}ergo sequence TASK_A TASK_B TASK_C{{RESET}}
 
-Remove order between A and B (remove edge where B depends on A):
+Remove one edge:
   {{CMD}}ergo sequence rm TASK_A TASK_B{{RESET}}
 
-Find ready work (all deps done or canceled):
-  {{CMD}}ergo list --ready{{RESET}}
+Dependencies are allowed between any two non-ancestor tasks. Cycles are forbidden.
 
-{{HEADER}}6. UPDATE & FAILURES{{RESET}}
+{{HEADER}}8. PRUNE + COMPACT{{RESET}}
 
-Any field accepted by `new task` (epic, title, body, state, claim, results) can be changed later with `set`.
-
-Reassign a task to a different container (or unassign with ""):
-  {{CMD}}printf '%s' '{"epic":"OFKSTE"}' | ergo set ABCDEF{{RESET}}
-
-Mark blocked (waiting on human/external):
-  {{CMD}}printf '%s' '{"state":"blocked"}' | ergo set ABCDEF{{RESET}}
-
-Mark error (requires claim to show who failed):
-  {{CMD}}printf '%s' '{"state":"error"}' | ergo set ABCDEF{{RESET}}
-  If unclaimed, pass --agent or set claim in JSON.
-
-{{HEADER}}7. PRUNE + COMPACT{{RESET}}
-
-`ergo prune` logically deletes completed work. Default is dry-run.
-
-What gets pruned:
-  - Tasks in `done` or `canceled`
-  - Containers with no remaining children
-
-What is preserved (never pruned):
-  - Tasks in `todo`, `blocked`, `doing`, or `error`
-  - Containers with active children
-
-Dry-run (preview):
+Preview logical deletion:
   {{CMD}}ergo prune{{RESET}}
 
-Apply:
+Apply logical deletion:
   {{CMD}}ergo prune --yes{{RESET}}
 
-`ergo compact` rewrites the log to physically remove pruned history.
+Physically rewrite the log after pruning:
+  {{CMD}}ergo compact{{RESET}}
 
-{{HEADER}}8. ATTACH RESULTS{{RESET}}
+Prune removes `done` and `canceled` tasks, then removes any empty containers left behind.
 
-Results are pointers to project files (relative paths).
+{{HEADER}}9. CONTAINERS + RULES{{RESET}}
 
-Attach results (multiple calls accumulate, newest first):
-  {{CMD}}printf '%s' '{"result_path":"docs/report.md","result_summary":"Final report"}' | ergo set GHIJKL{{RESET}}
+A task becomes a container when it has children.
 
-Inspect results:
-  {{CMD}}ergo show GHIJKL --json | jq '.results[]'{{RESET}}
+Containers:
+  - complete when all children are `done` or `canceled`
+  - cannot hold state, claim, or results directly
+  - cannot be nested more than one level deep
 
-{{HEADER}}9. CONTAINERS{{RESET}}
-
-A task becomes a container when it has children. Containers have no own state —
-they complete when all children are done or canceled.
-
-Containers cannot have state, claim, or results set directly.
-One level of nesting only: a child cannot itself be a container.
-
-Dependencies between any non-ancestor tasks are allowed (cycles forbidden).
-
-{{CMD}}ergo sequence CONTAINER_A CONTAINER_B{{RESET}}
-
-{{HEADER}}REFERENCE: TITLE + BODY{{RESET}}
-Use `title` for the task name; `body` for details.
-Title is required for new tasks. Legacy tasks without titles are auto-derived on load.
-
-{{HEADER}}REFERENCE: STATE MACHINE{{RESET}}
-States: todo, doing, blocked, error, done, canceled
+State set:
+  - `todo`, `doing`, `blocked`, `error`, `done`, `canceled`
 
 Invariants:
-  doing/error require claim; pass --agent or set claim in JSON
-  todo/done/canceled clear claim
+  - `doing` requires a claim
+  - `error` requires a claim
+  - `todo`, `done`, and `canceled` clear the claim
+  - `blocked` may keep or drop the claim
 
-{{HEADER}}REFERENCE: RULES{{RESET}}
-
-- deps: any non-ancestor tasks; cycles forbidden
-- agent ID format: <model>@<hostname> (recommended, not enforced)
+Agent ID format:
+  - `<model>@<hostname>` is recommended, not enforced

@@ -26,7 +26,7 @@ User-facing docs live in `ergo --help` and `ergo quickstart`; this file is opera
 
 ## Cutting a release (tag-driven)
 
-- Choose a version tag (e.g., `v0.7.0`).
+- Choose a version tag (e.g., `v1.0.0`).
 - Create and push the git tag.
 - Let GitHub Actions / goreleaser build and publish artifacts.
 

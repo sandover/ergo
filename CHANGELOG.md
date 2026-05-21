@@ -7,24 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.12.0] - 2026-05-20
+## [1.0.0] - 2026-05-20
 
 ### Changed
-- **BREAKING**: Removed `new epic` command. Use `new task` — any task with children
-  is automatically a container.
-- **BREAKING**: Removed `plan` command. Use `new task` with `tasks:[...]` for bulk
-  creation of a container with children and dependency edges.
-- **BREAKING**: Renamed `--epics` flag to `--containers` in `list`.
-- **BREAKING**: JSON output: replaced `kind` field in list items with `container: bool`.
-- Relaxed dependency rules: any non-ancestor tasks can have deps (was: same-kind only).
-- Containers are now derived (has-children) rather than declared (was: explicit `new epic`).
-- Rewrote `--help` and `quickstart` for the unified model.
+- **BREAKING**: `new task` now accepts at most one positional JSON argument; when stdin is piped, stdin becomes the task body.
+- **BREAKING**: `set <id>` now accepts at most one positional JSON argument; when stdin is piped, stdin replaces the task body.
+- **BREAKING**: `plan --file <path> [json]` now creates a container and child tasks from markdown chunks split on `---`.
+- **BREAKING**: New writes use `result` as the user-facing result field; legacy `result_path` and `result_summary` remain readable from old logs.
+- Integration tests, fixtures, and user-facing docs now target the forward CLI surface consistently.
+- Rewrote `--help`, `quickstart`, README, and spec docs around the inspect-then-mutate workflow.
 
 ### Removed
 - `ergo new epic` command
-- `ergo plan` command
-- `--epics` flag (replaced by `--containers`)
-- `kind` field from task list JSON output
+- `--body-stdin` and flag-driven mutation metadata for `new task` / `set`
+- JSON-on-stdin mutation mode for `new task` / `set`
 
 ## [0.11.2] - 2026-05-18
 
@@ -398,7 +394,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sandover/ergo/compare/v0.11.2...v1.0.0
 [0.11.0]: https://github.com/sandover/ergo/compare/v0.10.3...v0.11.0
 [0.10.3]: https://github.com/sandover/ergo/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/sandover/ergo/compare/v0.10.1...v0.10.2

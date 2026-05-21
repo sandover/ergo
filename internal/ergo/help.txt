@@ -1,74 +1,77 @@
-{{BOLD}}ergo{{RESET}} — task orchestration for AI agents. humans welcome.
+{{BOLD}}ergo{{RESET}} — fast, local task graph for AI agents. humans welcome.
 
-Append-only task graph stored in .ergo/ (JSONL). Containers are tasks with children.
-Tasks have states (todo→doing→done). IDs are 6-char uppercase (e.g. OFKSTE).
-Input: pipe JSON or use flags. Output: JSON objects with --json.
+Append-only task graph stored in `.ergo/` as JSONL. Tasks can depend on each other.
+A task with children is a container. Leaf tasks carry state, claim, and results.
 
-{{HEADER}}EXAMPLE: FULL LIFECYCLE{{RESET}}
+{{HEADER}}WORKFLOW{{RESET}}
 
-  printf '%s' '{"title":"Add login"}' | ergo --json new task
+  printf '%s\n' '## Goal' '- Add rate limiting' | ergo --json new task '{"title":"Rate limiter"}'
   → {"id":"ABCDEF","state":"todo",...}
 
-  ergo --json claim ABCDEF --agent sonnet@myhost
+  ergo --json claim --agent sonnet@myhost
   → {"id":"ABCDEF","state":"doing","claim":"sonnet@myhost",...}
 
-  printf '%s' '{"state":"done"}' | ergo --json set ABCDEF
+  ergo --json set ABCDEF '{"state":"done","result":"src/ratelimit.ts"}'
   → {"id":"ABCDEF","state":"done",...}
-
-For multi-line Markdown bodies, use --body-stdin (stdin is the raw text):
-  printf '%s\n' '## Goal' '- Implement login' | ergo --json new task --body-stdin --title "Add login"
 
 {{HEADER}}COMMANDS{{RESET}}
   init [dir]                              create .ergo/ in dir (default: .)
-  new task                                create task (JSON stdin; or --body-stdin)
-                                          include tasks:[...] to create container+children+deps
-  set <id>                                update task (JSON stdin; or --body-stdin)
-  show <id>                               show task (Markdown default; --json for agents)
-  list [--epic <id>] [--ready] [--containers] [--all]
-                                          list active work (--ready = unblocked todo tasks)
-  claim [<id>] --agent <identity> [--epic <id>]
-                                          claim oldest ready task (or by ID); sets to doing
+  new task [json]                         create one task (stdin = body when piped)
+  set <id> [json]                         update one task (stdin = replacement body when piped)
+  plan --file <path> [json]               create one container and child tasks from markdown
+  show <id> [--short]                     show one task (Markdown default; --json for agents)
+  list [--epic <id>] [--ready] [--all]    list tasks; default omits done/canceled
+  claim [<id>] --agent <identity>         claim specific task or oldest ready task
   sequence <A> <B> [<C>...]               enforce order: A before B before C
-  sequence rm <A> <B>                     remove edge where B depends on A
+  sequence rm <A> <B>                     remove the edge where B depends on A
+  prune [--yes]                           remove done/canceled tasks (dry-run default)
+  compact                                 rewrite log to current state
   where                                   print active .ergo directory path
-  prune [--yes] [--json]                  remove done/canceled tasks (dry-run default)
-  compact                                 collapse log to current state
   quickstart                              complete reference manual
+  version                                 print version
 
 {{HEADER}}GLOBAL FLAGS{{RESET}}
   --dir <path>                            discovery start (or .ergo path)
-  --agent <identity>                      identity for claim and implicit set
-  --json                                  JSON output (required for agents)
-  --quiet, -q                             suppress output
-  --verbose, -v                           verbose output
+  --agent <identity>                      caller identity (suggested: model@host)
+  --json                                  JSON output
   -h, --help                              show help
   -V, --version                           print version
 
-{{HEADER}}FLAGS FOR new/set{{RESET}}
-  --body-stdin                            read body from stdin (raw text, non-empty)
-  --title <text>                          set title (required for new with --body-stdin)
-  --body <text>                           inline body text (mutually exclusive with --body-stdin)
-  --epic <id>                             assign/reassign to container ("" to unassign)
-  --state <state>                         todo|doing|done|blocked|canceled|error
-  --claim <agent>                         set claim
-  --result-path <path>                    attach result file (requires --result-summary)
-  --result-summary <text>                 one-line result summary (requires --result-path)
-  When stdin is a TTY (not piped), new/set can be driven entirely by flags.
-
-{{HEADER}}JSON INPUT FIELDS (all strings){{RESET}}
+{{HEADER}}JSON ARGUMENTS FOR new/set{{RESET}}
   Unknown keys are rejected (with suggestions for close matches).
-  Containers cannot have: state, claim, results (these are leaf-task only)
-  title           required for new, optional for set
-  body            optional (for multi-line, prefer --body-stdin over JSON escaping)
-  epic            container ID or "" to unassign
+  `new task` requires `title`. `set` accepts any subset.
+
+  title           task title
+  epic            parent task ID ("" to unassign)
   state           todo|doing|done|blocked|canceled|error
-                  doing/error require claim; todo/done/canceled clear claim
-  claim           agent ID or "" to unclaim
-                  claim implies state=doing unless state is also set
-  result_path     file path (requires result_summary)
-  result_summary  one-liner (requires result_path)
-  tasks           array of {title, body?, after?} for bulk creation (see quickstart §4d)
+  claim           agent identity
+  result          file path to attach as a result
+
+Stdin behavior:
+  - If stdin is piped to `new task`, it becomes the task body.
+  - If stdin is piped to `set`, it replaces the task body.
+  - Empty piped stdin is allowed: it creates an empty body on `new task` and clears the body on `set`.
+  - When stdin is a TTY, the body is left unchanged unless you pipe one in.
+
+{{HEADER}}PLAN FILE FORMAT{{RESET}}
+  ergo --json plan --file tasks.md '{"title":"Auth system"}'
+
+  tasks.md:
+    # Schema
+    Create the tables and indexes.
+    ---
+    # Endpoints
+    Add signup and login handlers.
+
+  - Split chunks on a line that is exactly `---`.
+  - Each chunk must start with `# Title`.
+  - The heading becomes the child title; the rest of the chunk becomes the body.
+  - The command JSON must include the top-level container `title`.
+  - File order does not imply dependencies. Use `sequence` explicitly.
 
 {{HEADER}}RULES{{RESET}}
-  Never leave a task in doing — always finish with done, blocked, error, or canceled.
-  Do not hand-escape Markdown into JSON. Use --body-stdin for multi-line bodies.
+  1. Never leave a task in `doing`. Finish with `done`, `blocked`, `error`, or `canceled`.
+  2. Claim and `doing` move together. Finishing (`done` or `canceled`) clears the claim.
+  3. Containers cannot hold state, claim, or results. Only leaf tasks can.
+  4. One level of nesting only: a child cannot itself become a container.
+  5. Dependencies are allowed between any two non-ancestor tasks. Cycles are forbidden.

@@ -95,7 +95,7 @@ Fix what you find, then present an executive summary to the user for approval. K
 3. Commit using repo conventions. Do not include `.ergo/` files in per-task commits.
 4. Mark task done. On completion:
    - Update the task body with a brief completion note: decisions made, approach taken, anything non-obvious. Think PR description, not essay.
-   - If the task produced a concrete deliverable, attach it with `result_path`. Do not create standalone result files just to have a link.
+  - If the task produced a concrete deliverable, attach it with `result` pointing at the file path. Do not create standalone result files just to have a link.
    - After completing a spike, update dependent tasks with what was learned so the knowledge flows forward.
    - If a task can't be completed, mark it blocked or error. Never leave tasks in progress.
 5. If the plan needs to change, update the plan and note why. Plans are living documents, not contracts.
