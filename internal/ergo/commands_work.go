@@ -17,151 +17,20 @@ import (
 )
 
 type ListOptions struct {
-	EpicID         string
-	ReadyOnly      bool
-	ShowContainers bool
-	ShowAll        bool
+	EpicID    string
+	ReadyOnly bool
+	ShowAll   bool
 }
 
-func RunSet(id string, opts GlobalOptions) error {
+func RunSet(id string, args []string, opts GlobalOptions) error {
 	if id == "" {
-		return errors.New("usage: ergo set <id> (JSON stdin; flags; or --body-stdin)")
+		return errors.New("usage: ergo set <id> [json]")
 	}
 
-	if opts.BodyStdin {
-		if err := validateBodyStdinExclusions(opts.BodyFlag); err != nil {
-			return err
-		}
-		body, err := readBodyFromStdinOrEmpty()
-		if err != nil {
-			return err
-		}
-		if strings.TrimSpace(body) == "" {
-			return errors.New("set --body-stdin requires non-empty body")
-		}
-		updates := buildFlagUpdates(opts)
-		updates["body"] = body
-
-		updatedFields := []string{"body"}
-		if strings.TrimSpace(opts.TitleFlag) != "" {
-			updatedFields = append(updatedFields, "title")
-		}
-		if opts.EpicFlag != "" {
-			updatedFields = append(updatedFields, "epic")
-		}
-		if opts.StateFlag != "" {
-			updatedFields = append(updatedFields, "state")
-		}
-		if opts.ClaimFlag != "" {
-			updatedFields = append(updatedFields, "claim")
-		}
-		if opts.ResultPathFlag != "" {
-			updatedFields = append(updatedFields, "result_path")
-		}
-		if opts.ResultSummaryFlag != "" {
-			updatedFields = append(updatedFields, "result_summary")
-		}
-
-		dir, err := ergoDir(opts)
-		if err != nil {
-			return err
-		}
-		agentID := opts.AgentID
-		if err := applySetUpdates(dir, opts, id, updates, agentID, opts.JSON); err != nil {
-			return err
-		}
-
-		if opts.JSON {
-			graph, err := loadGraph(dir)
-			if err != nil {
-				return err
-			}
-			task := graph.Tasks[id]
-			if task == nil {
-				return fmt.Errorf("unknown task id %s", id)
-			}
-			return writeJSON(os.Stdout, setOutput{
-				Kind:          "set",
-				ID:            id,
-				UpdatedFields: updatedFields,
-				State:         task.State,
-				ClaimedBy:     task.ClaimedBy,
-			})
-		}
-		return nil
+	input, verr, err := parseInlineTaskArgs(args, "usage: ergo set <id> [json]")
+	if err != nil {
+		return err
 	}
-
-	hasFlagInput := strings.TrimSpace(opts.TitleFlag) != "" ||
-		opts.BodyFlag != "" ||
-		opts.EpicFlag != "" ||
-		opts.StateFlag != "" ||
-		opts.ClaimFlag != "" ||
-		opts.ResultPathFlag != "" ||
-		opts.ResultSummaryFlag != ""
-	if !stdinIsPiped() && hasFlagInput {
-		updates := buildFlagUpdates(opts)
-		if opts.BodyFlag != "" {
-			updates["body"] = opts.BodyFlag
-		}
-
-		if len(updates) == 0 {
-			return errors.New("no fields to update")
-		}
-
-		var updatedFields []string
-		if strings.TrimSpace(opts.TitleFlag) != "" {
-			updatedFields = append(updatedFields, "title")
-		}
-		if opts.BodyFlag != "" {
-			updatedFields = append(updatedFields, "body")
-		}
-		if opts.EpicFlag != "" {
-			updatedFields = append(updatedFields, "epic")
-		}
-		if opts.StateFlag != "" {
-			updatedFields = append(updatedFields, "state")
-		}
-		if opts.ClaimFlag != "" {
-			updatedFields = append(updatedFields, "claim")
-		}
-		if opts.ResultPathFlag != "" {
-			updatedFields = append(updatedFields, "result_path")
-		}
-		if opts.ResultSummaryFlag != "" {
-			updatedFields = append(updatedFields, "result_summary")
-		}
-
-		dir, err := ergoDir(opts)
-		if err != nil {
-			return err
-		}
-		agentID := opts.AgentID
-		if err := applySetUpdates(dir, opts, id, updates, agentID, opts.JSON); err != nil {
-			return err
-		}
-
-		if opts.JSON {
-			graph, err := loadGraph(dir)
-			if err != nil {
-				return err
-			}
-			task := graph.Tasks[id]
-			if task == nil {
-				return fmt.Errorf("unknown task id %s", id)
-			}
-			return writeJSON(os.Stdout, setOutput{
-				Kind:          "set",
-				ID:            id,
-				UpdatedFields: updatedFields,
-				State:         task.State,
-				ClaimedBy:     task.ClaimedBy,
-			})
-		}
-		return nil
-	}
-
-	// Parse JSON from stdin
-	input, verr := ParseTaskInput()
 	if verr != nil {
 		if opts.JSON {
 			if err := verr.WriteJSON(os.Stdout); err != nil {
@@ -170,8 +39,6 @@ func RunSet(id string, opts GlobalOptions) error {
 		}
 		return verr.GoError()
 	}
-
-	// Validate for set (all fields optional)
 	if verr := input.ValidateForSet(); verr != nil {
 		if opts.JSON {
 			if err := verr.WriteJSON(os.Stdout); err != nil {
@@ -181,7 +48,15 @@ func RunSet(id string, opts GlobalOptions) error {
 		return verr.GoError()
 	}
 
-	updates := input.ToKeyValueMap()
+	body, bodyProvided, err := readOptionalBodyFromStdin()
+	if err != nil {
+		return err
+	}
+
+	updates := input.ToUpdates()
+	if bodyProvided {
+		updates["body"] = body
+	}
 	if len(updates) == 0 {
 		return errors.New("no fields to update")
 	}
@@ -208,7 +83,7 @@ func RunSet(id string, opts GlobalOptions) error {
 		return writeJSON(os.Stdout, setOutput{
 			Kind:          "set",
 			ID:            id,
-			UpdatedFields: buildUpdatedFields(input),
+			UpdatedFields: buildUpdatedFields(input, bodyProvided),
 			State:         task.State,
 			ClaimedBy:     task.ClaimedBy,
 		})
@@ -363,41 +238,11 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 	fmt.Println(reminder)
 	return nil
 }
-
-func buildUpdatedFields(input *TaskInput) []string {
-	if input == nil {
-		return nil
-	}
-	var fields []string
-	if input.Title != nil {
-		fields = append(fields, "title")
-	}
-	if input.Body != nil {
-		fields = append(fields, "body")
-	}
-	if input.Epic != nil {
-		fields = append(fields, "epic")
-	}
-	if input.State != nil {
-		fields = append(fields, "state")
-	}
-	if input.Claim != nil {
-		fields = append(fields, "claim")
-	}
-	if input.ResultPath != nil {
-		fields = append(fields, "result_path")
-	}
-	if input.ResultSummary != nil {
-		fields = append(fields, "result_summary")
-	}
-	return fields
-}
-
 func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, agentID string, quiet bool) error {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
 
-	// Handle result.path + result.summary (requires file I/O before lock)
+	// Handle result.path (+ optional result.summary) before the main mutation lock.
 	resultPath, hasPath := updates["result.path"]
 	resultSummary, hasSummary := updates["result.summary"]
 	if hasPath || hasSummary {
@@ -405,7 +250,7 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 			return errors.New("result.summary requires result.path=")
 		}
 		if !hasSummary {
-			return errors.New("result.path requires result.summary=")
+			resultSummary = resultPath
 		}
 		if err := writeResultEvent(dir, opts, id, resultSummary, resultPath); err != nil {
 			return err
@@ -710,22 +555,10 @@ func RunSequence(args []string, opts GlobalOptions) error {
 func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	epicID := listOpts.EpicID
 	readyOnly := listOpts.ReadyOnly
-	showContainers := listOpts.ShowContainers
 	showAll := listOpts.ShowAll
 
 	if readyOnly && showAll {
 		return errors.New("conflicting flags: --ready and --all")
-	}
-	if showContainers {
-		if readyOnly {
-			return errors.New("conflicting flags: --containers and --ready")
-		}
-		if showAll {
-			return errors.New("conflicting flags: --containers and --all")
-		}
-		if epicID != "" {
-			return errors.New("conflicting flags: --containers and --epic")
-		}
 	}
 
 	dir, err := ergoDir(opts)
@@ -764,45 +597,12 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 		tasksOnly = active
 	}
 
-	// Handle containers if --containers flag is set
-	var containers []*Task
-	if showContainers {
-		for _, task := range graph.Tasks {
-			if isContainer(task, graph) {
-				containers = append(containers, task)
-			}
-		}
-		sortByCreatedAt(containers)
-	}
-
 	if opts.JSON {
-		// JSON output includes all tasks (agents filter themselves)
-		// Return bare array for simplicity and consistency with show --json
-		if showContainers {
-			return writeJSON(os.Stdout, buildTaskListItems(containers, graph, repoDir))
-		}
 		// Default: return array of tasks
 		return writeJSON(os.Stdout, buildTaskListItems(tasksOnly, graph, repoDir))
 	}
 
-	if !opts.Quiet {
-		fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json list' instead for structured output.")
-	}
-
-	// If --containers only, show simple container list instead of tree
-	if showContainers && epicID == "" && !readyOnly {
-		useColor := stdoutIsTTY()
-		termWidth := getTerminalWidth()
-		for _, c := range containers {
-			icon := stateIcon(c, false)
-			line := formatTreeLine("", "", false, icon, c.ID, c.Title, nil, "", c, false, useColor, termWidth)
-			fmt.Fprintln(os.Stdout, line)
-		}
-		if len(containers) == 0 {
-			fmt.Println("No containers.")
-		}
-		return nil
-	}
+	fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json list' instead for structured output.")
 
 	// Tree view (human-friendly hierarchical output)
 	if epicID != "" {
@@ -816,9 +616,6 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	roots := buildListRoots(graph, showAll, readyOnly, epicID)
 
 	printSummary := func(stats taskStats, buckets []summaryBucket, addSpacing bool) {
-		if opts.Quiet {
-			return
-		}
 		renderSummary(os.Stdout, stats, useColor, buckets, addSpacing)
 	}
 
@@ -1116,9 +913,7 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 		}
 		return writeJSON(os.Stdout, output)
 	}
-	if !opts.Quiet {
-		fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json show <id>' instead for structured output.")
-	}
+	fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json show <id>' instead for structured output.")
 	if short {
 		epic := task.EpicID
 		if epic == "" {
@@ -1444,7 +1239,6 @@ func RunWhere(opts GlobalOptions) error {
 		return err
 	}
 	repoDir := filepath.Dir(ergoDir)
-	debugf(opts, "where start=%s ergo_dir=%s repo_dir=%s", start, ergoDir, repoDir)
 	if opts.JSON {
 		return writeJSON(os.Stdout, whereOutput{
 			ErgoDir: ergoDir,

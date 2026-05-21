@@ -12,15 +12,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Wrapper functions to adapt Cobra commands to existing RunX functions
-// or implement new Cobra logic while reusing existing business logic.
-
 func init() {
 	// ergo init
 	rootCmd.AddCommand(initCmd)
 	// ergo new
 	rootCmd.AddCommand(newCmd)
 	newCmd.AddCommand(newTaskCmd)
+	// ergo plan
+	rootCmd.AddCommand(planCmd)
 	// ergo list
 	rootCmd.AddCommand(listCmd)
 	// ergo show
@@ -69,43 +68,12 @@ var newCmd = &cobra.Command{
 }
 
 var newTaskCmd = &cobra.Command{
-	Use:   "task",
-	Short: "Create a new task (JSON stdin)",
-	Args:  cobra.NoArgs,
+	Use:   "task [json]",
+	Short: "Create a new task (stdin = body)",
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		opts := globalOpts
-		opts.BodyStdin = newTaskBodyStdin
-		opts.TitleFlag = newTaskTitle
-		opts.BodyFlag = newTaskBody
-		opts.EpicFlag = newTaskEpic
-		opts.StateFlag = newTaskState
-		opts.ClaimFlag = newTaskClaim
-		opts.ResultPathFlag = newTaskResultPath
-		opts.ResultSummaryFlag = newTaskResultSummary
-		return ergo.RunNewTask(opts)
+		return ergo.RunNewTask(args, globalOpts)
 	},
-}
-
-var (
-	newTaskBodyStdin     bool
-	newTaskTitle         string
-	newTaskBody          string
-	newTaskEpic          string
-	newTaskState         string
-	newTaskClaim         string
-	newTaskResultPath    string
-	newTaskResultSummary string
-)
-
-func init() {
-	newTaskCmd.Flags().BoolVar(&newTaskBodyStdin, "body-stdin", false, "Read body from stdin (raw text); metadata via flags")
-	newTaskCmd.Flags().StringVar(&newTaskTitle, "title", "", "Task title (required with --body-stdin)")
-	newTaskCmd.Flags().StringVar(&newTaskBody, "body", "", "Inline body text (mutually exclusive with --body-stdin)")
-	newTaskCmd.Flags().StringVar(&newTaskEpic, "epic", "", "Container ID to assign this task to")
-	newTaskCmd.Flags().StringVar(&newTaskState, "state", "", "Initial state (todo|doing|done|blocked|canceled|error)")
-	newTaskCmd.Flags().StringVar(&newTaskClaim, "claim", "", "Initial claim identity (agent id)")
-	newTaskCmd.Flags().StringVar(&newTaskResultPath, "result-path", "", "Attach result file path (requires --result-summary)")
-	newTaskCmd.Flags().StringVar(&newTaskResultSummary, "result-summary", "", "Attach one-line result summary (requires --result-path)")
 }
 
 // -- list --
@@ -115,13 +83,11 @@ var listCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		epicID, _ := cmd.Flags().GetString("epic")
 		readyOnly, _ := cmd.Flags().GetBool("ready")
-		showContainers, _ := cmd.Flags().GetBool("containers")
 		showAll, _ := cmd.Flags().GetBool("all")
 		return ergo.RunList(ergo.ListOptions{
-			EpicID:         epicID,
-			ReadyOnly:      readyOnly,
-			ShowContainers: showContainers,
-			ShowAll:        showAll,
+			EpicID:    epicID,
+			ReadyOnly: readyOnly,
+			ShowAll:   showAll,
 		}, globalOpts)
 	},
 }
@@ -129,7 +95,6 @@ var listCmd = &cobra.Command{
 func init() {
 	listCmd.Flags().String("epic", "", "Filter by container ID")
 	listCmd.Flags().Bool("ready", false, "Show only ready tasks")
-	listCmd.Flags().Bool("containers", false, "Show only containers")
 	listCmd.Flags().Bool("all", false, "Show all tasks (including canceled/done)")
 }
 
@@ -176,43 +141,29 @@ func init() {
 
 // -- set --
 var setCmd = &cobra.Command{
-	Use:   "set <id>",
-	Short: "Update a task (JSON stdin)",
-	Args:  cobra.ExactArgs(1),
+	Use:   "set <id> [json]",
+	Short: "Update a task (stdin = new body)",
+	Args:  cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		opts := globalOpts
-		opts.BodyStdin = setBodyStdin
-		opts.TitleFlag = setTitle
-		opts.BodyFlag = setBody
-		opts.EpicFlag = setEpic
-		opts.StateFlag = setState
-		opts.ClaimFlag = setClaim
-		opts.ResultPathFlag = setResultPath
-		opts.ResultSummaryFlag = setResultSummary
-		return ergo.RunSet(args[0], opts)
+		return ergo.RunSet(args[0], args[1:], globalOpts)
 	},
 }
 
 var (
-	setBodyStdin     bool
-	setTitle         string
-	setBody          string
-	setEpic          string
-	setState         string
-	setClaim         string
-	setResultPath    string
-	setResultSummary string
+	planFile string
 )
 
+var planCmd = &cobra.Command{
+	Use:   "plan [json]",
+	Short: "Create a container and children from a markdown file",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return ergo.RunPlan(planFile, args, globalOpts)
+	},
+}
+
 func init() {
-	setCmd.Flags().BoolVar(&setBodyStdin, "body-stdin", false, "Read body from stdin (raw text); other fields via flags")
-	setCmd.Flags().StringVar(&setTitle, "title", "", "New title")
-	setCmd.Flags().StringVar(&setBody, "body", "", "Inline body text (mutually exclusive with --body-stdin)")
-	setCmd.Flags().StringVar(&setEpic, "epic", "", "Container ID to assign this task to (\"\" unassign only via JSON)")
-	setCmd.Flags().StringVar(&setState, "state", "", "Set state (todo|doing|done|blocked|canceled|error)")
-	setCmd.Flags().StringVar(&setClaim, "claim", "", "Set claim identity (\"\" unclaim only via JSON)")
-	setCmd.Flags().StringVar(&setResultPath, "result-path", "", "Attach result file path (requires --result-summary)")
-	setCmd.Flags().StringVar(&setResultSummary, "result-summary", "", "Attach one-line result summary (requires --result-path)")
+	planCmd.Flags().StringVar(&planFile, "file", "", "Markdown file with # Title chunks separated by ---")
 }
 
 // -- sequence --

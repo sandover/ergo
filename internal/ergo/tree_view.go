@@ -53,7 +53,7 @@ const (
 	iconBlocked  = "·"
 	iconCanceled = "✗"
 	iconError    = "⚠"
-	iconEpic     = "Ⓔ"
+	iconEpic     = "◈"
 )
 
 // treeNode represents a task or epic in the tree structure.
@@ -745,7 +745,7 @@ func truncateToWidth(s string, maxWidth int) string {
 }
 
 // formatCollapsedEpicLine formats a done epic as a single collapsed line.
-// Format: ├ Ⓔ  ✓ Epic title [3 tasks]                                    EPICID
+// Format: ├ ◈  ✓ Epic title [3 tasks]                                    EPICID
 func formatCollapsedEpicLine(prefix, connector string, showConnector bool, id, title, countStr string, useColor bool, termWidth int) string {
 	// Layout contract: ids are right-aligned at idStart.
 	minGap := idMinGap

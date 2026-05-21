@@ -113,7 +113,7 @@ func validateClaimInvariant(state, claimedBy string) error {
 }
 
 // Dependency rules: defines valid dependency relationships.
-// Design decisions (v0.12 unified model):
+// Design decisions (1.0 unified model):
 // - Any two non-ancestor tasks may depend on each other
 // - A task cannot depend on its own container (parent) or vice versa
 // - self-dep: forbidden (A cannot depend on A)
@@ -145,20 +145,7 @@ func validateDepSelf(from, to string) error {
 type GlobalOptions struct {
 	StartDir string
 	AgentID  string
-	Quiet    bool
-	Verbose  bool
 	JSON     bool
-
-	// Input mode + metadata flags (set by Cobra subcommands that support --body-stdin).
-	// These are intentionally ignored unless a command explicitly opts into them.
-	BodyStdin         bool
-	TitleFlag         string
-	BodyFlag          string
-	EpicFlag          string
-	StateFlag         string
-	ClaimFlag         string
-	ResultPathFlag    string
-	ResultSummaryFlag string
 }
 
 type Task struct {

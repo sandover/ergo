@@ -73,8 +73,8 @@ type bulkCreateChildOutput struct {
 	Title string `json:"title"`
 }
 
-// bulkCreateOutput is the JSON response for `new task` with tasks:[...].
-// Uses the same vocabulary as single-task creation, with children and edges added.
+// bulkCreateOutput is the JSON response for `plan --file` container creation.
+// It reuses the single-task vocabulary, with children and edges added.
 type bulkCreateOutput struct {
 	Kind      string                  `json:"kind"`
 	Container bool                    `json:"container"`

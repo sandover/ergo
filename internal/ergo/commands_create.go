@@ -4,16 +4,15 @@
 // Invariants: Writes are append-only under lock; create is safe under concurrent writers.
 // Notes: New tasks start in todo state; containers cannot nest.
 //
-// Task creation supports multiple input styles:
-// - JSON object on stdin (default)
-// - Flags-only input (e.g. --title/--body) when stdin is a TTY
-// - `--body-stdin` to treat stdin as literal body text (metadata via flags)
-// - `tasks:[...]` array creates a container with child tasks and deps
+// Task creation uses one forward input style:
+// - optional inline JSON argument for metadata (`new task '{...}'`)
+// - optional piped stdin for the body (`printf ... | ergo new task '{...}'`)
+// - `plan --file` for markdown-driven bulk creation
 //
-//	printf '%s' '{"title":"Do X"}' | ergo new task
-//	printf '%s' '{"title":"Auth system","tasks":[...]}' | ergo new task
+//	printf '%s\n' '## Goal' '- Do X' | ergo new task '{"title":"Do X"}'
+//	ergo plan --file tasks.md '{"title":"Auth system"}'
 //
-// See json_input.go for the unified TaskInput schema.
+// See cli_input.go for the user-facing parser contract.
 package ergo
 
 import (
@@ -53,136 +52,57 @@ func RunInit(args []string, opts GlobalOptions) error {
 	} else {
 		fmt.Println(target)
 	}
-	if !opts.Quiet {
-		fmt.Fprintln(os.Stderr, "Initialized ergo at", target)
-	}
+	fmt.Fprintln(os.Stderr, "Initialized ergo at", target)
 	return nil
 }
 
-func RunNewTask(opts GlobalOptions) error {
-	if opts.BodyStdin {
-		if err := validateBodyStdinExclusions(opts.BodyFlag); err != nil {
-			return err
-		}
-		title := strings.TrimSpace(opts.TitleFlag)
-		if title == "" {
-			return errors.New("new task --body-stdin requires --title")
-		}
-		body, err := readBodyFromStdinOrEmpty()
-		if err != nil {
-			return err
-		}
+func RunNewTask(args []string, opts GlobalOptions) error {
+	const usage = "usage: ergo new task [json]"
 
-		dir, err := ergoDir(opts)
-		if err != nil {
-			return err
-		}
-		created, err := createTask(dir, opts, opts.EpicFlag, title, body)
-		if err != nil {
-			return err
-		}
-
-		updates := buildFlagUpdates(opts)
-		delete(updates, "title")
-		delete(updates, "epic")
-		if len(updates) > 0 {
-			agentID := opts.AgentID
-			if err := applySetUpdates(dir, opts, created.ID, updates, agentID, true); err != nil {
-				return err
-			}
-		}
-
-		if opts.JSON {
-			return writeJSON(os.Stdout, created)
-		}
-		fmt.Println(created.ID)
-		return nil
+	input, verr, err := parseInlineTaskArgs(args, usage)
+	if err != nil {
+		return err
 	}
-
-	hasFlagInput := strings.TrimSpace(opts.TitleFlag) != "" ||
-		opts.BodyFlag != "" ||
-		opts.EpicFlag != "" ||
-		opts.StateFlag != "" ||
-		opts.ClaimFlag != "" ||
-		opts.ResultPathFlag != "" ||
-		opts.ResultSummaryFlag != ""
-	if !stdinIsPiped() && hasFlagInput {
-		title := strings.TrimSpace(opts.TitleFlag)
-		if title == "" {
-			return errors.New("new task requires --title (or pipe JSON to stdin)")
-		}
-
-		dir, err := ergoDir(opts)
-		if err != nil {
-			return err
-		}
-		created, err := createTask(dir, opts, opts.EpicFlag, title, opts.BodyFlag)
-		if err != nil {
-			return err
-		}
-
-		updates := buildFlagUpdates(opts)
-		delete(updates, "title")
-		delete(updates, "epic")
-		if len(updates) > 0 {
-			agentID := opts.AgentID
-			if err := applySetUpdates(dir, opts, created.ID, updates, agentID, true); err != nil {
-				return err
-			}
-		}
-
-		if opts.JSON {
-			return writeJSON(os.Stdout, created)
-		}
-		fmt.Println(created.ID)
-		return nil
-	}
-
-	// Parse JSON from stdin
-	input, verr := ParseTaskInput()
 	if verr != nil {
 		if opts.JSON {
 			_ = verr.WriteJSON(os.Stdout)
 		}
 		return verr.GoError()
 	}
-
-	// Validate for task creation
-	if verr := input.ValidateForNewTask(); verr != nil {
+	if verr := input.ValidateForNew(); verr != nil {
 		if opts.JSON {
 			_ = verr.WriteJSON(os.Stdout)
 		}
 		return verr.GoError()
 	}
 
+	body, _, err := readOptionalBodyFromStdin()
+	if err != nil {
+		return err
+	}
+
+	title := strings.TrimSpace(*input.Title)
+	epicID := ""
+	if input.Epic != nil {
+		epicID = *input.Epic
+	}
+
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
 	}
-
-	// Bulk creation: if tasks array is present, create a container with children
-	if len(input.Tasks) > 0 {
-		return runBulkCreate(dir, opts, input)
-	}
-
-	// Create the task
-	created, err := createTask(dir, opts, input.GetEpic(), input.GetTitle(), input.GetBody())
+	created, err := createTask(dir, opts, epicID, title, body)
 	if err != nil {
 		return err
 	}
 
-	// If state/claim were provided, apply them via set logic
-	if input.State != nil || input.Claim != nil || input.ResultPath != nil {
-		updates := input.ToKeyValueMap()
-		// Remove fields already handled by createTask
-		delete(updates, "title")
-		delete(updates, "body")
-		delete(updates, "epic")
-		if len(updates) > 0 {
-			agentID := opts.AgentID
-			if err := applySetUpdates(dir, opts, created.ID, updates, agentID, true); err != nil {
-				return err
-			}
+	updates := input.ToUpdates()
+	delete(updates, "title")
+	delete(updates, "epic")
+	if len(updates) > 0 {
+		agentID := opts.AgentID
+		if err := applySetUpdates(dir, opts, created.ID, updates, agentID, true); err != nil {
+			return err
 		}
 	}
 
@@ -193,9 +113,45 @@ func RunNewTask(opts GlobalOptions) error {
 	return nil
 }
 
+func RunPlan(filePath string, args []string, opts GlobalOptions) error {
+	const usage = "usage: ergo plan --file <path> [json]"
+	if strings.TrimSpace(filePath) == "" {
+		return errors.New(usage)
+	}
+
+	input, verr, err := parsePlanCommandArgs(args, usage)
+	if err != nil {
+		return err
+	}
+	if verr != nil {
+		if opts.JSON {
+			_ = verr.WriteJSON(os.Stdout)
+		}
+		return verr.GoError()
+	}
+	if verr := input.Validate(); verr != nil {
+		if opts.JSON {
+			_ = verr.WriteJSON(os.Stdout)
+		}
+		return verr.GoError()
+	}
+
+	tasks, err := ParsePlanFile(filePath)
+	if err != nil {
+		return err
+	}
+	title := strings.TrimSpace(*input.Title)
+
+	dir, err := ergoDir(opts)
+	if err != nil {
+		return err
+	}
+	return runBulkCreate(dir, opts, title, "", tasks)
+}
+
 // runBulkCreate creates a container task with child tasks and dependency edges.
-// This is the unified replacement for the old `ergo plan` command.
-func runBulkCreate(dir string, opts GlobalOptions, input *TaskInput) error {
+// It backs the current `plan --file` command.
+func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, containerBody string, tasks []PlanTaskInput) error {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
 
@@ -210,15 +166,9 @@ func runBulkCreate(dir string, opts GlobalOptions, input *TaskInput) error {
 			return err
 		}
 
-		workingIDs := make(map[string]*Task, len(graph.Tasks)+len(input.Tasks)+1)
+		workingIDs := make(map[string]*Task, len(graph.Tasks)+len(tasks)+1)
 		for id, task := range graph.Tasks {
 			workingIDs[id] = task
-		}
-
-		containerTitle := *input.Title
-		containerBody := ""
-		if input.Body != nil {
-			containerBody = *input.Body
 		}
 
 		now := time.Now().UTC()
@@ -253,20 +203,17 @@ func runBulkCreate(dir string, opts GlobalOptions, input *TaskInput) error {
 			Title:     containerTitle,
 			State:     stateTodo,
 			CreatedAt: createdAt,
-			Children:  make([]bulkCreateChildOutput, 0, len(input.Tasks)),
+			Children:  make([]bulkCreateChildOutput, 0, len(tasks)),
 			Edges:     make([]sequenceEdgeOutput, 0),
 		}
 
-		newEvents := make([]Event, 0, 1+len(input.Tasks))
+		newEvents := make([]Event, 0, 1+len(tasks))
 		newEvents = append(newEvents, containerEvent)
 
-		titleToID := make(map[string]string, len(input.Tasks))
-		for _, taskInput := range input.Tasks {
-			taskTitle := *taskInput.Title
-			taskBody := ""
-			if taskInput.Body != nil {
-				taskBody = *taskInput.Body
-			}
+		titleToID := make(map[string]string, len(tasks))
+		for _, taskInput := range tasks {
+			taskTitle := taskInput.Title
+			taskBody := taskInput.Body
 
 			taskID, err := newShortID(workingIDs)
 			if err != nil {
@@ -305,8 +252,8 @@ func runBulkCreate(dir string, opts GlobalOptions, input *TaskInput) error {
 		}
 
 		seenEdges := map[string]struct{}{}
-		for _, taskInput := range input.Tasks {
-			fromTitle := *taskInput.Title
+		for _, taskInput := range tasks {
+			fromTitle := taskInput.Title
 			fromID := titleToID[fromTitle]
 			for _, dep := range taskInput.After {
 				toID := titleToID[dep]
@@ -352,9 +299,6 @@ func runBulkCreate(dir string, opts GlobalOptions, input *TaskInput) error {
 
 	if opts.JSON {
 		return writeJSON(os.Stdout, out)
-	}
-	if opts.Quiet {
-		return nil
 	}
 	fmt.Printf("Created container %s: %s (%d tasks, %d dependencies)\n", out.ID, out.Title, len(out.Children), len(out.Edges))
 	return nil

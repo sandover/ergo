@@ -70,7 +70,6 @@ func ergoDir(opts GlobalOptions) (string, error) {
 		}
 		start = wd
 	}
-	debugf(opts, "discover start=%s", start)
 	return resolveErgoDir(start)
 }
 
