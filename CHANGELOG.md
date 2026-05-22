@@ -10,20 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2026-05-22
 
 ### Changed
-- **BREAKING**: `new task` now accepts at most one positional JSON argument; when stdin is piped, stdin becomes the task body.
-- **BREAKING**: `set <id>` now accepts at most one positional JSON argument; when stdin is piped, stdin replaces the task body.
-- **BREAKING**: `plan --file <path> [json]` now creates a container and child tasks from markdown chunks split on `---`.
-- **BREAKING**: New writes use `result` as the user-facing result field; legacy `result_path` and `result_summary` remain readable from old logs.
-- Integration tests, fixtures, and user-facing docs now target the forward CLI surface consistently.
-- Rewrote `--help`, `quickstart`, README, and spec docs around the inspect-then-mutate workflow.
-- `--help` redesigned: denser intro paragraph with state machine and "ready" semantics, terser plan section, epic used consistently in prose.
+- **BREAKING**: stdin to `new task` is now the task body (plain text or Markdown); metadata goes in the JSON argument.
+- **BREAKING**: stdin to `set <id>` replaces the task body; metadata goes in the JSON argument.
+- **BREAKING**: `plan --file <path>` takes a Markdown file split on `---` lines; each chunk becomes a child task.
+- **BREAKING**: `result` replaces `result_path` / `result_summary` as the result field. Old logs are still readable.
+- `--help` rewritten: state machine intro, "ready" semantics, workflow-first command order.
 
 ### Removed
-- `ergo new epic` command
-- `--body-stdin` and flag-driven mutation metadata for `new task` / `set`
-- JSON-on-stdin mutation mode for `new task` / `set`
-- `show --short` flag (use `ergo --json show <id>` for structured output)
-- `claim --epic <id>` flag (use `ergo --json list --epic <id> --ready` to see scoped ready tasks)
+- `ergo new epic` — use `ergo new task` with child tasks to form a container.
+- `--body-stdin` flag — stdin is always the body when piped.
+- `show --short` flag — use `ergo --json show <id>` for structured output.
+- `claim --epic <id>` flag — use `ergo --json list --epic <id> --ready` to scope work.
 
 ## [0.11.2] - 2026-05-18
 
