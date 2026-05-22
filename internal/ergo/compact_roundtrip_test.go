@@ -590,7 +590,7 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 			if fromTask == nil || toTask == nil {
 				continue
 			}
-			if err := validateDepKinds(isEpic(fromTask), isEpic(toTask)); err != nil {
+			if err := validateDepAncestry(fromTask, toTask); err != nil {
 				continue
 			}
 

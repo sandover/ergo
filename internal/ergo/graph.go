@@ -2,7 +2,7 @@
 // Exports: none (package-internal graph helpers).
 // Role: Core domain logic for state reconstruction and queries.
 // Invariants: Tombstones remove tasks; results are ordered newest-first.
-// Notes: Readiness checks dependencies and epic-deps.
+// Notes: Readiness checks direct deps and inherited container deps.
 package ergo
 
 import (
@@ -276,6 +276,9 @@ func replayEvents(events []Event) (*Graph, error) {
 
 	applyLegacyTitleMigration(graph)
 
+	// Derive container status: any task with children is a container
+	applyContainerDerivation(graph)
+
 	return graph, nil
 }
 
@@ -297,6 +300,18 @@ func applyTombstone(graph *Graph, id string, info TombstoneInfo) {
 	}
 }
 
+func hasChildren(id string, graph *Graph) bool {
+	if graph == nil {
+		return false
+	}
+	for _, task := range graph.Tasks {
+		if task.EpicID == id {
+			return true
+		}
+	}
+	return false
+}
+
 func applyLegacyTitleMigration(graph *Graph) {
 	for _, task := range graph.Tasks {
 		if strings.TrimSpace(task.Title) != "" {
@@ -305,6 +320,19 @@ func applyLegacyTitleMigration(graph *Graph) {
 		title, body := deriveTitleAndBodyFromLegacy(task.Body)
 		task.Title = title
 		task.Body = body
+	}
+}
+
+// applyContainerDerivation refreshes the compatibility/display cache for any
+// task with children. Current writes use new_task; legacy new_epic remains
+// read-compatible.
+func applyContainerDerivation(graph *Graph) {
+	for _, task := range graph.Tasks {
+		if task.EpicID != "" {
+			if parent, ok := graph.Tasks[task.EpicID]; ok {
+				parent.IsEpic = true
+			}
+		}
 	}
 }
 
@@ -390,7 +418,7 @@ func compactEvents(graph *Graph) ([]Event, error) {
 			CreatedAt: formatTime(createdAt),
 		}
 		eventType := "new_task"
-		if task.IsEpic {
+		if task.IsEpic && !hasChildren(task.ID, graph) {
 			eventType = "new_epic"
 		}
 		event, err := newEvent(eventType, createdAt, payload)
@@ -503,12 +531,13 @@ func compactEvents(graph *Graph) ([]Event, error) {
 	return events, nil
 }
 
-func readyTasks(graph *Graph, epicID string, kind Kind) []*Task {
-	tasks := listTasks(graph, epicID, true)
+func readyTasks(graph *Graph) []*Task {
+	tasks := listTasks(graph, "", true)
 	if len(tasks) == 0 {
 		return nil
 	}
-	tasks = filterTasksByKind(tasks, kind)
+	// Exclude containers from ready list (they complete implicitly)
+	tasks = filterNonContainers(tasks, graph)
 	if len(tasks) == 0 {
 		return nil
 	}
@@ -521,13 +550,11 @@ func readyTasks(graph *Graph, epicID string, kind Kind) []*Task {
 	return tasks
 }
 
-func filterTasksByKind(tasks []*Task, kind Kind) []*Task {
-	if kind == "" || kind == kindAny {
-		return tasks
-	}
+// filterNonContainers removes tasks that are containers (have children).
+func filterNonContainers(tasks []*Task, graph *Graph) []*Task {
 	filtered := tasks[:0]
 	for _, task := range tasks {
-		if kindForTask(task) == kind {
+		if !isContainer(task, graph) {
 			filtered = append(filtered, task)
 		}
 	}
@@ -559,10 +586,18 @@ func sortedTasks(tasks map[string]*Task) []*Task {
 	return values
 }
 
-func sortByCreatedAt(tasks []*Task) {
-	sort.Slice(tasks, func(i, j int) bool {
-		return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
-	})
+// isDepComplete returns true if the dependency identified by depID is fully satisfied.
+// For containers: all children must be done or canceled.
+// For leaves: the task must be done or canceled.
+func isDepComplete(depID string, graph *Graph) bool {
+	dep, ok := graph.Tasks[depID]
+	if !ok {
+		return true // unknown deps don't block
+	}
+	if isContainer(dep, graph) {
+		return isEpicComplete(depID, graph)
+	}
+	return dep.State == stateDone || dep.State == stateCanceled
 }
 
 func isReady(task *Task, graph *Graph) bool {
@@ -575,19 +610,17 @@ func isReady(task *Task, graph *Graph) bool {
 	if task.ClaimedBy != "" {
 		return false
 	}
-	for dep := range graph.Deps[task.ID] {
-		other, ok := graph.Tasks[dep]
-		if !ok {
-			continue
-		}
-		if other.State != stateDone && other.State != stateCanceled {
+	for depID := range graph.Deps[task.ID] {
+		if !isDepComplete(depID, graph) {
 			return false
 		}
 	}
-	// For tasks in an epic, check if epic's epic-deps are complete
+	// Tasks in a container inherit the container's external deps.
 	if task.EpicID != "" {
-		if !areEpicDepsComplete(task.EpicID, graph) {
-			return false
+		for depID := range graph.Deps[task.EpicID] {
+			if !isDepComplete(depID, graph) {
+				return false
+			}
 		}
 	}
 	return true
@@ -603,19 +636,17 @@ func isBlocked(task *Task, graph *Graph) bool {
 	if task.State != stateTodo || task.ClaimedBy != "" {
 		return false
 	}
-	for dep := range graph.Deps[task.ID] {
-		other, ok := graph.Tasks[dep]
-		if !ok {
-			continue
-		}
-		if other.State != stateDone && other.State != stateCanceled {
+	for depID := range graph.Deps[task.ID] {
+		if !isDepComplete(depID, graph) {
 			return true
 		}
 	}
-	// For tasks in an epic, check if epic's epic-deps are incomplete
+	// Tasks in a container inherit the container's external deps.
 	if task.EpicID != "" {
-		if !areEpicDepsComplete(task.EpicID, graph) {
-			return true
+		for depID := range graph.Deps[task.EpicID] {
+			if !isDepComplete(depID, graph) {
+				return true
+			}
 		}
 	}
 	return false
@@ -629,23 +660,6 @@ func isEpicComplete(epicID string, graph *Graph) bool {
 			if task.State != stateDone && task.State != stateCanceled {
 				return false
 			}
-		}
-	}
-	return true
-}
-
-// areEpicDepsComplete returns true if all epics that the given epic depends on are complete.
-func areEpicDepsComplete(epicID string, graph *Graph) bool {
-	for depID := range graph.Deps[epicID] {
-		depEpic, ok := graph.Tasks[depID]
-		if !ok {
-			continue
-		}
-		if !isEpic(depEpic) {
-			continue
-		}
-		if !isEpicComplete(depID, graph) {
-			return false
 		}
 	}
 	return true

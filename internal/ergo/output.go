@@ -14,15 +14,15 @@ import (
 )
 
 type taskListItem struct {
-	Kind       string `json:"kind,omitempty"`
-	ID         string `json:"id"`
-	EpicID     string `json:"epic_id,omitempty"`
-	State      string `json:"state"`
-	ClaimedBy  string `json:"claimed_by,omitempty"`
-	Title      string `json:"title"`
-	Ready      bool   `json:"ready"`
-	Blocked    bool   `json:"blocked"`
-	HasResults bool   `json:"has_results,omitempty"`
+	Container bool   `json:"container,omitempty"`
+	ID        string `json:"id"`
+	EpicID    string `json:"epic_id,omitempty"`
+	State     string `json:"state"`
+	ClaimedBy string `json:"claimed_by,omitempty"`
+	Title     string `json:"title"`
+	Ready     bool   `json:"ready"`
+	Blocked   bool   `json:"blocked"`
+	HasResults bool  `json:"has_results,omitempty"`
 }
 
 // resultOutputItem is the JSON representation of a result with derived file_url.
@@ -57,7 +57,7 @@ type initOutput struct {
 }
 
 type createOutput struct {
-	Kind      string `json:"kind"`
+	Container bool   `json:"container,omitempty"`
 	ID        string `json:"id"`
 	UUID      string `json:"uuid"`
 	EpicID    string `json:"epic_id"`
@@ -67,23 +67,24 @@ type createOutput struct {
 	CreatedAt string `json:"created_at"`
 }
 
-type planEntityOutput struct {
-	ID        string `json:"id"`
-	UUID      string `json:"uuid"`
-	Title     string `json:"title"`
-	CreatedAt string `json:"created_at"`
-}
-
-type planTaskOutput struct {
+// bulkCreateChildOutput is a compact child task entry in a bulk-create response.
+type bulkCreateChildOutput struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 }
 
-type planOutput struct {
-	Kind  string               `json:"kind"`
-	Epic  planEntityOutput     `json:"epic"`
-	Tasks []planTaskOutput     `json:"tasks"`
-	Edges []sequenceEdgeOutput `json:"edges"`
+// bulkCreateOutput is the JSON response for `plan --file` container creation.
+// It reuses the single-task vocabulary, with children and edges added.
+type bulkCreateOutput struct {
+	Kind      string                  `json:"kind"`
+	Container bool                    `json:"container"`
+	ID        string                  `json:"id"`
+	UUID      string                  `json:"uuid"`
+	Title     string                  `json:"title"`
+	State     string                  `json:"state"`
+	CreatedAt string                  `json:"created_at"`
+	Children  []bulkCreateChildOutput `json:"children"`
+	Edges     []sequenceEdgeOutput    `json:"edges"`
 }
 
 type setOutput struct {
@@ -172,7 +173,7 @@ func buildTaskListItems(tasks []*Task, graph *Graph, repoDir string) []taskListI
 	items := make([]taskListItem, 0, len(tasks))
 	for _, task := range tasks {
 		item := taskListItem{
-			Kind:       string(kindForTask(task)),
+			Container:  isContainer(task, graph),
 			ID:         task.ID,
 			EpicID:     task.EpicID,
 			State:      task.State,

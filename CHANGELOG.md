@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-22
+
+### Changed
+- **BREAKING**: `new task` now accepts at most one positional JSON argument; when stdin is piped, stdin becomes the task body.
+- **BREAKING**: `set <id>` now accepts at most one positional JSON argument; when stdin is piped, stdin replaces the task body.
+- **BREAKING**: `plan --file <path> [json]` now creates a container and child tasks from markdown chunks split on `---`.
+- **BREAKING**: New writes use `result` as the user-facing result field; legacy `result_path` and `result_summary` remain readable from old logs.
+- Integration tests, fixtures, and user-facing docs now target the forward CLI surface consistently.
+- Rewrote `--help`, `quickstart`, README, and spec docs around the inspect-then-mutate workflow.
+- `--help` redesigned: denser intro paragraph with state machine and "ready" semantics, terser plan section, epic used consistently in prose.
+
+### Removed
+- `ergo new epic` command
+- `--body-stdin` and flag-driven mutation metadata for `new task` / `set`
+- JSON-on-stdin mutation mode for `new task` / `set`
+- `show --short` flag (use `ergo --json show <id>` for structured output)
+- `claim --epic <id>` flag (use `ergo --json list --epic <id> --ready` to see scoped ready tasks)
+
 ## [0.11.2] - 2026-05-18
 
 ### Changed
@@ -379,7 +397,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sandover/ergo/compare/v0.11.2...v1.0.0
 [0.11.0]: https://github.com/sandover/ergo/compare/v0.10.3...v0.11.0
 [0.10.3]: https://github.com/sandover/ergo/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/sandover/ergo/compare/v0.10.1...v0.10.2

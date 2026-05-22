@@ -1,255 +1,92 @@
-// Purpose: Parse and validate JSON stdin for `ergo plan`.
-// Exports: PlanInput, PlanTaskInput, ParsePlanInput.
-// Role: Input contract layer for atomic epic+task graph creation.
-// Invariants: Unknown keys are rejected; task-title references are local and acyclic.
-// Notes: Parse errors use `parse_error`; semantic failures use `validation_failed`.
+// Purpose: Define and parse plan payloads used for bulk task creation.
+// Exports: PlanTaskInput, ParsePlanFile, and hasPlanCycle.
+// Role: Shared parsing for markdown-plan files and title-based dependency validation.
+// Invariants: Each plan chunk starts with `# Title`; duplicate titles are rejected.
+// Notes: Markdown plan files intentionally do not infer dependencies from order.
 package ergo
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
-	"sort"
+	"os"
 	"strings"
 )
 
-var knownPlanTopLevelJSONFields = []string{
-	"title",
-	"body",
-	"tasks",
-}
-
-var knownPlanTaskJSONFields = []string{
-	"title",
-	"body",
-	"after",
-}
-
-type planUnknownFieldScope int
-
-const (
-	planUnknownFieldScopeUnknown planUnknownFieldScope = iota
-	planUnknownFieldScopeTopLevel
-	planUnknownFieldScopeTask
-)
-
-// PlanInput is the JSON schema for `ergo plan`.
-type PlanInput struct {
-	Title *string         `json:"title,omitempty"` // epic title (required)
-	Body  *string         `json:"body,omitempty"`  // epic body (optional)
-	Tasks []PlanTaskInput `json:"tasks"`           // required, non-empty
-}
-
-// PlanTaskInput describes one task in a plan payload.
+// PlanTaskInput describes one child task in a markdown plan file.
 type PlanTaskInput struct {
-	Title *string  `json:"title,omitempty"` // required
-	Body  *string  `json:"body,omitempty"`  // optional
-	After []string `json:"after,omitempty"` // optional: task titles this task depends on
+	Title string
+	Body  string
+	After []string
 }
 
-// ParsePlanInput reads JSON from stdin and parses it into PlanInput.
-func ParsePlanInput() (*PlanInput, *ValidationError) {
-	jsonBytes, err := readJSONFromStdin()
+func ParsePlanFile(path string) ([]PlanTaskInput, error) {
+	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, &ValidationError{
-			Error:   "io_error",
-			Message: fmt.Sprintf("failed to read stdin: %v", err),
-		}
-	}
-	if len(jsonBytes) == 0 {
-		return nil, &ValidationError{
-			Error:   "parse_error",
-			Message: "no input: pipe JSON to stdin",
-		}
+		return nil, err
 	}
 
-	var input PlanInput
-	decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
-		unknownField, hasUnknown := extractUnknownField(err)
-		if hasUnknown {
-			message := fmt.Sprintf("invalid JSON: %v", err)
-			invalid := map[string]string{
-				unknownField: "unknown field",
-			}
-			suggestionCandidates := knownPlanTopLevelJSONFields
-			if detectPlanUnknownFieldScope(jsonBytes, unknownField) == planUnknownFieldScopeTask {
-				suggestionCandidates = knownPlanTaskJSONFields
-			}
-			if suggestion, ok := suggestFieldNameFrom(unknownField, suggestionCandidates); ok {
-				message = fmt.Sprintf("invalid JSON: unknown field %q (did you mean: %s?)", unknownField, suggestion)
-				invalid[unknownField] = fmt.Sprintf("unknown field (did you mean: %s?)", suggestion)
-			}
-			return nil, &ValidationError{
-				Error:   "parse_error",
-				Message: message,
-				Invalid: invalid,
-			}
-		}
-		return nil, &ValidationError{
-			Error:   "parse_error",
-			Message: fmt.Sprintf("invalid JSON: %v", err),
-		}
-	}
-	// Ensure there is only one top-level JSON value.
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return nil, &ValidationError{
-			Error:   "parse_error",
-			Message: "invalid JSON: multiple JSON values provided",
-		}
+	chunks := splitPlanChunks(strings.ReplaceAll(string(content), "\r\n", "\n"))
+	if len(chunks) == 0 {
+		return nil, fmt.Errorf("%s: plan file contains no task chunks", path)
 	}
 
-	return &input, nil
+	seenTitles := map[string]struct{}{}
+	tasks := make([]PlanTaskInput, 0, len(chunks))
+	for idx, chunk := range chunks {
+		task, err := parsePlanChunk(chunk)
+		if err != nil {
+			return nil, fmt.Errorf("%s: chunk %d: %w", path, idx+1, err)
+		}
+		title := strings.TrimSpace(task.Title)
+		if _, exists := seenTitles[title]; exists {
+			return nil, fmt.Errorf("%s: duplicate task title %q", path, title)
+		}
+		seenTitles[title] = struct{}{}
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
 }
 
-func detectPlanUnknownFieldScope(jsonBytes []byte, field string) planUnknownFieldScope {
-	var root map[string]json.RawMessage
-	if err := json.Unmarshal(jsonBytes, &root); err != nil {
-		return planUnknownFieldScopeUnknown
-	}
-	if _, exists := root[field]; exists {
-		return planUnknownFieldScopeTopLevel
-	}
-
-	tasksRaw, hasTasks := root["tasks"]
-	if !hasTasks {
-		return planUnknownFieldScopeUnknown
-	}
-
-	var tasks []map[string]json.RawMessage
-	if err := json.Unmarshal(tasksRaw, &tasks); err != nil {
-		return planUnknownFieldScopeUnknown
-	}
-	for _, task := range tasks {
-		if _, exists := task[field]; exists {
-			return planUnknownFieldScopeTask
+func splitPlanChunks(content string) []string {
+	lines := strings.Split(content, "\n")
+	chunks := make([]string, 0)
+	current := make([]string, 0)
+	flush := func() {
+		chunk := strings.TrimSpace(strings.Join(current, "\n"))
+		if chunk != "" {
+			chunks = append(chunks, chunk)
 		}
+		current = current[:0]
 	}
 
-	return planUnknownFieldScopeUnknown
-}
-
-// Validate validates the parsed plan payload.
-func (p *PlanInput) Validate() *ValidationError {
-	var missing []string
-	invalid := map[string]string{}
-
-	if p.Title == nil || strings.TrimSpace(*p.Title) == "" {
-		missing = append(missing, "title")
-	}
-	if p.Body != nil && strings.TrimSpace(*p.Body) == "" {
-		invalid["body"] = "cannot be empty"
-	}
-	if len(p.Tasks) == 0 {
-		missing = append(missing, "tasks")
-	}
-
-	titleToIndex := map[string]int{}
-	depsByTitle := map[string][]string{}
-
-	for i, task := range p.Tasks {
-		fieldPrefix := fmt.Sprintf("tasks[%d]", i)
-		if task.Title == nil || strings.TrimSpace(*task.Title) == "" {
-			missing = append(missing, fieldPrefix+".title")
-		} else {
-			taskTitle := *task.Title
-			if prior, exists := titleToIndex[taskTitle]; exists {
-				invalid[fieldPrefix+".title"] = fmt.Sprintf("duplicate title %q (already used by tasks[%d].title)", taskTitle, prior)
-			} else {
-				titleToIndex[taskTitle] = i
-			}
-		}
-
-		if task.Body != nil && strings.TrimSpace(*task.Body) == "" {
-			invalid[fieldPrefix+".body"] = "cannot be empty"
-		}
-	}
-
-	for i, task := range p.Tasks {
-		if task.Title == nil || strings.TrimSpace(*task.Title) == "" {
+	for _, line := range lines {
+		if line == "---" {
+			flush()
 			continue
 		}
-		taskTitle := *task.Title
-		seenDeps := map[string]struct{}{}
-		for j, rawDep := range task.After {
-			field := fmt.Sprintf("tasks[%d].after[%d]", i, j)
-			if strings.TrimSpace(rawDep) == "" {
-				invalid[field] = "cannot be empty"
-				continue
-			}
-			depTitle := rawDep
-			if err := validateDepSelf(taskTitle, depTitle); err != nil {
-				invalid[field] = err.Error()
-				continue
-			}
-			if _, ok := titleToIndex[depTitle]; !ok {
-				invalid[field] = fmt.Sprintf("unknown task title %q", depTitle)
-				continue
-			}
-			if _, duplicate := seenDeps[depTitle]; duplicate {
-				continue
-			}
-			seenDeps[depTitle] = struct{}{}
-			depsByTitle[taskTitle] = append(depsByTitle[taskTitle], depTitle)
-		}
+		current = append(current, line)
 	}
-
-	if len(invalid) == 0 && hasPlanCycle(titleToIndex, depsByTitle) {
-		invalid["tasks"] = "after graph contains a cycle"
-	}
-
-	if len(missing) == 0 && len(invalid) == 0 {
-		return nil
-	}
-
-	sort.Strings(missing)
-	message := "invalid input"
-	if len(missing) > 0 && len(invalid) == 0 {
-		message = "missing required fields"
-	}
-	return &ValidationError{
-		Error:   "validation_failed",
-		Message: message,
-		Missing: missing,
-		Invalid: invalid,
-	}
+	flush()
+	return chunks
 }
 
-func hasPlanCycle(titles map[string]int, depsByTitle map[string][]string) bool {
-	const (
-		visitUnseen uint8 = iota
-		visitActive
-		visitDone
-	)
-	state := map[string]uint8{}
-
-	var visit func(node string) bool
-	visit = func(node string) bool {
-		switch state[node] {
-		case visitActive:
-			return true
-		case visitDone:
-			return false
-		}
-		state[node] = visitActive
-		for _, dep := range depsByTitle[node] {
-			if visit(dep) {
-				return true
-			}
-		}
-		state[node] = visitDone
-		return false
+func parsePlanChunk(chunk string) (PlanTaskInput, error) {
+	lines := strings.Split(chunk, "\n")
+	if len(lines) == 0 {
+		return PlanTaskInput{}, fmt.Errorf("empty chunk")
 	}
-
-	for title := range titles {
-		if state[title] != visitUnseen {
-			continue
-		}
-		if visit(title) {
-			return true
-		}
+	if !strings.HasPrefix(lines[0], "# ") {
+		return PlanTaskInput{}, fmt.Errorf("chunk must start with '# Title'")
 	}
-	return false
+	title := strings.TrimSpace(strings.TrimPrefix(lines[0], "# "))
+	if title == "" {
+		return PlanTaskInput{}, fmt.Errorf("chunk title cannot be empty")
+	}
+	task := PlanTaskInput{Title: title}
+	if len(lines) > 1 {
+		body := strings.Join(lines[1:], "\n")
+		task.Body = body
+	}
+	return task, nil
 }
+
+

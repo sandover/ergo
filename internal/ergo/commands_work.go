@@ -19,149 +19,18 @@ import (
 type ListOptions struct {
 	EpicID    string
 	ReadyOnly bool
-	ShowEpics bool
 	ShowAll   bool
 }
 
-func RunSet(id string, opts GlobalOptions) error {
+func RunSet(id string, args []string, opts GlobalOptions) error {
 	if id == "" {
-		return errors.New("usage: ergo set <id> (JSON stdin; flags; or --body-stdin)")
+		return errors.New("usage: ergo set <id> [json]")
 	}
 
-	if opts.BodyStdin {
-		if err := validateBodyStdinExclusions(opts.BodyFlag); err != nil {
-			return err
-		}
-		body, err := readBodyFromStdinOrEmpty()
-		if err != nil {
-			return err
-		}
-		if strings.TrimSpace(body) == "" {
-			return errors.New("set --body-stdin requires non-empty body")
-		}
-		updates := buildFlagUpdates(opts)
-		updates["body"] = body
-
-		updatedFields := []string{"body"}
-		if strings.TrimSpace(opts.TitleFlag) != "" {
-			updatedFields = append(updatedFields, "title")
-		}
-		if opts.EpicFlag != "" {
-			updatedFields = append(updatedFields, "epic")
-		}
-		if opts.StateFlag != "" {
-			updatedFields = append(updatedFields, "state")
-		}
-		if opts.ClaimFlag != "" {
-			updatedFields = append(updatedFields, "claim")
-		}
-		if opts.ResultPathFlag != "" {
-			updatedFields = append(updatedFields, "result_path")
-		}
-		if opts.ResultSummaryFlag != "" {
-			updatedFields = append(updatedFields, "result_summary")
-		}
-
-		dir, err := ergoDir(opts)
-		if err != nil {
-			return err
-		}
-		agentID := opts.AgentID
-		if err := applySetUpdates(dir, opts, id, updates, agentID, opts.JSON); err != nil {
-			return err
-		}
-
-		if opts.JSON {
-			graph, err := loadGraph(dir)
-			if err != nil {
-				return err
-			}
-			task := graph.Tasks[id]
-			if task == nil {
-				return fmt.Errorf("unknown task id %s", id)
-			}
-			return writeJSON(os.Stdout, setOutput{
-				Kind:          "set",
-				ID:            id,
-				UpdatedFields: updatedFields,
-				State:         task.State,
-				ClaimedBy:     task.ClaimedBy,
-			})
-		}
-		return nil
+	input, verr, err := parseInlineTaskArgs(args, "usage: ergo set <id> [json]")
+	if err != nil {
+		return err
 	}
-
-	hasFlagInput := strings.TrimSpace(opts.TitleFlag) != "" ||
-		opts.BodyFlag != "" ||
-		opts.EpicFlag != "" ||
-		opts.StateFlag != "" ||
-		opts.ClaimFlag != "" ||
-		opts.ResultPathFlag != "" ||
-		opts.ResultSummaryFlag != ""
-	if !stdinIsPiped() && hasFlagInput {
-		updates := buildFlagUpdates(opts)
-		if opts.BodyFlag != "" {
-			updates["body"] = opts.BodyFlag
-		}
-
-		if len(updates) == 0 {
-			return errors.New("no fields to update")
-		}
-
-		var updatedFields []string
-		if strings.TrimSpace(opts.TitleFlag) != "" {
-			updatedFields = append(updatedFields, "title")
-		}
-		if opts.BodyFlag != "" {
-			updatedFields = append(updatedFields, "body")
-		}
-		if opts.EpicFlag != "" {
-			updatedFields = append(updatedFields, "epic")
-		}
-		if opts.StateFlag != "" {
-			updatedFields = append(updatedFields, "state")
-		}
-		if opts.ClaimFlag != "" {
-			updatedFields = append(updatedFields, "claim")
-		}
-		if opts.ResultPathFlag != "" {
-			updatedFields = append(updatedFields, "result_path")
-		}
-		if opts.ResultSummaryFlag != "" {
-			updatedFields = append(updatedFields, "result_summary")
-		}
-
-		dir, err := ergoDir(opts)
-		if err != nil {
-			return err
-		}
-		agentID := opts.AgentID
-		if err := applySetUpdates(dir, opts, id, updates, agentID, opts.JSON); err != nil {
-			return err
-		}
-
-		if opts.JSON {
-			graph, err := loadGraph(dir)
-			if err != nil {
-				return err
-			}
-			task := graph.Tasks[id]
-			if task == nil {
-				return fmt.Errorf("unknown task id %s", id)
-			}
-			return writeJSON(os.Stdout, setOutput{
-				Kind:          "set",
-				ID:            id,
-				UpdatedFields: updatedFields,
-				State:         task.State,
-				ClaimedBy:     task.ClaimedBy,
-			})
-		}
-		return nil
-	}
-
-	// Parse JSON from stdin
-	input, verr := ParseTaskInput()
 	if verr != nil {
 		if opts.JSON {
 			if err := verr.WriteJSON(os.Stdout); err != nil {
@@ -170,8 +39,6 @@ func RunSet(id string, opts GlobalOptions) error {
 		}
 		return verr.GoError()
 	}
-
-	// Validate for set (all fields optional)
 	if verr := input.ValidateForSet(); verr != nil {
 		if opts.JSON {
 			if err := verr.WriteJSON(os.Stdout); err != nil {
@@ -181,7 +48,15 @@ func RunSet(id string, opts GlobalOptions) error {
 		return verr.GoError()
 	}
 
-	updates := input.ToKeyValueMap()
+	body, bodyProvided, err := readOptionalBodyFromStdin()
+	if err != nil {
+		return err
+	}
+
+	updates := input.ToUpdates()
+	if bodyProvided {
+		updates["body"] = body
+	}
 	if len(updates) == 0 {
 		return errors.New("no fields to update")
 	}
@@ -208,7 +83,7 @@ func RunSet(id string, opts GlobalOptions) error {
 		return writeJSON(os.Stdout, setOutput{
 			Kind:          "set",
 			ID:            id,
-			UpdatedFields: buildUpdatedFields(input),
+			UpdatedFields: buildUpdatedFields(input, bodyProvided),
 			State:         task.State,
 			ClaimedBy:     task.ClaimedBy,
 		})
@@ -272,7 +147,7 @@ func RunClaim(id string, opts GlobalOptions) error {
 	return nil
 }
 
-func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
+func RunClaimOldestReady(opts GlobalOptions) error {
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
@@ -296,7 +171,7 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 			return err
 		}
 
-		ready := readyTasks(graph, epicID, kindTask)
+		ready := readyTasks(graph)
 		if len(ready) == 0 {
 			return errors.New("no ready tasks")
 		}
@@ -328,7 +203,6 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 		if err.Error() == "no ready tasks" {
 			if opts.JSON {
 				return writeJSON(os.Stdout, map[string]string{
-					"kind":    "claim",
 					"status":  "no_ready",
 					"message": "No ready ergo tasks.",
 				})
@@ -364,41 +238,11 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 	fmt.Println(reminder)
 	return nil
 }
-
-func buildUpdatedFields(input *TaskInput) []string {
-	if input == nil {
-		return nil
-	}
-	var fields []string
-	if input.Title != nil {
-		fields = append(fields, "title")
-	}
-	if input.Body != nil {
-		fields = append(fields, "body")
-	}
-	if input.Epic != nil {
-		fields = append(fields, "epic")
-	}
-	if input.State != nil {
-		fields = append(fields, "state")
-	}
-	if input.Claim != nil {
-		fields = append(fields, "claim")
-	}
-	if input.ResultPath != nil {
-		fields = append(fields, "result_path")
-	}
-	if input.ResultSummary != nil {
-		fields = append(fields, "result_summary")
-	}
-	return fields
-}
-
 func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, agentID string, quiet bool) error {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
 
-	// Handle result.path + result.summary (requires file I/O before lock)
+	// Handle result.path (+ optional result.summary) before the main mutation lock.
 	resultPath, hasPath := updates["result.path"]
 	resultSummary, hasSummary := updates["result.summary"]
 	if hasPath || hasSummary {
@@ -406,7 +250,7 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 			return errors.New("result.summary requires result.path=")
 		}
 		if !hasSummary {
-			return errors.New("result.path requires result.summary=")
+			resultSummary = resultPath
 		}
 		if err := writeResultEvent(dir, opts, id, resultSummary, resultPath); err != nil {
 			return err
@@ -436,13 +280,13 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 			return fmt.Errorf("unknown task id %s", id)
 		}
 
-		// Epics cannot have state or claim
-		if isEpic(task) {
+		// Containers cannot have state or claim (they complete implicitly)
+		if isContainer(task, graph) {
 			if _, hasState := updates["state"]; hasState {
-				return errors.New("epics do not have state")
+				return errors.New("containers do not have state")
 			}
 			if _, hasClaim := updates["claim"]; hasClaim {
-				return errors.New("epics cannot be claimed")
+				return errors.New("containers cannot be claimed")
 			}
 		}
 
@@ -483,7 +327,7 @@ func buildSetEvents(id string, task *Task, updates map[string]string, agentID st
 	}
 
 	// Handle implicit claim: if transitioning to doing/error and unclaimed, and no claim provided, use session identity
-	if !isEpic(task) && task.ClaimedBy == "" {
+	if task.ClaimedBy == "" {
 		newState, hasState := remainingUpdates["state"]
 		_, hasClaim := remainingUpdates["claim"]
 		if hasState && (newState == stateDoing || newState == stateError) && !hasClaim {
@@ -531,8 +375,10 @@ func buildSetEvents(id string, task *Task, updates map[string]string, agentID st
 
 	// Handle epic assignment
 	if epicID, ok := remainingUpdates["epic"]; ok {
-		if isEpic(task) {
-			return nil, nil, errors.New("epics cannot be assigned to other epics")
+		// task.IsEpic is set by applyContainerDerivation during graph load;
+		// buildSetEvents has no graph access so we rely on the field directly here.
+		if task.IsEpic {
+			return nil, nil, errors.New("containers cannot be assigned to other containers")
 		}
 		event, err := newEvent("epic", now, EpicAssignEvent{
 			ID:     id,
@@ -551,30 +397,28 @@ func buildSetEvents(id string, task *Task, updates map[string]string, agentID st
 	claimValue := ""
 	if cv, ok := remainingUpdates["claim"]; ok {
 		claimValue = cv
-		if !isEpic(task) {
-			if claimValue == "" {
-				// Clear claim
-				event, err := newEvent("unclaim", now, UnclaimEvent{
-					ID: id,
-					TS: formatTime(now),
-				})
-				if err != nil {
-					return nil, nil, err
-				}
-				events = append(events, event)
-			} else {
-				event, err := newEvent("claim", now, ClaimEvent{
-					ID:      id,
-					AgentID: claimValue,
-					TS:      formatTime(now),
-				})
-				if err != nil {
-					return nil, nil, err
-				}
-				events = append(events, event)
+		if claimValue == "" {
+			// Clear claim
+			event, err := newEvent("unclaim", now, UnclaimEvent{
+				ID: id,
+				TS: formatTime(now),
+			})
+			if err != nil {
+				return nil, nil, err
 			}
-			claimWasSet = true
+			events = append(events, event)
+		} else {
+			event, err := newEvent("claim", now, ClaimEvent{
+				ID:      id,
+				AgentID: claimValue,
+				TS:      formatTime(now),
+			})
+			if err != nil {
+				return nil, nil, err
+			}
+			events = append(events, event)
 		}
+		claimWasSet = true
 		delete(remainingUpdates, "claim")
 	}
 
@@ -711,22 +555,10 @@ func RunSequence(args []string, opts GlobalOptions) error {
 func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	epicID := listOpts.EpicID
 	readyOnly := listOpts.ReadyOnly
-	showEpics := listOpts.ShowEpics
 	showAll := listOpts.ShowAll
 
 	if readyOnly && showAll {
 		return errors.New("conflicting flags: --ready and --all")
-	}
-	if showEpics {
-		if readyOnly {
-			return errors.New("conflicting flags: --epics and --ready")
-		}
-		if showAll {
-			return errors.New("conflicting flags: --epics and --all")
-		}
-		if epicID != "" {
-			return errors.New("conflicting flags: --epics and --epic")
-		}
 	}
 
 	dir, err := ergoDir(opts)
@@ -744,10 +576,10 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	// We need all tasks for tree view hierarchy and JSON output
 	tasks := listTasks(graph, epicID, readyOnly)
 
-	// Filter out epics from tasks list (tasks should only be tasks, not epics)
+	// Filter out containers from tasks list (default listing shows leaf tasks)
 	var tasksOnly []*Task
 	for _, task := range tasks {
-		if !isEpic(task) {
+		if !isContainer(task, graph) {
 			tasksOnly = append(tasksOnly, task)
 		}
 	}
@@ -765,53 +597,18 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 		tasksOnly = active
 	}
 
-	// Handle epics if --epics flag is set
-	var epics []*Task
-	if showEpics {
-		for _, task := range graph.Tasks {
-			if isEpic(task) && (epicID == "" || task.EpicID == epicID) {
-				epics = append(epics, task)
-			}
-		}
-		// Sort epics by creation time
-		sortByCreatedAt(epics)
-	}
-
 	if opts.JSON {
-		// JSON output includes all tasks (agents filter themselves)
-		// Return bare array for simplicity and consistency with show --json
-		if showEpics {
-			// When filtering to epics only, return just the epics array
-			return writeJSON(os.Stdout, buildTaskListItems(epics, graph, repoDir))
-		}
 		// Default: return array of tasks
 		return writeJSON(os.Stdout, buildTaskListItems(tasksOnly, graph, repoDir))
 	}
 
-	if !opts.Quiet {
-		fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json list' instead for structured output.")
-	}
-
-	// If --epics only, show simple epic list instead of tree
-	if showEpics && epicID == "" && !readyOnly {
-		useColor := stdoutIsTTY()
-		termWidth := getTerminalWidth()
-		for _, epic := range epics {
-			icon := stateIcon(epic, false)
-			line := formatTreeLine("", "", false, icon, epic.ID, epic.Title, nil, "", epic, false, useColor, termWidth)
-			fmt.Fprintln(os.Stdout, line)
-		}
-		if len(epics) == 0 {
-			fmt.Println("No epics.")
-		}
-		return nil
-	}
+	fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json list' instead for structured output.")
 
 	// Tree view (human-friendly hierarchical output)
 	if epicID != "" {
 		epic := graph.Tasks[epicID]
-		if epic == nil || !epic.IsEpic {
-			return fmt.Errorf("no such epic: %s", epicID)
+		if epic == nil || !isContainer(epic, graph) {
+			return fmt.Errorf("no such container: %s", epicID)
 		}
 	}
 
@@ -819,13 +616,10 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	roots := buildListRoots(graph, showAll, readyOnly, epicID)
 
 	printSummary := func(stats taskStats, buckets []summaryBucket, addSpacing bool) {
-		if opts.Quiet {
-			return
-		}
 		renderSummary(os.Stdout, stats, useColor, buckets, addSpacing)
 	}
 
-	allTasks := collectNonEpicTasks(graph)
+	allTasks := collectNonContainerTasks(graph)
 	activeTasks := filterActiveTasks(allTasks)
 	readyTasks := filterReadyTasks(allTasks, graph)
 
@@ -913,17 +707,17 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 func collectEpicChildren(epicID string, graph *Graph) []*Task {
 	var children []*Task
 	for _, t := range graph.Tasks {
-		if !isEpic(t) && t.EpicID == epicID {
+		if t.EpicID == epicID {
 			children = append(children, t)
 		}
 	}
 	return topoSortTasks(children, graph)
 }
 
-func collectNonEpicTasks(graph *Graph) []*Task {
+func collectNonContainerTasks(graph *Graph) []*Task {
 	var tasks []*Task
 	for _, task := range graph.Tasks {
-		if !isEpic(task) {
+		if !isContainer(task, graph) {
 			tasks = append(tasks, task)
 		}
 	}
@@ -978,7 +772,6 @@ type frontMatterField struct {
 // printTaskDetails prints task show output as a Markdown document.
 func printTaskDetails(task *Task, repoDir string) {
 	writeShowFrontMatter([]frontMatterField{
-		{key: "kind", value: "task"},
 		{key: "id", value: task.ID},
 		{key: "title", value: task.Title},
 		{key: "state", value: task.State},
@@ -999,7 +792,7 @@ func printTaskDetails(task *Task, repoDir string) {
 // printEpicDetails renders epic show output as a Markdown document.
 func printEpicDetails(epic *Task, children []*Task, repoDir string) {
 	writeShowFrontMatter([]frontMatterField{
-		{key: "kind", value: "epic"},
+		{key: "container", value: "true"},
 		{key: "id", value: epic.ID},
 		{key: "title", value: epic.Title},
 		{key: "created_at", value: formatTime(epic.CreatedAt)},
@@ -1074,12 +867,9 @@ func printTaskResultsMarkdown(results []Result, repoDir string, heading string) 
 	fmt.Println()
 }
 
-func RunShow(id string, short bool, opts GlobalOptions) error {
+func RunShow(id string, opts GlobalOptions) error {
 	if id == "" {
-		return errors.New("usage: ergo show <id> [--short] [--json]")
-	}
-	if short && opts.JSON {
-		return errors.New("conflicting flags: --short and --json")
+		return errors.New("usage: ergo show <id> [--json]")
 	}
 	dir, err := ergoDir(opts)
 	if err != nil {
@@ -1098,45 +888,31 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 		return fmt.Errorf("unknown task id %s", id)
 	}
 
-	// Collect child tasks if this is an epic
+	// Collect child tasks if this is a container
 	var childTasks []*Task
-	if isEpic(task) {
+	if isContainer(task, graph) {
 		childTasks = collectEpicChildren(id, graph)
 	}
 
 	if opts.JSON {
 		output := buildTaskShowOutput(task, graph.Meta[id], repoDir)
 
-		// If it's an epic with children, wrap with children
-		if isEpic(task) && len(childTasks) > 0 {
+		// If it's a container with children, wrap with children
+		if isContainer(task, graph) && len(childTasks) > 0 {
 			childOutputs := make([]taskShowOutput, len(childTasks))
 			for i, child := range childTasks {
 				childOutputs[i] = buildTaskShowOutput(child, graph.Meta[child.ID], repoDir)
 			}
 			return writeJSON(os.Stdout, map[string]interface{}{
-				"epic":     output,
-				"children": childOutputs,
+				"container": output,
+				"children":  childOutputs,
 			})
 		}
 		return writeJSON(os.Stdout, output)
 	}
-	if !opts.Quiet {
-		fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json show <id>' instead for structured output.")
-	}
-	if short {
-		epic := task.EpicID
-		if epic == "" {
-			epic = "-"
-		}
-		claimed := task.ClaimedBy
-		if claimed == "" {
-			claimed = "-"
-		}
-		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", task.ID, task.State, epic, claimed, task.Title)
-		return nil
-	}
+	fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json show <id>' instead for structured output.")
 
-	if isEpic(task) {
+	if isContainer(task, graph) {
 		printEpicDetails(task, childTasks, repoDir)
 		return nil
 	}
@@ -1235,7 +1011,7 @@ func printPruneEmpty(useColor bool) {
 
 func printPrunePreview(items []PruneItem, useColor bool, termWidth int) {
 	stats := computePruneStats(items)
-	total := stats.done + stats.canceled + stats.epics
+	total := stats.done + stats.canceled + stats.containers
 
 	// Header - tells you exactly what this is
 	if useColor {
@@ -1268,7 +1044,7 @@ func printPrunePreview(items []PruneItem, useColor bool, termWidth int) {
 
 func printPruneApplied(items []PruneItem, useColor bool) {
 	stats := computePruneStats(items)
-	total := stats.done + stats.canceled + stats.epics
+	total := stats.done + stats.canceled + stats.containers
 
 	// Header
 	if useColor {
@@ -1285,16 +1061,16 @@ func printPruneApplied(items []PruneItem, useColor bool) {
 }
 
 type pruneStats struct {
-	done     int
-	canceled int
-	epics    int
+	done       int
+	canceled   int
+	containers int
 }
 
 func computePruneStats(items []PruneItem) pruneStats {
 	var stats pruneStats
 	for _, item := range items {
-		if item.IsEpic {
-			stats.epics++
+		if item.IsContainer {
+			stats.containers++
 		} else if item.State == stateDone {
 			stats.done++
 		} else if item.State == stateCanceled {
@@ -1327,10 +1103,10 @@ func printPruneStats(stats pruneStats, useColor bool) {
 		}
 		fmt.Printf(" %d canceled tasks\n", stats.canceled)
 	}
-	if stats.epics > 0 {
+	if stats.containers > 0 {
 		fmt.Print("  ")
 		fmt.Print(iconEpic)
-		fmt.Printf("  %d empty epics\n", stats.epics)
+		fmt.Printf("  %d empty containers\n", stats.containers)
 	}
 }
 
@@ -1404,7 +1180,7 @@ func printPruneItemList(items []PruneItem, useColor bool, termWidth int) {
 }
 
 func pruneItemIcon(item PruneItem) string {
-	if item.IsEpic {
+	if item.IsContainer {
 		return iconEpic
 	}
 	switch item.State {
@@ -1418,7 +1194,7 @@ func pruneItemIcon(item PruneItem) string {
 }
 
 func pruneItemColor(item PruneItem) string {
-	if item.IsEpic {
+	if item.IsContainer {
 		return ""
 	}
 	switch item.State {
@@ -1448,7 +1224,6 @@ func RunWhere(opts GlobalOptions) error {
 		return err
 	}
 	repoDir := filepath.Dir(ergoDir)
-	debugf(opts, "where start=%s ergo_dir=%s repo_dir=%s", start, ergoDir, repoDir)
 	if opts.JSON {
 		return writeJSON(os.Stdout, whereOutput{
 			ErgoDir: ergoDir,

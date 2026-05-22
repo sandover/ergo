@@ -7,7 +7,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo)](https://goreportcard.com/report/github.com/sandover/ergo)
 [![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo.svg)](https://pkg.go.dev/github.com/sandover/ergo)
 
-`ergo` gives your AI agents a better way to plan -- by storing epics & tasks in your repo, in a compact, git-friendly format.
+`ergo` gives your AI agents a better way to plan -- by storing task graphs in your repo, in a compact, git-friendly format.
 
 Plans are persistent across agent sessions, they are easy for humans to read and reason about, and they can be shared by different agents (from different model providers).
 
@@ -16,7 +16,7 @@ In software projects, even with AI, it really helps to clearly separate WHAT you
 
 Coding agents' own planning modes tend to result in a mess of markdown files that blur the distinction between the spec and the backlog and become hard to manage.
 
-`ergo` is a tool your AI agent uses to write out a backlog of tasks. Then during implementation, your agent claims tasks, works on them, and marks them done. Tasks can be sequenced (A must happen before B), and they can be grouped into epics. 
+`ergo` is a tool your AI agent uses to write out a backlog of tasks. Then during implementation, your agent claims tasks, works on them, and marks them done. Tasks can be sequenced (A must happen before B), and they can be grouped into containers.
 
 The task collection is stored in the repo as JSONL file, not inside the agent or its harness. You can keep the plan in git. The plan is agnostic about which agent you use to work on it. You could even use more than one agent at the same time -- ergo is built for concurrency.
 
@@ -28,7 +28,7 @@ Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler, soun
 - **Fast:** 5-15x faster than beads, especially for large projects.
 - **Tasks live in the repo:** state lives in `.ergo/` as append-only JSONL.
 - **Safe for multiple agents:** a plain old file lock serializes writes
-- **Unixy:** text or JSON on stdin and stdout.
+- **Unixy:** JSON arguments, stdin bodies, and machine-readable JSON output.
 
 ---
 
@@ -102,19 +102,30 @@ Run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
 ### Planning
 
 ```bash
-# Create an epic
-ergo new epic --title "User login" --body "Let users sign in with email+pw."
+# Create a feature from a markdown plan file
+cat > tasks.md <<'EOF'
+# Password hashing
+Use bcrypt with cost=12.
+---
+# Session tokens
+1h access, 24h refresh.
+EOF
+
+ergo --json plan --file tasks.md '{"title":"User login"}'
+# => creates container ABCDEF with children GHIJKL, MNOPQR
+
+# Add ordering explicitly
+ergo sequence GHIJKL MNOPQR
+
+# Or incrementally: create a task, then add children
+ergo new task '{"title":"User login"}'
 # => ABCDEF
 
-# Add tasks to it
-ergo new task --title "Password hashing" --body "Use bcrypt with cost=12" --epic ABCDEF
+printf '%s\n' 'Use bcrypt with cost=12.' | ergo new task '{"title":"Password hashing","epic":"ABCDEF"}'
 # => GHIJKL
 
-ergo new task --title "Session tokens" --body "1h access, 24h refresh" --epic ABCDEF
+printf '%s\n' '1h access, 24h refresh.' | ergo new task '{"title":"Session tokens","epic":"ABCDEF"}'
 # => MNOPQR
-
-# Enforce order
-ergo sequence GHIJKL MNOPQR
 ```
 
 ### Execution
@@ -127,10 +138,10 @@ ergo --json list --ready
 ergo claim GHIJKL --agent sonnet@hostname
 
 # Mark it done
-ergo set GHIJKL --state done
+ergo set GHIJKL '{"state":"done"}'
 ```
 
-> **Tip:** For multi-line task bodies or automation, pipe JSON to stdin. See `ergo quickstart` for patterns.
+> **Tip:** Put metadata in the JSON argument and pipe markdown bodies on stdin. Use `plan --file` when you want to seed a container from a markdown task list.
 
 ---
 

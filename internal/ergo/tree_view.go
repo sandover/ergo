@@ -53,7 +53,7 @@ const (
 	iconBlocked  = "·"
 	iconCanceled = "✗"
 	iconError    = "⚠"
-	iconEpic     = "Ⓔ"
+	iconEpic     = "◈"
 )
 
 // treeNode represents a task or epic in the tree structure.
@@ -658,19 +658,17 @@ func stateIcon(task *Task, isReady bool) string {
 func getBlockers(task *Task, graph *Graph) []string {
 	var blockers []string
 
-	// Check task deps
+	// Check task's own direct deps
 	for depID := range graph.Deps[task.ID] {
-		dep := graph.Tasks[depID]
-		if dep != nil && dep.State != stateDone && dep.State != stateCanceled {
+		if !isDepComplete(depID, graph) {
 			blockers = append(blockers, depID)
 		}
 	}
 
-	// Check epic deps (if task is in an epic)
+	// Inherited blocking: if the task's container has external deps, propagate them
 	if task.EpicID != "" {
 		for epicDepID := range graph.Deps[task.EpicID] {
-			epicDep := graph.Tasks[epicDepID]
-			if epicDep != nil && epicDep.IsEpic && !isEpicComplete(epicDepID, graph) {
+			if !isDepComplete(epicDepID, graph) {
 				blockers = append(blockers, epicDepID)
 			}
 		}
@@ -747,7 +745,7 @@ func truncateToWidth(s string, maxWidth int) string {
 }
 
 // formatCollapsedEpicLine formats a done epic as a single collapsed line.
-// Format: ├ Ⓔ  ✓ Epic title [3 tasks]                                    EPICID
+// Format: ├ ◈  ✓ Epic title [3 tasks]                                    EPICID
 func formatCollapsedEpicLine(prefix, connector string, showConnector bool, id, title, countStr string, useColor bool, termWidth int) string {
 	// Layout contract: ids are right-aligned at idStart.
 	minGap := idMinGap
