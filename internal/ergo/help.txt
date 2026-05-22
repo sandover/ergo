@@ -1,77 +1,68 @@
 {{BOLD}}ergo{{RESET}} — fast, local task graph for AI agents. humans welcome.
 
-Append-only task graph stored in `.ergo/` as JSONL. Tasks can depend on each other.
-A task with children is a container. Leaf tasks carry state, claim, and results.
+  Tasks have states (todo → doing → done/blocked/error/canceled) and can depend on
+  each other. A task is "ready" when all its dependencies are done. A task with
+  children is an epic (no state of its own; completes when children finish).
 
 {{HEADER}}WORKFLOW{{RESET}}
 
+  # Create a task (body is piped on stdin)
   printf '%s\n' '## Goal' '- Add rate limiting' | ergo --json new task '{"title":"Rate limiter"}'
   → {"id":"ABCDEF","state":"todo",...}
 
+  # Claim next ready task
   ergo --json claim --agent sonnet@myhost
   → {"id":"ABCDEF","state":"doing","claim":"sonnet@myhost",...}
 
+  # Mark done with result
   ergo --json set ABCDEF '{"state":"done","result":"src/ratelimit.ts"}'
   → {"id":"ABCDEF","state":"done",...}
 
 {{HEADER}}COMMANDS{{RESET}}
-  init [dir]                              create .ergo/ in dir (default: .)
   new task [json]                         create one task (stdin = body when piped)
   set <id> [json]                         update one task (stdin = replacement body when piped)
-  plan --file <path> [json]               create one container and child tasks from markdown
-  show <id> [--short]                     show one task (Markdown default; --json for agents)
+  show <id>                               task detail (Markdown default; --json for agents)
   list [--epic <id>] [--ready] [--all]    list tasks; default omits done/canceled
-  claim [<id>] --agent <identity>         claim specific task or oldest ready task
+  claim [<id>] --agent <identity>         claim next ready task (or specific ID)
   sequence <A> <B> [<C>...]               enforce order: A before B before C
   sequence rm <A> <B>                     remove the edge where B depends on A
+  plan --file <path> [json]               create epic + children from markdown file
+  init [dir]                              create .ergo/ in dir (default: .)
+  where                                   print active .ergo directory path
   prune [--yes]                           remove done/canceled tasks (dry-run default)
   compact                                 rewrite log to current state
-  where                                   print active .ergo directory path
   quickstart                              complete reference manual
   version                                 print version
 
 {{HEADER}}GLOBAL FLAGS{{RESET}}
-  --dir <path>                            discovery start (or .ergo path)
+  --json                                  structured output
   --agent <identity>                      caller identity (suggested: model@host)
-  --json                                  JSON output
+  --dir <path>                            discovery start (or .ergo path)
   -h, --help                              show help
   -V, --version                           print version
 
-{{HEADER}}JSON ARGUMENTS FOR new/set{{RESET}}
+{{HEADER}}TASK FIELDS (JSON for new/set){{RESET}}
   Unknown keys are rejected (with suggestions for close matches).
   `new task` requires `title`. `set` accepts any subset.
 
   title           task title
   epic            parent task ID ("" to unassign)
   state           todo|doing|done|blocked|canceled|error
-  claim           agent identity
+  claim           agent identity (implies state=doing)
   result          file path to attach as a result
 
-Stdin behavior:
-  - If stdin is piped to `new task`, it becomes the task body.
-  - If stdin is piped to `set`, it replaces the task body.
-  - Empty piped stdin is allowed: it creates an empty body on `new task` and clears the body on `set`.
-  - When stdin is a TTY, the body is left unchanged unless you pipe one in.
+  Stdin: piped input becomes the task body (new) or replaces it (set).
+  Empty pipe = empty/cleared body. TTY = body unchanged.
 
-{{HEADER}}PLAN FILE FORMAT{{RESET}}
+{{HEADER}}PLAN{{RESET}}
   ergo --json plan --file tasks.md '{"title":"Auth system"}'
 
-  tasks.md:
-    # Schema
-    Create the tables and indexes.
-    ---
-    # Endpoints
-    Add signup and login handlers.
-
-  - Split chunks on a line that is exactly `---`.
-  - Each chunk must start with `# Title`.
-  - The heading becomes the child title; the rest of the chunk becomes the body.
-  - The command JSON must include the top-level container `title`.
-  - File order does not imply dependencies. Use `sequence` explicitly.
+  Markdown file: chunks separated by `---`. Each chunk = `# Title` + body.
+  File order does not imply dependencies — use `sequence` afterwards.
 
 {{HEADER}}RULES{{RESET}}
   1. Never leave a task in `doing`. Finish with `done`, `blocked`, `error`, or `canceled`.
-  2. Claim and `doing` move together. Finishing (`done` or `canceled`) clears the claim.
-  3. Containers cannot hold state, claim, or results. Only leaf tasks can.
-  4. One level of nesting only: a child cannot itself become a container.
-  5. Dependencies are allowed between any two non-ancestor tasks. Cycles are forbidden.
+  2. `doing` and `error` require a claim. `done`/`canceled` clear it. `blocked` may keep it.
+  3. Epics cannot have state, claim, or results — only leaf tasks can.
+  4. One level of nesting: a child cannot itself be an epic.
+  5. Dependencies: any non-ancestor tasks; cycles are forbidden.

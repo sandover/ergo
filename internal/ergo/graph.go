@@ -531,8 +531,8 @@ func compactEvents(graph *Graph) ([]Event, error) {
 	return events, nil
 }
 
-func readyTasks(graph *Graph, epicID string) []*Task {
-	tasks := listTasks(graph, epicID, true)
+func readyTasks(graph *Graph) []*Task {
+	tasks := listTasks(graph, "", true)
 	if len(tasks) == 0 {
 		return nil
 	}

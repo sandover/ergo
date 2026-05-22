@@ -23,9 +23,6 @@ Only actionable work:
 Full detail for one task or container:
   {{CMD}}ergo --json show ABCDEF{{RESET}}
 
-Short human summary for one task:
-  {{CMD}}ergo show ABCDEF --short{{RESET}}
-
 Use `show` before mutating when you need the body, child tasks, or dependencies.
 
 {{HEADER}}3. AGENT LOOP{{RESET}}
@@ -37,9 +34,6 @@ Claim oldest ready work:
 
 Claim a specific task:
   {{CMD}}ergo --json claim ABCDEF --agent sonnet@agent-host{{RESET}}
-
-Claim inside one container:
-  {{CMD}}ergo --json claim --agent sonnet@agent-host --epic ABCDEF{{RESET}}
 
 Finish the task. Never leave it in `doing`.
 

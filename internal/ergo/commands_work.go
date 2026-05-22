@@ -147,7 +147,7 @@ func RunClaim(id string, opts GlobalOptions) error {
 	return nil
 }
 
-func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
+func RunClaimOldestReady(opts GlobalOptions) error {
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
@@ -171,7 +171,7 @@ func RunClaimOldestReady(epicID string, opts GlobalOptions) error {
 			return err
 		}
 
-		ready := readyTasks(graph, epicID)
+		ready := readyTasks(graph)
 		if len(ready) == 0 {
 			return errors.New("no ready tasks")
 		}
@@ -867,12 +867,9 @@ func printTaskResultsMarkdown(results []Result, repoDir string, heading string) 
 	fmt.Println()
 }
 
-func RunShow(id string, short bool, opts GlobalOptions) error {
+func RunShow(id string, opts GlobalOptions) error {
 	if id == "" {
-		return errors.New("usage: ergo show <id> [--short] [--json]")
-	}
-	if short && opts.JSON {
-		return errors.New("conflicting flags: --short and --json")
+		return errors.New("usage: ergo show <id> [--json]")
 	}
 	dir, err := ergoDir(opts)
 	if err != nil {
@@ -914,18 +911,6 @@ func RunShow(id string, short bool, opts GlobalOptions) error {
 		return writeJSON(os.Stdout, output)
 	}
 	fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json show <id>' instead for structured output.")
-	if short {
-		epic := task.EpicID
-		if epic == "" {
-			epic = "-"
-		}
-		claimed := task.ClaimedBy
-		if claimed == "" {
-			claimed = "-"
-		}
-		fmt.Printf("%s\t%s\t%s\t%s\t%s\n", task.ID, task.State, epic, claimed, task.Title)
-		return nil
-	}
 
 	if isContainer(task, graph) {
 		printEpicDetails(task, childTasks, repoDir)
