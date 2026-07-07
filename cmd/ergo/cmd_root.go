@@ -8,6 +8,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/sandover/ergo/internal/ergo"
 	"github.com/spf13/cobra"
@@ -35,6 +37,11 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&globalOpts.StartDir, "dir", "", "Run in a specific directory")
 	rootCmd.PersistentFlags().StringVar(&globalOpts.AgentID, "agent", "", "Agent ID for claims (required for claim/implicit set; suggested: model@host)")
 	rootCmd.PersistentFlags().BoolVar(&globalOpts.JSON, "json", false, "Output JSON")
+	rootCmd.PersistentFlags().DurationVar(&globalOpts.LockTimeout, "lock-timeout", 30*time.Second, "How long to wait for the .ergo lock (0 = fail fast)")
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		globalOpts.LockTimeoutSet = cmd.Root().PersistentFlags().Changed("lock-timeout")
+		globalOpts.Command = strings.Join(os.Args, " ")
+	}
 
 	// Set the version to enable --version flag
 	rootCmd.Version = version

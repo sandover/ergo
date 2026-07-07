@@ -143,9 +143,12 @@ func validateDepSelf(from, to string) error {
 }
 
 type GlobalOptions struct {
-	StartDir string
-	AgentID  string
-	JSON     bool
+	StartDir       string
+	AgentID        string
+	JSON           bool
+	LockTimeout    time.Duration
+	LockTimeoutSet bool
+	Command        string
 }
 
 type Task struct {

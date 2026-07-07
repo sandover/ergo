@@ -161,6 +161,24 @@ func countEventLines(t *testing.T, dir string) int {
 	return strings.Count(trimmed, "\n") + 1
 }
 
+func assertEventLogJSONL(t *testing.T, dir string) {
+	t.Helper()
+	path := getEventFilePath(dir)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read event log: %v", err)
+	}
+	for i, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var value map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &value); err != nil {
+			t.Fatalf("event log line %d is not valid JSON: %v\n%s", i+1, err, line)
+		}
+	}
+}
+
 func writePlanFile(t *testing.T, dir string, content string) string {
 	t.Helper()
 	file, err := os.CreateTemp(dir, "plan-*.md")
@@ -1214,11 +1232,14 @@ func TestPrune_LockBusy(t *testing.T) {
 	}
 
 	lockPath := filepath.Join(dir, ".ergo", "lock")
-	lockFile, err := os.OpenFile(lockPath, os.O_RDONLY, 0)
+	lockFile, err := os.OpenFile(lockPath, os.O_RDWR, 0)
 	if err != nil {
 		t.Fatalf("open lock file: %v", err)
 	}
 	defer lockFile.Close()
+	if _, err := lockFile.WriteString(`{"pid":12345,"command":"ergo prune --yes","agent":"agent-a","started_at":"2026-07-07T00:00:00Z","mode":"exclusive"}` + "\n"); err != nil {
+		t.Fatalf("write holder metadata: %v", err)
+	}
 	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		t.Fatalf("failed to acquire lock: %v", err)
 	}
@@ -1229,14 +1250,120 @@ func TestPrune_LockBusy(t *testing.T) {
 	}()
 
 	before := countEventLines(t, dir)
-	_, stderr, code := runErgo(t, dir, "", "prune", "--yes")
+	_, stderr, code := runErgo(t, dir, "", "--lock-timeout", "0", "prune", "--yes")
 	if code == 0 || !strings.Contains(stderr, "lock busy") {
 		t.Fatalf("expected lock busy error, got code=%d stderr=%q", code, stderr)
+	}
+	if !strings.Contains(stderr, "pid=12345") || !strings.Contains(stderr, "agent=agent-a") {
+		t.Fatalf("expected holder metadata in stderr, got %q", stderr)
 	}
 	after := countEventLines(t, dir)
 	if before != after {
 		t.Fatalf("expected no writes on lock busy (lines %d -> %d)", before, after)
 	}
+}
+
+func TestLockWaitsThenSucceeds(t *testing.T) {
+	dir := setupErgo(t)
+
+	stdout, _, code := runNewTask(t, dir, `{"title":"Task A"}`)
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+
+	lockPath := filepath.Join(dir, ".ergo", "lock")
+	lockFile, err := os.OpenFile(lockPath, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatalf("open lock file: %v", err)
+	}
+	defer lockFile.Close()
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		t.Fatalf("failed to acquire lock: %v", err)
+	}
+
+	type result struct {
+		stdout string
+		stderr string
+		code   int
+	}
+	done := make(chan result, 1)
+	go func() {
+		out, errOut, exit := runErgo(t, dir, "", "--lock-timeout", "2s", "claim", "--agent", "agent-wait")
+		done <- result{stdout: out, stderr: errOut, code: exit}
+	}()
+
+	select {
+	case r := <-done:
+		t.Fatalf("claim completed while lock was still held: code=%d stdout=%q stderr=%q", r.code, r.stdout, r.stderr)
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN); err != nil {
+		t.Fatalf("failed to release lock: %v", err)
+	}
+
+	select {
+	case r := <-done:
+		if r.code != 0 {
+			t.Fatalf("claim after unlock failed: code=%d stdout=%q stderr=%q", r.code, r.stdout, r.stderr)
+		}
+		if !strings.Contains(r.stdout, taskID) || strings.Contains(r.stderr, "lock busy") {
+			t.Fatalf("unexpected claim result after unlock: stdout=%q stderr=%q", r.stdout, r.stderr)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("claim did not complete after lock release")
+	}
+}
+
+func TestConcurrentMixedCommandsKeepLogValid(t *testing.T) {
+	dir := setupErgo(t)
+
+	var ids []string
+	for i := 0; i < 4; i++ {
+		stdout, _, code := runNewTask(t, dir, fmt.Sprintf(`{"title":"Task %d"}`, i))
+		if code != 0 {
+			t.Fatalf("new task %d failed: exit %d", i, code)
+		}
+		ids = append(ids, strings.TrimSpace(stdout))
+	}
+
+	type result struct {
+		name   string
+		stdout string
+		stderr string
+		code   int
+	}
+	results := make(chan result, 16)
+	for i, id := range ids {
+		go func(i int, id string) {
+			out, errOut, exit := runSetTask(t, dir, id, `{"state":"done"}`)
+			results <- result{name: fmt.Sprintf("set-%d", i), stdout: out, stderr: errOut, code: exit}
+		}(i, id)
+		go func(i int, id string) {
+			out, errOut, exit := runErgo(t, dir, "", "show", id, "--json")
+			results <- result{name: fmt.Sprintf("show-%d", i), stdout: out, stderr: errOut, code: exit}
+		}(i, id)
+		go func(i int) {
+			out, errOut, exit := runNewTask(t, dir, fmt.Sprintf(`{"title":"Concurrent %d"}`, i))
+			results <- result{name: fmt.Sprintf("new-%d", i), stdout: out, stderr: errOut, code: exit}
+		}(i)
+		go func(i int) {
+			out, errOut, exit := runErgo(t, dir, "", "list", "--json")
+			results <- result{name: fmt.Sprintf("list-%d", i), stdout: out, stderr: errOut, code: exit}
+		}(i)
+	}
+
+	for i := 0; i < 16; i++ {
+		r := <-results
+		if r.code != 0 {
+			t.Fatalf("%s failed: code=%d stdout=%q stderr=%q", r.name, r.code, r.stdout, r.stderr)
+		}
+		if strings.Contains(r.stderr, "lock busy") {
+			t.Fatalf("%s unexpectedly hit lock busy: stderr=%q", r.name, r.stderr)
+		}
+	}
+	assertEventLogJSONL(t, dir)
 }
 
 func TestPrune_ConcurrentRuns(t *testing.T) {
@@ -2199,17 +2326,17 @@ Test body
 
 func TestPlan_FailuresReturnErrorsAndDoNotWritePartialState(t *testing.T) {
 	tests := []struct {
-		name          string
-		planContent   string
-		inlineJSON    string
-		jsonOutput    bool
-		expectedError string
+		name           string
+		planContent    string
+		inlineJSON     string
+		jsonOutput     bool
+		expectedError  string
 		expectedStderr string
 	}{
 		{
-			name:          "duplicate task title",
-			planContent:   "# A\nfirst\n---\n# A\nsecond\n",
-			inlineJSON:    `{"title":"Epic"}`,
+			name:           "duplicate task title",
+			planContent:    "# A\nfirst\n---\n# A\nsecond\n",
+			inlineJSON:     `{"title":"Epic"}`,
 			expectedStderr: "duplicate task title",
 		},
 		{

@@ -28,7 +28,7 @@ This design is intentionally “boring”:
 
 - `.ergo/plans.jsonl`: append-only event log (source of truth).
   - For backwards compatibility, `.ergo/events.jsonl` is also supported if it already exists.
-- `.ergo/lock`: advisory lock file used to serialize writes.
+- `.ergo/lock`: advisory lock file used to serialize commands and hold best-effort writer diagnostics while locked.
 
 ### Event log invariants
 
@@ -39,11 +39,19 @@ This design is intentionally “boring”:
 
 ### Locking and concurrency
 
-All write operations are performed under an exclusive `flock` on `.ergo/lock`.
-The lock is intentionally non-blocking (fail-fast): callers can retry on “lock busy”.
+Commands that mutate or read the task graph acquire an exclusive `flock` on `.ergo/lock`.
+Mutations validate and append their full event batch while holding that lock.
+`list` and `show` also hold the lock while replaying the log, so they read a coherent snapshot.
+
+Lock acquisition waits up to `--lock-timeout` (30s by default).
+`--lock-timeout 0` is the explicit fail-fast mode for hooks and scripts.
+When a command times out, the error includes best-effort holder metadata from `.ergo/lock` when available.
+
+The lock file must not be deleted to recover from contention.
+`flock` releases when the owning process exits; deleting the file can split processes across different inodes.
 
 This yields two key properties:
-- **No interleaved writes**: events remain line-delimited JSON objects.
+- **No interleaved command batches**: each command emits its logical event set together.
 - **Race-safe claiming**: “claim oldest ready” selects and writes under the same lock, so only one process wins.
 
 ## Core domain model

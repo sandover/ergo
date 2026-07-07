@@ -38,6 +38,7 @@
   --json                                  structured output
   --agent <identity>                      caller identity (suggested: model@host)
   --dir <path>                            discovery start (or .ergo path)
+  --lock-timeout <duration>               wait for .ergo lock (default 30s; 0 = fail fast)
   -h, --help                              show help
   -V, --version                           print version
 

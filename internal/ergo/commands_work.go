@@ -67,15 +67,12 @@ func RunSet(id string, args []string, opts GlobalOptions) error {
 	}
 
 	agentID := opts.AgentID
-	if err := applySetUpdates(dir, opts, id, updates, agentID, opts.JSON); err != nil {
+	graph, err := applySetUpdates(dir, opts, id, updates, agentID, opts.JSON)
+	if err != nil {
 		return err
 	}
 
 	if opts.JSON {
-		graph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
 		task := graph.Tasks[id]
 		if task == nil {
 			return fmt.Errorf("unknown task id %s", id)
@@ -111,11 +108,7 @@ func RunClaim(id string, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	if err := applySetUpdates(dir, opts, id, updates, agentID, true); err != nil {
-		return err
-	}
-
-	graph, err := loadGraph(dir)
+	graph, err := applySetUpdates(dir, opts, id, updates, agentID, true)
 	if err != nil {
 		return err
 	}
@@ -165,7 +158,7 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 		return errors.New("claim requires --agent")
 	}
 
-	err = withLock(lockPath, syscall.LOCK_EX, func() error {
+	err = withLock(lockPath, syscall.LOCK_EX, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -238,35 +231,13 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 	fmt.Println(reminder)
 	return nil
 }
-func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, agentID string, quiet bool) error {
+func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, agentID string, quiet bool) (*Graph, error) {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
+	repoDir := filepath.Dir(dir)
 
-	// Handle result.path (+ optional result.summary) before the main mutation lock.
-	resultPath, hasPath := updates["result.path"]
-	resultSummary, hasSummary := updates["result.summary"]
-	if hasPath || hasSummary {
-		if !hasPath {
-			return errors.New("result.summary requires result.path=")
-		}
-		if !hasSummary {
-			resultSummary = resultPath
-		}
-		if err := writeResultEvent(dir, opts, id, resultSummary, resultPath); err != nil {
-			return err
-		}
-		delete(updates, "result.path")
-		delete(updates, "result.summary")
-		// If no other updates, we're done
-		if len(updates) == 0 {
-			if !quiet {
-				fmt.Println(id)
-			}
-			return nil
-		}
-	}
-
-	return withLock(lockPath, syscall.LOCK_EX, func() error {
+	var updatedGraph *Graph
+	err := withLock(lockPath, syscall.LOCK_EX, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -291,12 +262,33 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 		}
 
 		now := time.Now().UTC()
+		var events []Event
+
+		// Handle result.path (+ optional result.summary) in the same mutation lock.
+		resultPath, hasPath := updates["result.path"]
+		resultSummary, hasSummary := updates["result.summary"]
+		if hasPath || hasSummary {
+			if !hasPath {
+				return errors.New("result.summary requires result.path=")
+			}
+			if !hasSummary {
+				resultSummary = resultPath
+			}
+			event, err := buildResultEvent(repoDir, graph, id, resultSummary, resultPath, now)
+			if err != nil {
+				return err
+			}
+			events = append(events, event)
+			delete(updates, "result.path")
+			delete(updates, "result.summary")
+		}
 
 		// Build events using pure function, passing I/O-dependent body resolver
-		events, remainingUpdates, err := buildSetEvents(id, task, updates, agentID, now, identityBodyResolver)
+		setEvents, remainingUpdates, err := buildSetEvents(id, task, updates, agentID, now, identityBodyResolver)
 		if err != nil {
 			return err
 		}
+		events = append(events, setEvents...)
 
 		// Check for any unhandled keys
 		if len(remainingUpdates) > 0 {
@@ -310,11 +302,19 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 		if err := appendEvents(eventsPath, events); err != nil {
 			return err
 		}
+		updatedGraph, err = loadGraph(dir)
+		if err != nil {
+			return err
+		}
 		if !quiet {
 			fmt.Println(id)
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return updatedGraph, nil
 }
 
 // buildSetEvents generates the event list for a set command.
@@ -528,10 +528,8 @@ func RunSequence(args []string, opts GlobalOptions) error {
 		return errors.New(usage)
 	}
 
-	for _, edge := range edges {
-		if err := writeLinkEvent(dir, opts, action, edge.FromID, edge.ToID); err != nil {
-			return err
-		}
+	if err := writeLinkEvents(dir, opts, action, edges); err != nil {
+		return err
 	}
 
 	if opts.JSON {
@@ -552,6 +550,65 @@ func RunSequence(args []string, opts GlobalOptions) error {
 	return nil
 }
 
+func writeLinkEvents(dir string, opts GlobalOptions, eventType string, edges []sequenceEdge) error {
+	lockPath := filepath.Join(dir, "lock")
+	eventsPath := getEventsPath(dir)
+	return withLock(lockPath, syscall.LOCK_EX, opts, func() error {
+		graph, err := loadGraph(dir)
+		if err != nil {
+			return err
+		}
+
+		events := make([]Event, 0, len(edges))
+		now := time.Now().UTC()
+		for _, edge := range edges {
+			from := edge.FromID
+			to := edge.ToID
+			if _, ok := graph.Tombstones[from]; ok {
+				return prunedErr(from)
+			}
+			if _, ok := graph.Tombstones[to]; ok {
+				return prunedErr(to)
+			}
+			fromItem, ok := graph.Tasks[from]
+			if !ok {
+				return fmt.Errorf("unknown id %s", from)
+			}
+			toItem, ok := graph.Tasks[to]
+			if !ok {
+				return fmt.Errorf("unknown id %s", to)
+			}
+			if err := validateDepSelf(from, to); err != nil {
+				return err
+			}
+			if err := validateDepAncestry(fromItem, toItem); err != nil {
+				return err
+			}
+			if eventType == "link" && hasCycle(graph, from, to) {
+				return errors.New("dependency would create a cycle")
+			}
+			event, err := newEvent(eventType, now, LinkEvent{
+				FromID: from,
+				ToID:   to,
+				Type:   dependsLinkType,
+			})
+			if err != nil {
+				return err
+			}
+			events = append(events, event)
+			if eventType == "link" {
+				if graph.Deps[from] == nil {
+					graph.Deps[from] = map[string]struct{}{}
+				}
+				graph.Deps[from][to] = struct{}{}
+			} else if graph.Deps[from] != nil {
+				delete(graph.Deps[from], to)
+			}
+		}
+		return appendEvents(eventsPath, events)
+	})
+}
+
 func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	epicID := listOpts.EpicID
 	readyOnly := listOpts.ReadyOnly
@@ -567,7 +624,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	}
 	repoDir := filepath.Dir(dir)
 
-	graph, err := loadGraph(dir)
+	graph, err := loadGraphLocked(dir, opts)
 	if err != nil {
 		return err
 	}
@@ -876,7 +933,7 @@ func RunShow(id string, opts GlobalOptions) error {
 		return err
 	}
 	repoDir := filepath.Dir(dir)
-	graph, err := loadGraph(dir)
+	graph, err := loadGraphLocked(dir, opts)
 	if err != nil {
 		return err
 	}
@@ -927,7 +984,7 @@ func RunCompact(opts GlobalOptions) error {
 	}
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
-	if err := withLock(lockPath, syscall.LOCK_EX, func() error {
+	if err := withLock(lockPath, syscall.LOCK_EX, opts, func() error {
 		events, err := readEvents(eventsPath)
 		if err != nil {
 			return err

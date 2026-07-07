@@ -91,19 +91,12 @@ func RunNewTask(args []string, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	created, err := createTask(dir, opts, epicID, title, body)
-	if err != nil {
-		return err
-	}
-
 	updates := input.ToUpdates()
 	delete(updates, "title")
 	delete(updates, "epic")
-	if len(updates) > 0 {
-		agentID := opts.AgentID
-		if err := applySetUpdates(dir, opts, created.ID, updates, agentID, true); err != nil {
-			return err
-		}
+	created, err := createTaskWithUpdates(dir, opts, epicID, title, body, updates, opts.AgentID)
+	if err != nil {
+		return err
 	}
 
 	if opts.JSON {
@@ -156,7 +149,7 @@ func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, contai
 	eventsPath := getEventsPath(dir)
 
 	var out bulkCreateOutput
-	if err := withLock(lockPath, syscall.LOCK_EX, func() error {
+	if err := withLock(lockPath, syscall.LOCK_EX, opts, func() error {
 		events, err := readEvents(eventsPath)
 		if err != nil {
 			return err

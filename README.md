@@ -166,7 +166,8 @@ All state lives in `.ergo/` at your repo root:
 **Concurrency safety:**
 - All writes acquire an exclusive `flock(2)` on `.ergo/lock` before appending.
 - `ergo claim` is atomic: read → find oldest READY → claim → write, all under lock.
-- Multiple agents can safely race to claim work; exactly one wins, others fail fast and should retry.
+- Commands wait up to 30s for the lock by default; use `--lock-timeout 0` for fail-fast scripts.
+- Multiple agents can safely race to claim work; exactly one process claims each task.
 
 **State reconstruction:**
 On each command, ergo replays `plans.jsonl` to build current state in memory quickly (100 tasks: ~3ms, 1000 tasks: ~15ms) and guarantees consistency. Run `ergo compact` to collapse history if the log grows large. To verify: `go test -bench=. -benchmem`

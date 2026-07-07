@@ -105,6 +105,20 @@ func loadGraph(dir string) (*Graph, error) {
 	return replayEvents(events)
 }
 
+func loadGraphLocked(dir string, opts GlobalOptions) (*Graph, error) {
+	lockPath := filepath.Join(dir, "lock")
+	var graph *Graph
+	err := withLockNoMetadata(lockPath, syscall.LOCK_EX, opts, func() error {
+		var err error
+		graph, err = loadGraph(dir)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return graph, nil
+}
+
 func readEvents(path string) ([]Event, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -189,22 +203,24 @@ func formatEventsParseError(path string, lineNo int, line []byte, cause error) e
 }
 
 func appendEvents(path string, events []Event) error {
-	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
+	if len(events) == 0 {
+		return nil
 	}
-	defer file.Close()
+	var buf bytes.Buffer
 	for _, event := range events {
 		data, err := json.Marshal(event)
 		if err != nil {
 			return err
 		}
-		line := append(data, '\n')
-		if err := writeAll(file, line); err != nil {
-			return err
-		}
+		buf.Write(data)
+		buf.WriteByte('\n')
 	}
-	return nil
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return writeAll(file, buf.Bytes())
 }
 
 func writeEventsFile(path string, events []Event) error {
@@ -270,63 +286,19 @@ func writeAll(w *os.File, data []byte) error {
 	return nil
 }
 
-func writeLinkEvent(dir string, opts GlobalOptions, eventType, from, to string) error {
-	lockPath := filepath.Join(dir, "lock")
-	eventsPath := getEventsPath(dir)
-	return withLock(lockPath, syscall.LOCK_EX, func() error {
-		graph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
-		if _, ok := graph.Tombstones[from]; ok {
-			return prunedErr(from)
-		}
-		if _, ok := graph.Tombstones[to]; ok {
-			return prunedErr(to)
-		}
-		fromItem, ok := graph.Tasks[from]
-		if !ok {
-			return fmt.Errorf("unknown id %s", from)
-		}
-		toItem, ok := graph.Tasks[to]
-		if !ok {
-			return fmt.Errorf("unknown id %s", to)
-		}
-		// Validate dependency rules
-		if err := validateDepSelf(from, to); err != nil {
-			return err
-		}
-		if err := validateDepAncestry(fromItem, toItem); err != nil {
-			return err
-		}
-		// Cycle detection for new links
-		if eventType == "link" {
-			if hasCycle(graph, from, to) {
-				return errors.New("dependency would create a cycle")
-			}
-		}
-		now := time.Now().UTC()
-		event, err := newEvent(eventType, now, LinkEvent{
-			FromID: from,
-			ToID:   to,
-			Type:   dependsLinkType,
-		})
-		if err != nil {
-			return err
-		}
-		return appendEvents(eventsPath, []Event{event})
-	})
-}
-
 func createTask(dir string, opts GlobalOptions, epicID string, title, body string) (createOutput, error) {
-	eventsPath := getEventsPath(dir)
-	lockPath := filepath.Join(dir, "lock")
-	return createTaskWithDir(dir, opts, lockPath, eventsPath, epicID, title, body)
+	return createTaskWithUpdates(dir, opts, epicID, title, body, nil, opts.AgentID)
 }
 
-func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epicID string, title, body string) (createOutput, error) {
+func createTaskWithUpdates(dir string, opts GlobalOptions, epicID string, title, body string, updates map[string]string, agentID string) (createOutput, error) {
+	eventsPath := getEventsPath(dir)
+	lockPath := filepath.Join(dir, "lock")
+	return createTaskWithDir(dir, opts, lockPath, eventsPath, epicID, title, body, updates, agentID)
+}
+
+func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epicID string, title, body string, updates map[string]string, agentID string) (createOutput, error) {
 	var output createOutput
-	err := withLock(lockPath, syscall.LOCK_EX, func() error {
+	err := withLock(lockPath, syscall.LOCK_EX, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -362,6 +334,7 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 			return err
 		}
 		now := time.Now().UTC()
+		createdAt := formatTime(now)
 		payload := NewTaskEvent{
 			ID:        id,
 			UUID:      uuid,
@@ -369,23 +342,84 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 			State:     stateTodo,
 			Title:     title,
 			Body:      body,
-			CreatedAt: formatTime(now),
+			CreatedAt: createdAt,
 		}
 		event, err := newEvent("new_task", now, payload)
 		if err != nil {
 			return err
 		}
-		if err := appendEvents(eventsPath, []Event{event}); err != nil {
+
+		newTask := &Task{
+			ID:        id,
+			UUID:      uuid,
+			EpicID:    epicID,
+			State:     stateTodo,
+			Title:     title,
+			Body:      body,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		graph.Tasks[id] = newTask
+		graph.Meta[id] = &TaskMeta{
+			CreatedTitle:     title,
+			CreatedBody:      body,
+			CreatedState:     stateTodo,
+			CreatedEpicID:    epicID,
+			CreatedEpicIDSet: true,
+			CreatedAt:        now,
+		}
+
+		events := []Event{event}
+		resultPath, hasPath := updates["result.path"]
+		resultSummary, hasSummary := updates["result.summary"]
+		if hasPath || hasSummary {
+			if !hasPath {
+				return errors.New("result.summary requires result.path=")
+			}
+			if !hasSummary {
+				resultSummary = resultPath
+			}
+			resultEvent, err := buildResultEvent(filepath.Dir(dir), graph, id, resultSummary, resultPath, now)
+			if err != nil {
+				return err
+			}
+			events = append(events, resultEvent)
+			delete(updates, "result.path")
+			delete(updates, "result.summary")
+		}
+
+		setEvents, remainingUpdates, err := buildSetEvents(id, newTask, updates, agentID, now, identityBodyResolver)
+		if err != nil {
 			return err
+		}
+		if len(remainingUpdates) > 0 {
+			var unknown []string
+			for key := range remainingUpdates {
+				unknown = append(unknown, key)
+			}
+			return fmt.Errorf("unknown keys: %s", strings.Join(unknown, ", "))
+		}
+		events = append(events, setEvents...)
+
+		if err := appendEvents(eventsPath, events); err != nil {
+			return err
+		}
+		updatedGraph, err := loadGraph(dir)
+		if err != nil {
+			return err
+		}
+		task := updatedGraph.Tasks[id]
+		if task == nil {
+			return errors.New("internal error: missing created task")
 		}
 		output = createOutput{
 			ID:        id,
 			UUID:      uuid,
 			EpicID:    payload.EpicID,
-			State:     stateTodo,
-			Title:     title,
-			Body:      body,
-			CreatedAt: payload.CreatedAt,
+			State:     task.State,
+			Title:     task.Title,
+			Body:      task.Body,
+			CreatedAt: createdAt,
 		}
 		return nil
 	})
@@ -506,50 +540,50 @@ func writeResultEvent(dir string, opts GlobalOptions, taskID, summary, relPath s
 	eventsPath := getEventsPath(dir)
 	repoDir := filepath.Dir(dir)
 
-	return withLock(lockPath, syscall.LOCK_EX, func() error {
+	return withLock(lockPath, syscall.LOCK_EX, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
 		}
-		if _, ok := graph.Tombstones[taskID]; ok {
-			return prunedErr(taskID)
-		}
-		task, ok := graph.Tasks[taskID]
-		if !ok {
-			return fmt.Errorf("unknown task id %s", taskID)
-		}
-		if isContainer(task, graph) {
-			return errors.New("cannot attach result to container")
-		}
-		if err := validateResultSummary(summary); err != nil {
-			return err
-		}
-
-		// Validate and normalize path
-		cleanPath, err := validateResultPath(repoDir, relPath)
-		if err != nil {
-			return err
-		}
-
-		// Capture evidence
-		evidence, err := captureResultEvidence(repoDir, cleanPath)
-		if err != nil {
-			return err
-		}
-
-		now := time.Now().UTC()
-		event, err := newEvent("result", now, ResultEvent{
-			TaskID:            taskID,
-			Summary:           strings.TrimSpace(summary),
-			Path:              cleanPath,
-			Sha256AtAttach:    evidence.Sha256AtAttach,
-			MtimeAtAttach:     evidence.MtimeAtAttach,
-			GitCommitAtAttach: evidence.GitCommitAtAttach,
-			TS:                formatTime(now),
-		})
+		event, err := buildResultEvent(repoDir, graph, taskID, summary, relPath, time.Now().UTC())
 		if err != nil {
 			return err
 		}
 		return appendEvents(eventsPath, []Event{event})
+	})
+}
+
+func buildResultEvent(repoDir string, graph *Graph, taskID, summary, relPath string, now time.Time) (Event, error) {
+	if _, ok := graph.Tombstones[taskID]; ok {
+		return Event{}, prunedErr(taskID)
+	}
+	task, ok := graph.Tasks[taskID]
+	if !ok {
+		return Event{}, fmt.Errorf("unknown task id %s", taskID)
+	}
+	if isContainer(task, graph) {
+		return Event{}, errors.New("cannot attach result to container")
+	}
+	if err := validateResultSummary(summary); err != nil {
+		return Event{}, err
+	}
+
+	cleanPath, err := validateResultPath(repoDir, relPath)
+	if err != nil {
+		return Event{}, err
+	}
+	evidence, err := captureResultEvidence(repoDir, cleanPath)
+	if err != nil {
+		return Event{}, err
+	}
+
+	return newEvent("result", now, ResultEvent{
+		TaskID:            taskID,
+		Summary:           strings.TrimSpace(summary),
+		Path:              cleanPath,
+		Sha256AtAttach:    evidence.Sha256AtAttach,
+		MtimeAtAttach:     evidence.MtimeAtAttach,
+		GitCommitAtAttach: evidence.GitCommitAtAttach,
+		TS:                formatTime(now),
 	})
 }
