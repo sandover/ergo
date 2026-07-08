@@ -28,7 +28,7 @@ This design is intentionally “boring”:
 
 - `.ergo/plans.jsonl`: append-only event log (source of truth).
   - For backwards compatibility, `.ergo/events.jsonl` is also supported if it already exists.
-- `.ergo/lock`: advisory lock file used to serialize commands and hold best-effort writer diagnostics while locked.
+- `.ergo/lock`: advisory lock file used to serialize graph commands.
 
 ### Event log invariants
 
@@ -43,9 +43,7 @@ Commands that mutate or read the task graph acquire an exclusive `flock` on `.er
 Mutations validate and append their full event batch while holding that lock.
 `list` and `show` also hold the lock while replaying the log, so they read a coherent snapshot.
 
-Lock acquisition waits up to `--lock-timeout` (30s by default).
-`--lock-timeout 0` is the explicit fail-fast mode for hooks and scripts.
-When a command times out, the error includes best-effort holder metadata from `.ergo/lock` when available.
+Commands wait briefly for the lock before returning a lock-busy error.
 
 The lock file must not be deleted to recover from contention.
 `flock` releases when the owning process exits; deleting the file can split processes across different inodes.

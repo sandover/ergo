@@ -108,7 +108,7 @@ func loadGraph(dir string) (*Graph, error) {
 func loadGraphLocked(dir string, opts GlobalOptions) (*Graph, error) {
 	lockPath := filepath.Join(dir, "lock")
 	var graph *Graph
-	err := withLockNoMetadata(lockPath, syscall.LOCK_EX, opts, func() error {
+	err := withLock(lockPath, syscall.LOCK_EX, opts, func() error {
 		var err error
 		graph, err = loadGraph(dir)
 		return err
@@ -284,10 +284,6 @@ func writeAll(w *os.File, data []byte) error {
 		data = data[n:]
 	}
 	return nil
-}
-
-func createTask(dir string, opts GlobalOptions, epicID string, title, body string) (createOutput, error) {
-	return createTaskWithUpdates(dir, opts, epicID, title, body, nil, opts.AgentID)
 }
 
 func createTaskWithUpdates(dir string, opts GlobalOptions, epicID string, title, body string, updates map[string]string, agentID string) (createOutput, error) {
@@ -531,26 +527,6 @@ func getGitHead(repoDir string) string {
 
 	// Detached HEAD: already a commit SHA
 	return head
-}
-
-// writeResultEvent attaches a result file reference to a task.
-// The file must exist and be within the project root.
-func writeResultEvent(dir string, opts GlobalOptions, taskID, summary, relPath string) error {
-	lockPath := filepath.Join(dir, "lock")
-	eventsPath := getEventsPath(dir)
-	repoDir := filepath.Dir(dir)
-
-	return withLock(lockPath, syscall.LOCK_EX, opts, func() error {
-		graph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
-		event, err := buildResultEvent(repoDir, graph, taskID, summary, relPath, time.Now().UTC())
-		if err != nil {
-			return err
-		}
-		return appendEvents(eventsPath, []Event{event})
-	})
 }
 
 func buildResultEvent(repoDir string, graph *Graph, taskID, summary, relPath string, now time.Time) (Event, error) {

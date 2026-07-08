@@ -166,7 +166,7 @@ All state lives in `.ergo/` at your repo root:
 **Concurrency safety:**
 - All writes acquire an exclusive `flock(2)` on `.ergo/lock` before appending.
 - `ergo claim` is atomic: read → find oldest READY → claim → write, all under lock.
-- Commands wait up to 30s for the lock by default; use `--lock-timeout 0` for fail-fast scripts.
+- Commands wait briefly for the lock when another Ergo process is active.
 - Multiple agents can safely race to claim work; exactly one process claims each task.
 
 **State reconstruction:**

@@ -204,9 +204,6 @@ After `compact`, the history of pruned IDs may be removed from the log:
 
 - Mutations are serialized by an advisory lock on `.ergo/lock`.
 - `list` and `show` also acquire the lock while replaying the log, so reads wait behind active writers and return coherent snapshots.
-- Lock acquisition waits up to `--lock-timeout`:
-  - Default: `30s`.
-  - `--lock-timeout 0`: fail fast with a “lock busy” error.
-  - Timeout errors include best-effort holder details when available.
+- Commands wait briefly for the lock before returning a “lock busy” error.
 - `claim` oldest-ready is race-safe: only one process can claim a given task.
 - Users should not delete `.ergo/lock` to recover from contention.

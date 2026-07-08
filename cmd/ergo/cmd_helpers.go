@@ -30,7 +30,7 @@ func exitErr(err error, opts *ergo.GlobalOptions) {
 	} else if strings.Contains(err.Error(), ".ergo") && strings.Contains(err.Error(), "exists but is not a directory") {
 		fmt.Fprintln(os.Stderr, "hint: .ergo must be a directory; delete/rename the file and run `ergo init`")
 	} else if errors.Is(err, ergo.ErrLockBusy) {
-		fmt.Fprintln(os.Stderr, "hint: another process is using ergo; retry or adjust --lock-timeout")
+		fmt.Fprintln(os.Stderr, "hint: another ergo process is still running; try again in a moment")
 	}
 	os.Exit(1)
 }

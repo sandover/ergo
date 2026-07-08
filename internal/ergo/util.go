@@ -1,7 +1,7 @@
 // Purpose: Provide shared helpers for IDs, locking, and time formatting.
 // Exports: none (package-internal helpers).
 // Role: Low-level utility layer used across command and storage logic.
-// Invariants: Lock acquisition is bounded by opts; IDs are 6 characters.
+// Invariants: Lock acquisition is briefly bounded; IDs are 6 characters.
 // Notes: Time formatting uses RFC3339Nano in UTC.
 package ergo
 
@@ -42,48 +42,25 @@ func sortedMapKeys(items map[string]map[string]struct{}) []string {
 	return keys
 }
 
-const defaultLockTimeout = 30 * time.Second
-
-func effectiveLockTimeout(opts GlobalOptions) time.Duration {
-	if opts.LockTimeoutSet {
-		return opts.LockTimeout
-	}
-	return defaultLockTimeout
-}
-
-type lockHolderInfo struct {
-	PID       int    `json:"pid"`
-	Command   string `json:"command,omitempty"`
-	Agent     string `json:"agent,omitempty"`
-	StartedAt string `json:"started_at"`
-	Mode      string `json:"mode"`
-}
+const defaultLockTimeout = 10 * time.Second
 
 func withLock(path string, lockType int, opts GlobalOptions, fn func() error) error {
-	return withLockMetadata(path, lockType, opts, true, fn)
-}
-
-func withLockNoMetadata(path string, lockType int, opts GlobalOptions, fn func() error) error {
-	return withLockMetadata(path, lockType, opts, false, fn)
-}
-
-func withLockMetadata(path string, lockType int, opts GlobalOptions, writeMetadata bool, fn func() error) error {
-	fd, canWriteMetadata, err := openLockFile(path, writeMetadata)
+	_ = opts
+	fd, err := syscall.Open(path, syscall.O_RDONLY, 0)
 	if err != nil && os.IsNotExist(err) {
 		// The lock file is not state; it's just the synchronization primitive.
 		// If it's missing, recreate it on demand so normal commands can proceed.
 		if err := ensureFileExists(path, 0644); err != nil {
 			return err
 		}
-		fd, canWriteMetadata, err = openLockFile(path, writeMetadata)
+		fd, err = syscall.Open(path, syscall.O_RDONLY, 0)
 	}
 	if err != nil {
 		return err
 	}
 	defer syscall.Close(fd)
 
-	timeout := effectiveLockTimeout(opts)
-	deadline := time.Now().Add(timeout)
+	deadline := time.Now().Add(defaultLockTimeout)
 	for {
 		if err := syscall.Flock(fd, lockType|syscall.LOCK_NB); err == nil {
 			break
@@ -91,119 +68,16 @@ func withLockMetadata(path string, lockType int, opts GlobalOptions, writeMetada
 			if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
 				return err
 			}
-			if timeout == 0 || !time.Now().Before(deadline) {
-				return lockBusyError(path, timeout)
+			if !time.Now().Before(deadline) {
+				return fmt.Errorf("%w after %s", ErrLockBusy, defaultLockTimeout)
 			}
 		}
 		time.Sleep(lockRetryDelay(deadline))
 	}
-	if writeMetadata && canWriteMetadata {
-		writeLockHolderMetadata(fd, opts, lockType)
-	}
 	defer func() {
-		if writeMetadata && canWriteMetadata {
-			clearLockHolderMetadata(fd)
-		}
 		_ = syscall.Flock(fd, syscall.LOCK_UN)
 	}()
 	return fn()
-}
-
-func openLockFile(path string, writeMetadata bool) (int, bool, error) {
-	if !writeMetadata {
-		fd, err := syscall.Open(path, syscall.O_RDONLY, 0)
-		return fd, false, err
-	}
-	fd, err := syscall.Open(path, syscall.O_RDWR, 0)
-	if err != nil && os.IsNotExist(err) {
-		return -1, false, err
-	}
-	if err == nil {
-		return fd, true, nil
-	}
-	fd, fallbackErr := syscall.Open(path, syscall.O_RDONLY, 0)
-	if fallbackErr != nil {
-		return -1, false, err
-	}
-	return fd, false, nil
-}
-
-func writeLockHolderMetadata(fd int, opts GlobalOptions, lockType int) {
-	info := lockHolderInfo{
-		PID:       os.Getpid(),
-		Command:   opts.Command,
-		Agent:     opts.AgentID,
-		StartedAt: formatTime(time.Now().UTC()),
-		Mode:      lockModeName(lockType),
-	}
-	data, err := json.Marshal(info)
-	if err != nil {
-		return
-	}
-	data = append(data, '\n')
-	if _, err := syscall.Seek(fd, 0, 0); err != nil {
-		return
-	}
-	if err := syscall.Ftruncate(fd, 0); err != nil {
-		return
-	}
-	_, _ = syscall.Write(fd, data)
-}
-
-func clearLockHolderMetadata(fd int) {
-	if _, err := syscall.Seek(fd, 0, 0); err != nil {
-		return
-	}
-	_ = syscall.Ftruncate(fd, 0)
-}
-
-func lockModeName(lockType int) string {
-	if lockType&syscall.LOCK_EX != 0 {
-		return "exclusive"
-	}
-	return "unknown"
-}
-
-func lockBusyError(path string, timeout time.Duration) error {
-	suffix := ""
-	if timeout > 0 {
-		suffix = fmt.Sprintf(" after %s", timeout)
-	}
-	if holder := readLockHolderSummary(path); holder != "" {
-		suffix += "; " + holder
-	}
-	return fmt.Errorf("%w%s", ErrLockBusy, suffix)
-}
-
-func readLockHolderSummary(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil || len(strings.TrimSpace(string(data))) == 0 {
-		return ""
-	}
-	var info lockHolderInfo
-	if err := json.Unmarshal(data, &info); err != nil {
-		return ""
-	}
-	var parts []string
-	if info.PID != 0 {
-		parts = append(parts, fmt.Sprintf("pid=%d", info.PID))
-	}
-	if info.Agent != "" {
-		parts = append(parts, "agent="+info.Agent)
-	}
-	if info.Command != "" {
-		parts = append(parts, "command="+info.Command)
-	}
-	if info.StartedAt != "" {
-		parts = append(parts, "started_at="+info.StartedAt)
-	}
-	if info.Mode != "" {
-		parts = append(parts, "mode="+info.Mode)
-	}
-	if len(parts) == 0 {
-		return ""
-	}
-	return "holder " + strings.Join(parts, " ")
 }
 
 func lockRetryDelay(deadline time.Time) time.Duration {

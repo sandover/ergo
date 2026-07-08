@@ -25,23 +25,10 @@ Full detail for one task or container:
 
 Use `show` before mutating when you need the body, child tasks, or dependencies.
 
-{{HEADER}}3. CONCURRENCY{{RESET}}
-
-Ergo serializes commands with `.ergo/lock`.
-
-Default behavior:
-  - mutating commands wait up to 30s for the lock
-  - `list` and `show` also wait, then read a coherent snapshot
-  - timeout errors include best-effort holder details when available
-
-Fail fast instead:
-  {{CMD}}ergo --lock-timeout 0 --json claim --agent sonnet@agent-host{{RESET}}
-
-Use `--lock-timeout <duration>` for shorter or longer waits, for example `250ms`, `5s`, or `1m`.
-
-{{HEADER}}4. AGENT LOOP{{RESET}}
+{{HEADER}}3. AGENT LOOP{{RESET}}
 
 Your identity should be `<model>@<hostname>`.
+Ergo waits briefly on its repo lock, so parallel agents can safely race to claim work.
 
 Claim oldest ready work:
   {{CMD}}ergo --json claim --agent sonnet@agent-host{{RESET}}
@@ -59,7 +46,7 @@ Mark done and attach a result file:
 
 Claim and `doing` move together. Finishing (`done` or `canceled`) clears the claim. `error` retains it.
 
-{{HEADER}}5. CREATE WORK{{RESET}}
+{{HEADER}}4. CREATE WORK{{RESET}}
 
 `new task [json]` creates exactly one task. The JSON argument carries metadata. If stdin is piped, it becomes the body.
 
@@ -77,7 +64,7 @@ Create and claim in one step:
 
 Unknown keys are rejected. `new task` requires `title`.
 
-{{HEADER}}6. UPDATE WORK{{RESET}}
+{{HEADER}}5. UPDATE WORK{{RESET}}
 
 `set <id> [json]` updates exactly one task. The JSON argument changes metadata. If stdin is piped, it replaces the body.
 
@@ -93,7 +80,7 @@ Clear the body:
 Attach another result later:
   {{CMD}}ergo set ABCDEF '{"result":"docs/followup.md"}'{{RESET}}
 
-{{HEADER}}7. PLAN A FEATURE{{RESET}}
+{{HEADER}}6. PLAN A FEATURE{{RESET}}
 
 `plan --file <path> [json]` creates one container and child tasks from markdown.
 
@@ -123,7 +110,7 @@ Rules:
 Add dependencies explicitly after planning:
   {{CMD}}ergo sequence TASK_SCHEMA TASK_ENDPOINTS TASK_DOCS{{RESET}}
 
-{{HEADER}}8. DEPENDENCIES{{RESET}}
+{{HEADER}}7. DEPENDENCIES{{RESET}}
 
 Enforce order (A before B):
   {{CMD}}ergo sequence TASK_A TASK_B{{RESET}}
@@ -136,7 +123,7 @@ Remove one edge:
 
 Dependencies are allowed between any two non-ancestor tasks. Cycles are forbidden.
 
-{{HEADER}}9. PRUNE + COMPACT{{RESET}}
+{{HEADER}}8. PRUNE + COMPACT{{RESET}}
 
 Preview logical deletion:
   {{CMD}}ergo prune{{RESET}}
@@ -149,7 +136,7 @@ Physically rewrite the log after pruning:
 
 Prune removes `done` and `canceled` tasks, then removes any empty containers left behind.
 
-{{HEADER}}10. CONTAINERS + RULES{{RESET}}
+{{HEADER}}9. CONTAINERS + RULES{{RESET}}
 
 A task becomes a container when it has children.
 
