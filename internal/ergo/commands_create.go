@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -149,7 +148,7 @@ func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, contai
 	eventsPath := getEventsPath(dir)
 
 	var out bulkCreateOutput
-	if err := withLock(lockPath, syscall.LOCK_EX, opts, func() error {
+	if err := withLock(lockPath, opts, func() error {
 		events, err := readEvents(eventsPath)
 		if err != nil {
 			return err

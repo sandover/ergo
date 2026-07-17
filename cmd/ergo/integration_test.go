@@ -14,8 +14,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -30,6 +30,9 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	ergoBinary = filepath.Join(cwd, "ergo-test")
+	if runtime.GOOS == "windows" {
+		ergoBinary += ".exe"
+	}
 
 	cmd := exec.Command("go", "build", "-o", ergoBinary, ".")
 	cmd.Stderr = os.Stderr
@@ -57,8 +60,12 @@ func runErgo(t *testing.T, dir string, stdin string, args ...string) (stdout, st
 	cmd.Stderr = &errBuf
 	err := cmd.Run()
 	exitCode = 0
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		exitCode = exitErr.ExitCode()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else {
+			t.Fatalf("run ergo: %v", err)
+		}
 	}
 	return outBuf.String(), errBuf.String(), exitCode
 }
@@ -1215,7 +1222,7 @@ func TestLockWaitsThenSucceeds(t *testing.T) {
 		t.Fatalf("open lock file: %v", err)
 	}
 	defer lockFile.Close()
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := lockTestFile(lockFile); err != nil {
 		t.Fatalf("failed to acquire lock: %v", err)
 	}
 
@@ -1236,7 +1243,7 @@ func TestLockWaitsThenSucceeds(t *testing.T) {
 	case <-time.After(150 * time.Millisecond):
 	}
 
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN); err != nil {
+	if err := unlockTestFile(lockFile); err != nil {
 		t.Fatalf("failed to release lock: %v", err)
 	}
 

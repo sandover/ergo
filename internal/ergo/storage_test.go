@@ -314,19 +314,17 @@ func TestAppendEventsAtomically_FailureLeavesOriginalFile(t *testing.T) {
 		t.Fatalf("writeEventsFile initial: %v", err)
 	}
 
-	if err := os.Chmod(dir, 0555); err != nil {
-		t.Fatalf("chmod readonly: %v", err)
+	tmpPath := path + ".tmp"
+	if err := os.Mkdir(tmpPath, 0755); err != nil {
+		t.Fatalf("create blocking temp directory: %v", err)
 	}
-	defer func() {
-		_ = os.Chmod(dir, 0755)
-	}()
 
 	if err := appendEventsAtomically(path, initial, appended); err == nil {
-		t.Fatal("expected appendEventsAtomically to fail in readonly dir")
+		t.Fatal("expected appendEventsAtomically to fail when its temp path is a directory")
 	}
 
-	if err := os.Chmod(dir, 0755); err != nil {
-		t.Fatalf("chmod writable: %v", err)
+	if err := os.Remove(tmpPath); err != nil {
+		t.Fatalf("remove blocking temp directory: %v", err)
 	}
 
 	events, err := readEvents(path)

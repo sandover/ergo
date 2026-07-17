@@ -14,7 +14,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -44,38 +43,38 @@ func sortedMapKeys(items map[string]map[string]struct{}) []string {
 
 const defaultLockTimeout = 10 * time.Second
 
-func withLock(path string, lockType int, opts GlobalOptions, fn func() error) error {
+func withLock(path string, opts GlobalOptions, fn func() error) error {
 	_ = opts
-	fd, err := syscall.Open(path, syscall.O_RDONLY, 0)
+	lockFile, err := os.Open(path)
 	if err != nil && os.IsNotExist(err) {
 		// The lock file is not state; it's just the synchronization primitive.
 		// If it's missing, recreate it on demand so normal commands can proceed.
 		if err := ensureFileExists(path, 0644); err != nil {
 			return err
 		}
-		fd, err = syscall.Open(path, syscall.O_RDONLY, 0)
+		lockFile, err = os.Open(path)
 	}
 	if err != nil {
 		return err
 	}
-	defer syscall.Close(fd)
+	defer lockFile.Close()
 
 	deadline := time.Now().Add(defaultLockTimeout)
 	for {
-		if err := syscall.Flock(fd, lockType|syscall.LOCK_NB); err == nil {
+		locked, err := tryFileLock(lockFile)
+		if err != nil {
+			return err
+		}
+		if locked {
 			break
-		} else {
-			if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
-				return err
-			}
-			if !time.Now().Before(deadline) {
-				return fmt.Errorf("%w after %s", ErrLockBusy, defaultLockTimeout)
-			}
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("%w after %s", ErrLockBusy, defaultLockTimeout)
 		}
 		time.Sleep(lockRetryDelay(deadline))
 	}
 	defer func() {
-		_ = syscall.Flock(fd, syscall.LOCK_UN)
+		_ = unlockFile(lockFile)
 	}()
 	return fn()
 }

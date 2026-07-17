@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -158,7 +157,7 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 		return errors.New("claim requires --agent")
 	}
 
-	err = withLock(lockPath, syscall.LOCK_EX, opts, func() error {
+	err = withLock(lockPath, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -237,7 +236,7 @@ func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[stri
 	repoDir := filepath.Dir(dir)
 
 	var updatedGraph *Graph
-	err := withLock(lockPath, syscall.LOCK_EX, opts, func() error {
+	err := withLock(lockPath, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -553,7 +552,7 @@ func RunSequence(args []string, opts GlobalOptions) error {
 func writeLinkEvents(dir string, opts GlobalOptions, eventType string, edges []sequenceEdge) error {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
-	return withLock(lockPath, syscall.LOCK_EX, opts, func() error {
+	return withLock(lockPath, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -984,7 +983,7 @@ func RunCompact(opts GlobalOptions) error {
 	}
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
-	if err := withLock(lockPath, syscall.LOCK_EX, opts, func() error {
+	if err := withLock(lockPath, opts, func() error {
 		events, err := readEvents(eventsPath)
 		if err != nil {
 			return err
