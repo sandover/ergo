@@ -8,7 +8,6 @@ package ergo
 import (
 	"path/filepath"
 	"sort"
-	"syscall"
 	"time"
 )
 
@@ -38,7 +37,7 @@ func runPrune(dir string, opts GlobalOptions, apply bool) (PrunePlan, error) {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
 	var plan PrunePlan
-	err := withLock(lockPath, syscall.LOCK_EX, opts, func() error {
+	err := withLock(lockPath, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err

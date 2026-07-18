@@ -39,7 +39,7 @@ Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler, soun
 # Install on Mac -- get homebrew first (https://brew.sh/)
 brew install sandover/tap/ergo 
 ```
-Or, on Linux: `go install github.com/sandover/ergo/cmd/ergo@latest`
+Or, on Windows or Linux with Go installed: `go install github.com/sandover/ergo/cmd/ergo@latest`
 
 #### Step 2
 Add this instruction into your `AGENTS.md` or `CLAUDE.md` file

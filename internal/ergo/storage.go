@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -108,7 +107,7 @@ func loadGraph(dir string) (*Graph, error) {
 func loadGraphLocked(dir string, opts GlobalOptions) (*Graph, error) {
 	lockPath := filepath.Join(dir, "lock")
 	var graph *Graph
-	err := withLock(lockPath, syscall.LOCK_EX, opts, func() error {
+	err := withLock(lockPath, opts, func() error {
 		var err error
 		graph, err = loadGraph(dir)
 		return err
@@ -266,15 +265,6 @@ func appendEventsAtomically(path string, existing, appended []Event) error {
 	return replaceEventsAtomically(path, merged)
 }
 
-func syncDir(path string) error {
-	dir, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-	return dir.Sync()
-}
-
 func writeAll(w *os.File, data []byte) error {
 	for len(data) > 0 {
 		n, err := w.Write(data)
@@ -294,7 +284,7 @@ func createTaskWithUpdates(dir string, opts GlobalOptions, epicID string, title,
 
 func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epicID string, title, body string, updates map[string]string, agentID string) (createOutput, error) {
 	var output createOutput
-	err := withLock(lockPath, syscall.LOCK_EX, opts, func() error {
+	err := withLock(lockPath, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -435,12 +425,12 @@ type ResultEvidence struct {
 // validateResultPath ensures path is relative, within project root, and exists.
 // Returns the cleaned relative path.
 func validateResultPath(repoDir, relPath string) (string, error) {
-	relPath = filepath.Clean(relPath)
-
-	// Must be relative (no leading /)
-	if filepath.IsAbs(relPath) {
+	// filepath.IsAbs does not consider drive-relative or root-relative paths
+	// absolute on Windows. IsLocal rejects those forms as well as traversal.
+	if !filepath.IsLocal(relPath) {
 		return "", fmt.Errorf("result path must be relative: %s", relPath)
 	}
+	relPath = filepath.Clean(relPath)
 
 	// No .. traversal outside project
 	if strings.HasPrefix(relPath, "..") || strings.Contains(relPath, string(filepath.Separator)+"..") {
