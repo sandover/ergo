@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-18
+
+### Added
+- Ergo now runs natively on Windows for AMD64 and ARM64 systems.
+- GitHub releases now include ZIP archives for both Windows architectures.
+- Windows users with Go installed can install Ergo with `go install github.com/sandover/ergo/cmd/ergo@latest`.
+
+### Improved
+- File locking and event-log replacement now use platform-specific implementations on Windows and Unix.
+- Result paths reject Windows root-relative forms that could escape the project directory.
+- Locking and storage integration tests are now portable across supported operating systems.
+
+### Compatibility
+- Existing commands, JSON output, and task logs remain compatible.
+- macOS and Linux installation and release artifacts are unchanged.
+
 ## [1.1.0] - 2026-07-08
 
 ### Improved
@@ -406,7 +422,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/sandover/ergo/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sandover/ergo/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/sandover/ergo/compare/v0.11.2...v1.0.0
 [0.11.0]: https://github.com/sandover/ergo/compare/v0.10.3...v0.11.0
