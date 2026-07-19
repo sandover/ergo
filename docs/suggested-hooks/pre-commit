@@ -16,11 +16,27 @@ echo "# - Before pushing: run task ci (or let pre-push run it)" >&2
 echo >&2
 
 # Staged file inventory (used for decisions and warnings below).
-mapfile -t staged_files < <(git diff --cached --name-only --diff-filter=ACM || true)
+# macOS ships Bash 3.2, which does not provide mapfile/readarray.
+staged_files=()
+staged_file_count=0
+while IFS= read -r file; do
+  staged_files[staged_file_count]="$file"
+  staged_file_count=$((staged_file_count + 1))
+done < <(git diff --cached --name-only --diff-filter=ACM || true)
 
 # Format only staged Go files, then restage them.
-mapfile -t staged_go_files < <(printf '%s\n' "${staged_files[@]}" | grep -E '\\.go$' || true)
-if (( ${#staged_go_files[@]} > 0 )); then
+staged_go_files=()
+staged_go_file_count=0
+for ((i = 0; i < staged_file_count; i++)); do
+  file="${staged_files[i]}"
+  case "$file" in
+    *.go)
+      staged_go_files[staged_go_file_count]="$file"
+      staged_go_file_count=$((staged_go_file_count + 1))
+      ;;
+  esac
+done
+if (( staged_go_file_count > 0 )); then
   gofmt -w "${staged_go_files[@]}"
   git add -- "${staged_go_files[@]}"
 fi
@@ -46,8 +62,8 @@ fi
 
 # Quick checks: run unit tests only when Go code/config changed (CI parity lives in pre-push).
 has_go_changes=false
-for f in "${staged_files[@]}"; do
-  case "$f" in
+for ((i = 0; i < staged_file_count; i++)); do
+  case "${staged_files[i]}" in
     *.go|go.mod|go.sum|Taskfile.yml) has_go_changes=true ;;
   esac
 done
