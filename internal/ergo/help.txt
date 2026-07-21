@@ -1,73 +1,75 @@
-{{BOLD}}ergo{{RESET}} — fast, local task graph for AI agents. humans welcome.
+{{BOLD}}ergo{{RESET}} — a fast, local task graph for coding agents.
 
-  Tasks have states (todo, doing, blocked, done, canceled) and can depend on
-  each other. A task is "ready" when all its dependencies are done. A task with
-  children is an epic (no state of its own; completes when children finish).
+  Work is ready when it is todo and every dependency is complete. Claim moves a
+  leaf task to doing. Finish with done, block, cancel, or release. A task with
+  children is a container; its completion is derived from its children.
 
-{{HEADER}}WORKFLOW{{RESET}}
+{{HEADER}}AGENT LOOP{{RESET}}
 
-  # Create a task (body is piped on stdin)
-  printf '%s\n' '## Goal' '- Add rate limiting' | ergo --json new task '{"title":"Rate limiter"}'
-  → {"id":"ABCDEF","state":"todo",...}
+  ergo --json claim --agent model@host
+  → {"id":"ABCDEF","state":"doing","next_commands":{...}}
 
-  # Claim next ready task
-  ergo --json claim --agent sonnet@myhost
-  → {"id":"ABCDEF","state":"doing","claim":"sonnet@myhost",...}
-
-  # Mark done with result
-  ergo --json done ABCDEF --result src/ratelimit.ts
-  → {"id":"ABCDEF","state":"done",...}
+  ergo --json done ABCDEF --result src/feature.go
+  → {"kind":"done","id":"ABCDEF","updated_fields":["result","state"],"state":"done"}
 
 {{HEADER}}COMMANDS{{RESET}}
-  new task [json]                         create one task (stdin = body when piped)
-  show <id>                               task detail (Markdown default; --json for agents)
-  list [--epic <id>] [--ready] [--all]    list tasks; default omits done/canceled
-  claim [<id>] --agent <identity>         claim next ready task (or specific ID)
-  done <id> [--result <path>]             mark the task done
-  block <id> [--result <path>]            mark the task blocked
-  cancel <id> [--result <path>]           cancel the task
-  release <id> [--result <path>]          return unfinished work to todo
-  title <id> <title>                      replace a task or container title
-  body <id>                               replace body with piped stdin
-  move <id> <container-id> | --root       move a leaf task
-  sequence <A> <B> [<C>...]               enforce order: A before B before C
-  sequence rm <A> <B>                     remove the edge where B depends on A
-  plan --file <path> [json]               create epic + children from markdown file
-  init [dir]                              create .ergo/ in dir (default: .)
-  where                                   print active .ergo directory path
-  prune [--yes]                           remove done/canceled tasks (dry-run default)
-  compact                                 rewrite log to current state
-  quickstart                              complete reference manual
-  version                                 print version
+  init [dir]                                      create .ergo/ (default: current dir)
+  new task [json]                                 create one task; piped stdin is its body
+  plan --file <path> [json]                       create a container and markdown children
+  show <id>                                       show one task or container
+  list [--epic <id>] [--ready | --all]            list work; default omits done/canceled
+  claim [<id>] --agent <identity>                 claim oldest ready or resume a specific task
+  done <id> [--result <path>] [--summary <text>]  mark the objective satisfied
+  block <id> [--result <path>] [--summary <text>] record an explicit impediment
+  cancel <id> [--result <path>] [--summary <text>] stop work that is no longer wanted
+  release <id> [--result <path>] [--summary <text>] return unfinished work to todo
+  title <id> <title>                              replace a task or container title
+  body <id>                                       replace body with literal piped stdin
+  move <id> <container-id>                        move a leaf task into a container
+  move <id> --root                                move a leaf task out of its container
+  sequence <A> <B> [<C>...]                       require A before B before C
+  sequence rm <A> <B>                             remove the edge where B depends on A
+  where                                           print the active .ergo directory
+  prune [--yes]                                   tombstone closed work; dry-run by default
+  compact                                         rewrite the log to current live state
+  quickstart                                      show the complete reference manual
+  version                                         print the version
 
 {{HEADER}}GLOBAL FLAGS{{RESET}}
-  --json                                  structured output
-  --agent <identity>                      caller identity (suggested: model@host)
-  --dir <path>                            discovery start (or .ergo path)
-  -h, --help                              show help
-  -V, --version                           print version
+  --json                                           emit one machine-readable JSON value
+  --agent <identity>                               caller identity; model@host is recommended
+  --dir <path>                                     start discovery at path or an existing .ergo
+  -h, --help                                       show help
+  -V, --version                                    print the version
 
-{{HEADER}}TASK FIELDS (JSON for new task){{RESET}}
-  Unknown keys are rejected (with suggestions for close matches).
-  `new task` requires `title`.
+{{HEADER}}CREATE INPUT{{RESET}}
+  `new task` accepts one JSON object. Unknown fields fail. `title` is required.
 
-  title           task title
-  epic            parent task ID ("" to unassign)
-  state           todo|doing|done|blocked|canceled
-  claim           agent identity (implies state=doing)
-  result          file path to attach as a result
+  title     nonblank title
+  epic      container ID; a clean root todo task may receive its first child
+  state     todo|doing|blocked|done|canceled
+  claim     agent identity; implies doing
+  result    existing project-relative result file
 
-  Stdin: piped input becomes the new task body.
+  Piped stdin is the literal body. Empty piped stdin creates an empty body.
 
-{{HEADER}}PLAN{{RESET}}
-  ergo --json plan --file tasks.md '{"title":"Auth system"}'
+  `plan` JSON requires `title`. Its markdown file contains `# Title` chunks
+  separated by a line that is exactly `---`. File order creates no dependencies.
 
-  Markdown file: chunks separated by `---`. Each chunk = `# Title` + body.
-  File order does not imply dependencies — use `sequence` afterwards.
+{{HEADER}}MUTATION INPUT{{RESET}}
+  Piped stdin on done, block, cancel, or release replaces the body atomically
+  with the lifecycle change. TTY stdin leaves the body unchanged.
+
+  `body` requires piped stdin. Empty piped stdin clears the body.
+  `--summary` requires `--result`. Result paths must be existing files inside
+  the project and outside .ergo/.
 
 {{HEADER}}RULES{{RESET}}
-  1. Never leave a task in `doing`. Use done, block, cancel, or release.
-  2. A claim exists exactly when state is `doing`.
-  3. Epics cannot have state, claim, or results — only leaf tasks can.
-  4. One level of nesting: a child cannot itself be an epic.
-  5. Dependencies: any non-ancestor tasks; cycles are forbidden.
+  1. A claim exists if and only if state is doing.
+  2. Specific claim resumes todo, blocked, done, canceled, or legacy error work.
+  3. release accepts todo, doing, blocked, or legacy error; closed work resumes with claim.
+  4. Containers cannot be claimed, moved, nested, or hold direct results.
+  5. Dependencies cannot be self, cyclic, or between a container and its child.
+  6. Legacy error and claimed-blocked records remain readable until a lifecycle command resolves them.
+
+  Run `ergo quickstart` for JSON shapes, placement rules, legacy behavior, and examples.

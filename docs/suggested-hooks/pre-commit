@@ -55,7 +55,7 @@ if [[ -n "$ergo_log_file" ]]; then
     if git diff --name-only | grep -q "^\\.ergo/$ergo_log_file\$"; then
       echo "warning: .ergo/$ergo_log_file changed but is not staged" >&2
       echo "action: git add .ergo/$ergo_log_file" >&2
-      echo "action: close finished tasks (ergo set <id> --state done)" >&2
+      echo "action: close finished tasks (ergo done <id>)" >&2
     fi
   fi
 fi

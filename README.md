@@ -1,180 +1,176 @@
 # ergo
 
-**A fast, minimal planning CLI tool for Claude Code and Codex.**
+**A fast, minimal planning CLI for coding agents.**
 
 [![License](https://img.shields.io/github/license/sandover/ergo)](LICENSE)
 [![CI](https://github.com/sandover/ergo/actions/workflows/ci.yml/badge.svg)](https://github.com/sandover/ergo/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo)](https://goreportcard.com/report/github.com/sandover/ergo)
 [![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo.svg)](https://pkg.go.dev/github.com/sandover/ergo)
 
-`ergo` gives your AI agents a better way to plan -- by storing task graphs in your repo, in a compact, git-friendly format.
+Ergo stores task graphs in the repository as compact, git-friendly JSONL. Plans
+survive agent sessions, remain visible to humans, and work across agent harnesses.
 
-Plans are persistent across agent sessions, they are easy for humans to read and reason about, and they can be shared by different agents (from different model providers).
+Coding agents often blur a product specification and an implementation backlog.
+Ergo gives the backlog a small, durable home. Agents create tasks, add dependency
+order, claim ready work, and finish through direct commands. A file lock makes
+concurrent claims and mutations safe.
 
-## Why?
-In software projects, even with AI, it really helps to clearly separate WHAT you want to build from HOW the implementation happens. Traditionally, this was the difference between a spec document and a work backlog.
+Inspired by [beads (bd)](https://github.com/steveyegge/beads), with a smaller
+command and storage model.
 
-Coding agents' own planning modes tend to result in a mess of markdown files that blur the distinction between the spec and the backlog and become hard to manage.
+## Install
 
-`ergo` is a tool your AI agent uses to write out a backlog of tasks. Then during implementation, your agent claims tasks, works on them, and marks them done. Tasks can be sequenced (A must happen before B), and they can be grouped into containers.
+macOS with Homebrew:
 
-The task collection is stored in the repo as JSONL file, not inside the agent or its harness. You can keep the plan in git. The plan is agnostic about which agent you use to work on it. You could even use more than one agent at the same time -- ergo is built for concurrency.
-
-Inspired by [beads (bd)](https://github.com/steveyegge/beads), but simpler, sounder, and faster.
-
-## Features
-
-- **Simple:** no daemons, no git hooks, few opinions, easy to reason about.
-- **Fast:** 5-15x faster than beads, especially for large projects.
-- **Tasks live in the repo:** state lives in `.ergo/` as append-only JSONL.
-- **Safe for multiple agents:** a plain old file lock serializes writes
-- **Unixy:** JSON arguments, stdin bodies, and machine-readable JSON output.
-
----
-
-## Quick Start
-
-#### Step 1 (in the terminal)
-```bash
-# Install on Mac -- get homebrew first (https://brew.sh/)
-brew install sandover/tap/ergo 
-```
-Or, on Windows or Linux with Go installed: `go install github.com/sandover/ergo/cmd/ergo@latest`
-
-#### Step 2
-Add this instruction into your `AGENTS.md` or `CLAUDE.md` file
-> Use 'ergo' for all feature planning, run "ergo --help" to learn it
-
-**Optional:** This repo bundles an agent skill at [`skills/ergo-feature-planning/SKILL.md`](skills/ergo-feature-planning/SKILL.md). Install or reference it from your agent setup when you want deeper guidance on writing well-structured plans: task sizing, acceptance criteria, validation gates, and dependency ordering.
-
-#### Step 3
-Once you have a description of what you want to build (your spec), use a prompt like this:
-
-> Use ergo to plan the implementation of this spec. Each task should have a goal, description, definition of done, and automated validation.
-
-_Pro tip_: after that, tell the agent to *review and improve upon its own plan*. This leads to improvements every time. Measure twice, cut once!
-
-#### Step 4
-Tell your agent to implement the plan.
-
----
-
-## How humans use ergo
-
-These three commands are typically the only ones used by humans.
-
-### `ergo list` -- to see the plan your agent wrote
-
-![Example output of ergo list](docs/img/ergo-list-screenshot.jpg)
-
-Legend:
-- `○` ready (todo + all deps satisfied)
-- `◐` in progress (doing)
-- `·` blocked (blocked or todo with unmet deps)
-- `✓` done
-- `✗` canceled
-- `⚠` error
-- `@agent-id` claimed by
-- `⧗ …` blocked by (dependency summary)
-
-### `ergo show` -- to see details of a task
-
-```bash
-ergo show GQUJPG
+```sh
+brew install sandover/tap/ergo
 ```
 
-![Example output of ergo show](docs/img/ergo-show-screenshot.jpg)
+Any supported platform with Go:
 
-### `ergo prune` -- to remove completed tasks
-
-```bash
-ergo prune
+```sh
+go install github.com/sandover/ergo/cmd/ergo@latest
 ```
 
-Removes completed (done or canceled) tasks from the plan.
+Add a short repository instruction for your coding agent:
 
----
+> Use Ergo for feature planning. Run `ergo --help` and `ergo quickstart` to learn it.
 
-## How coding agents use ergo
+The repository also ships a deeper planning skill at
+[`skills/ergo-feature-planning/SKILL.md`](skills/ergo-feature-planning/SKILL.md).
 
-Run `ergo --help` for syntax and `ergo quickstart` for the complete reference.
+## Plan work
 
-### Planning
+Create a container and child tasks from markdown:
 
-```bash
-# Create a feature from a markdown plan file
+```sh
 cat > tasks.md <<'EOF'
 # Password hashing
-Use bcrypt with cost=12.
+Use bcrypt with cost 12.
 ---
 # Session tokens
-1h access, 24h refresh.
+Use 1-hour access and 24-hour refresh tokens.
 EOF
 
 ergo --json plan --file tasks.md '{"title":"User login"}'
-# => creates container ABCDEF with children GHIJKL, MNOPQR
-
-# Add ordering explicitly
-ergo sequence GHIJKL MNOPQR
-
-# Or incrementally: create a task, then add children
-ergo new task '{"title":"User login"}'
-# => ABCDEF
-
-printf '%s\n' 'Use bcrypt with cost=12.' | ergo new task '{"title":"Password hashing","epic":"ABCDEF"}'
-# => GHIJKL
-
-printf '%s\n' '1h access, 24h refresh.' | ergo new task '{"title":"Session tokens","epic":"ABCDEF"}'
-# => MNOPQR
 ```
 
-### Execution
+File order does not create dependencies. Add order explicitly:
 
-```bash
-# Find actionable work
+```sh
+ergo sequence TASK_HASHING TASK_TOKENS
+```
+
+Create work incrementally when that is clearer:
+
+```sh
+ergo new task '{"title":"User login"}'
+# => OFKSTE
+
+printf '%s\n' 'Use bcrypt with cost 12.' |
+  ergo new task '{"title":"Password hashing","epic":"OFKSTE"}'
+```
+
+## Execute work
+
+```sh
+# Inspect actionable work.
 ergo --json list --ready
 
-# Claim a task (--agent identifies the caller)
-ergo claim GHIJKL --agent sonnet@hostname
+# Claim the oldest ready task.
+ergo --json claim --agent sonnet@hostname
 
-# Mark it done
-ergo set GHIJKL '{"state":"done"}'
+# Or resume a specific task by ID.
+ergo --json claim ABCDEF --agent sonnet@hostname
+
+# Leave the claim through one direct intent.
+ergo done ABCDEF --result src/auth.go
+ergo block ABCDEF
+ergo cancel ABCDEF
+ergo release ABCDEF
 ```
 
-> **Tip:** Put metadata in the JSON argument and pipe markdown bodies on stdin. Use `plan --file` when you want to seed a container from a markdown task list.
+Claim JSON returns the exact task-specific commands for all four exits. A claim
+exists exactly while state is `doing`. Done, block, cancel, and release clear it.
 
----
+Use release for unfinished work that remains valid. Use block when an identified
+impediment must be resolved before another attempt.
 
-## Data Representation
+## Human views
 
-All state lives in `.ergo/` at your repo root:
-
+```sh
+ergo list
+ergo show ABCDEF
+ergo prune
 ```
+
+![Example output of ergo list](docs/img/ergo-list-screenshot.jpg)
+
+The primary list symbols are:
+
+- `○` ready todo work
+- `◐` doing work and its agent identity
+- `·` explicit blocked work or todo work waiting on dependencies
+- `✓` done
+- `✗` canceled
+- `⚠` unresolved legacy error
+- `⧗` dependency summary
+
+Prune previews closed work by default. `ergo prune --yes` records tombstones.
+`ergo compact` later removes pruned history and collapses the live log.
+
+## Edit tasks
+
+```sh
+ergo title ABCDEF "Clarify authentication failure"
+printf '%s\n' '## Goal' '- Clarify the failure' | ergo body ABCDEF
+ergo move ABCDEF OFKSTE
+ergo move ABCDEF --root
+```
+
+Lifecycle commands also accept a piped body and `--result` in one atomic update:
+
+```sh
+printf '%s\n' '## Completion' '- Implemented and verified.' |
+  ergo done ABCDEF --result docs/verification.md
+```
+
+## V2 command cutover
+
+V2 replaces generic field and state mutation with direct verbs:
+
+| V1 intent | V2 command |
+| --- | --- |
+| Claim or set doing | `claim` |
+| Mark complete | `done` |
+| Record an impediment | `block` |
+| Stop unwanted work | `cancel` |
+| Return unfinished work to todo | `release` |
+| Rename | `title` |
+| Replace body | `body` |
+| Change container | `move` |
+
+Resume done or canceled work with a specific claim. V2 deliberately has no
+operation that returns closed work to unclaimed todo. The historical error state
+remains readable but cannot be created. Use release for a retryable attempt or
+block for an impediment.
+
+Existing repositories require no migration. Ergo reads both `plans.jsonl` and
+the legacy `events.jsonl` filename, preserves unresolved legacy state during
+compact, and normalizes it only after an explicit lifecycle command.
+
+## Storage
+
+```text
 .ergo/
-├── plans.jsonl    # append-only event log (source of truth)
-└── lock           # flock(2) lock file for write serialization
+├── plans.jsonl    # append-only event log
+└── lock           # write and coherent-read serialization
 ```
 
-(For backwards compatibility, `events.jsonl` is also supported if it already exists.)
+Plain JSONL is inspectable, diffable, and recoverable. Each command replays the
+log into memory. Mutations validate and append their complete event batch under
+the lock. Oldest-ready claim selects and writes under that same lock, so
+concurrent agents cannot claim the same task.
 
-**Why append-only JSONL?**
-- **Auditable:** Full history of every state change, who made it, when.
-- **Inspectable:** `cat .ergo/plans.jsonl | jq` — no special tools needed.
-- **Recoverable:** Corrupt state? Replay events. Want to undo? Filter events.
-- **Diffable:** `git diff` shows exactly what changed.
-
-**Concurrency safety:**
-- All writes acquire an exclusive `flock(2)` on `.ergo/lock` before appending.
-- `ergo claim` is atomic: read → find oldest READY → claim → write, all under lock.
-- Commands wait briefly for the lock when another Ergo process is active.
-- Multiple agents can safely race to claim work; exactly one process claims each task.
-
-**State reconstruction:**
-On each command, ergo replays `plans.jsonl` to build current state in memory quickly (100 tasks: ~3ms, 1000 tasks: ~15ms) and guarantees consistency. Run `ergo compact` to collapse history if the log grows large. To verify: `go test -bench=. -benchmem`
-
-**Why not SQLite?**
-SQLite is great, but binary files don't diff well in git. JSONL is trivially inspectable (`cat | jq`), merges via git, and append-only writes with `flock` are simple. For a few thousand tasks, replay is instant.
-
-## Is it any good?
-
-Yes.
+Run `ergo --help` for the compact reference and `ergo quickstart` for every
+command, flag, input rule, JSON guarantee, and legacy behavior.

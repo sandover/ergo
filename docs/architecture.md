@@ -1,133 +1,124 @@
-# ergo architecture (maintainer reference)
+# Ergo architecture
 
-This document explains how ergo is built and what invariants maintainers must preserve.
-It is not a user manual—**the user manual is `ergo --help` and `ergo quickstart`**.
+This document is a maintainer reference. `ergo --help` and `ergo quickstart`
+are the user manuals. `docs/spec.md` is the stable public contract.
 
-## Goals
+## Design
 
-- Keep the codebase small, legible, and mapped to the domain (task graphs for agents).
-- Provide strong robustness guarantees: no silent corruption, helpful error messages, and safe concurrent use.
-- Keep the CLI surfaces stable for agents (especially `--json`).
-- Ensure documentation stays coherent: behavior, tests, and manuals must match.
+Ergo stores task graph history as append-only JSONL and rebuilds current state
+by replaying events. The design favors plain text, explicit inputs, and one
+serialized write path over a database or daemon.
 
-## High-level mental model
+The active repository contains:
 
-ergo stores task graph state as an **append-only JSONL event log** in `.ergo/plans.jsonl`.
-Every command rebuilds current state by **replaying** events into an in-memory graph, then performs a read or appends new events.
+```text
+.ergo/
+├── plans.jsonl
+└── lock
+```
 
-(For backwards compatibility, `.ergo/events.jsonl` is also supported if it already exists.)
+If a repository already has `.ergo/events.jsonl`, Ergo continues to use it.
+Opening a repository does not rename or rewrite the log.
 
-This design is intentionally “boring”:
-- Plain text storage is diffable and debuggable with common tools.
-- Replay is fast enough for the intended scale (hundreds to low thousands of items).
-- Concurrency safety is centralized in a single file lock.
+## Event storage and replay
 
-## Data and persistence
+Normal mutations append events. Replay constructs tasks, dependency maps,
+reverse dependency maps, metadata timestamps, results, and tombstones in memory.
+It tolerates a truncated final line but reports malformed complete lines with
+the file and line number.
 
-### `.ergo/` layout
+Prune appends tombstones. Compact is the only routine that replaces the event
+file. It writes one lossless representation of the live graph and removes
+pruned history. It preserves unresolved legacy error and claimed-blocked state
+exactly.
 
-- `.ergo/plans.jsonl`: append-only event log (source of truth).
-  - For backwards compatibility, `.ergo/events.jsonl` is also supported if it already exists.
-- `.ergo/lock`: advisory lock file used to serialize graph commands.
+Containers are derived. A root task becomes a container when another task's
+parent ID points to it. Historical `new_epic` events remain replayable so empty
+legacy containers stay visible.
 
-### Event log invariants
+## Locking
 
-- **Append-only**: mutations append events; they do not rewrite existing lines.
-- **Replayable**: state is reconstructed from events; the current state is not stored separately.
-- **Tombstones**: prune writes tombstone events; pruned IDs are treated as non-existent.
-- **Corruption tolerance**: replay tolerates a truncated final line (common after crashes/partial writes).
+Reads and writes acquire an advisory lock on `.ergo/lock`. A mutation loads,
+validates, builds its full event batch, appends, and reloads while holding the
+lock. This prevents partial command effects and interleaved batches.
 
-### Locking and concurrency
+Oldest-ready claim selects and writes under the same lock. Concurrent agents can
+race to claim; only one claims each task. List and show also lock so their
+snapshots do not split a mutation batch.
 
-Commands that mutate or read the task graph acquire an exclusive `flock` on `.ergo/lock`.
-Mutations validate and append their full event batch while holding that lock.
-`list` and `show` also hold the lock while replaying the log, so they read a coherent snapshot.
+The lock file is a synchronization inode, not state. Do not delete it during
+contention. The operating system releases the lock when its process exits.
 
-Commands wait briefly for the lock before returning a lock-busy error.
+## Domain invariants
 
-The lock file must not be deleted to recover from contention.
-`flock` releases when the owning process exits; deleting the file can split processes across different inodes.
+Forward states are todo, doing, blocked, done, and canceled. Historical error
+is readable but never a new mutation target.
 
-This yields two key properties:
-- **No interleaved command batches**: each command emits its logical event set together.
-- **Race-safe claiming**: “claim oldest ready” selects and writes under the same lock, so only one process wins.
+The mutation core enforces a postcondition instead of a transition table:
 
-## Core domain model
+```text
+state=doing  <=>  claimed_by is nonempty
+```
 
-### Entities
+Done, block, cancel, and release state their target condition directly. Claim
+states doing plus an owner. This lets a direct command normalize legacy state
+without intermediate events or command choreography.
 
-- **Task**: the only stored entity type.
-- **Leaf task**: a task with no children; it has state and may be claimed.
-- **Container task**: a task with children. Containers are derived from child assignment, have no direct state/claim/results semantics, and complete when all children are done or canceled.
+A mutation request can include target state and claim, body replacement, result
+attachment, title, or placement. Validation finishes before append. Same-value
+content and same-state lifecycle calls suppress redundant events. Result append
+and legacy claim cleanup still produce events when the state itself is unchanged.
 
-The CLI still uses `--epic <id>` as the parent-assignment flag for compatibility with existing ergonomics. In current behavior, that value is a container task ID.
+## Tasks and containers
 
-### State machine
+Task is the only stored entity. A leaf task carries lifecycle state. A container
+has children and no direct lifecycle, claim, or result behavior. Completion is
+derived when all children are done or canceled.
 
-The allowed transitions and claim invariants live in code (the model layer) and must be enforced consistently:
-- `doing` and `error` require a claim (to identify the agent).
-- `todo`, `done`, `canceled` must have no claim.
-- `blocked` may have a claim or not.
+Placement validation keeps containers at one root level. A clean root todo task
+may be promoted by receiving its first child. Containers cannot move or nest.
+Moves also reject dependency edges between the prospective container and child.
 
-### Dependencies
+## Dependencies and readiness
 
-- Dependencies are allowed between any two non-ancestor tasks.
-- A task cannot depend on its own container, and a container cannot depend on one of its own children.
-- Cycles are forbidden.
-- If a dependency points at a container, the dependency is complete only when all children of that container are done or canceled.
+The graph stores directed `depends` edges. It rejects self edges, ancestry edges,
+and cycles. A container dependency completes when every child is done or
+canceled. A child also inherits dependencies assigned to its container.
+
+Readiness is derived for todo leaf tasks whose direct and inherited dependencies
+are complete. Explicit blocked is separate from todo work waiting on dependencies.
+
+## Results
+
+Result paths are validated relative to the project root while the mutation lock
+is held. A path must remain inside the project, refer to a regular file, and
+stay outside `.ergo/`. Attachment captures SHA-256, mtime, and the current git
+commit when available. Replay orders results newest first.
 
 ## Code organization
 
-The code is intentionally layered:
+- `model.go`: domain types and small invariants.
+- `storage.go`: discovery, event I/O, and result provenance.
+- `graph.go`: replay, derivation, readiness, and compaction.
+- `mutation.go`: the shared atomic mutation path.
+- `commands_*.go`: intent-specific command behavior.
+- `output.go` and rendering files: stable JSON and human output.
+- `cmd/ergo`: Cobra routing, global flags, and process-level errors.
 
-- **Model**: types and invariants (states, transitions, dependency rules).
-- **Storage**: `.ergo` discovery + reading/writing events.
-- **Replay/graph**: materialize state from events; readiness/blocking/compaction logic.
-- **Commands**: implement CLI operations by combining the above layers.
-- **Output**: stable JSON shapes and formatting helpers.
-- **CLI wiring**: cobra wiring in `cmd/ergo`.
+Command handlers state intent. They do not duplicate event, claim, result, or
+lock mechanics. Placement and lifecycle validation stay inside the locked path.
 
-The most important architectural constraint is that **domain invariants are enforced in one place** (model/command logic),
-and **tests assert the public behavior**.
+## Public surfaces
 
-## Documentation architecture (the “manual” contract)
+Agents depend on JSON output. Successful `--json` calls emit one value to stdout.
+Mutation objects report only fields that changed. Output shape changes require
+integration tests, manual updates, and a changelog note.
 
-ergo has two documentation surfaces, each with a distinct purpose:
+The documentation sources have distinct roles:
 
-### `ergo --help` (`internal/ergo/help.txt`)
+- `internal/ergo/help.txt`: complete compact command and flag reference.
+- `internal/ergo/quickstart.txt`: complete example-led manual.
+- `docs/spec.md`: stable behavioral contract.
+- `docs/architecture.md`: implementation constraints.
 
-The quick reference:
-- One-screen overview for users who already know ergo.
-- Command syntax + terse descriptions.
-- Minimal prose and minimal scrolling.
-
-### `ergo quickstart` (`internal/ergo/quickstart.txt`)
-
-The complete reference manual:
-- Teaches by runnable examples.
-- Covers the entire surface area: rules, edge cases, workflows.
-- The place agents consult when implementing or debugging.
-
-### Documentation invariants
-
-- **If it’s not in `help.txt` or `quickstart.txt`, it’s undocumented.**
-- `help.txt` optimizes for brevity; `quickstart.txt` optimizes for completeness.
-- Any behavior change must update: implementation + tests + manuals together.
-
-## JSON contracts
-
-Agents rely on `--json` for machine-safe automation.
-When `--json` is set:
-- Commands emit a single JSON value to stdout (object or array) on success.
-- Error paths should be deterministic and human-actionable.
-- Schema evolution should be additive where possible.
-
-If you must change JSON shape semantics, treat it like a public API change:
-update tests, update manuals, and call out the change clearly.
-
-## Working agreements for contributors
-
-- Keep changes focused. Prefer small, high-signal diffs.
-- Avoid hidden state and environment-variable configuration (except secrets).
-- Prefer pure functions for logic that can be isolated and tested.
-- When in doubt, update the manuals early—agents are primary users.
+Behavior, tests, and these sources must change together.

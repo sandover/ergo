@@ -1,48 +1,57 @@
-# ergo release guide
+# Ergo release guide
 
-This is the maintainer checklist for shipping a new ergo version.
-User-facing docs live in `ergo --help` and `ergo quickstart`; this file is operational.
+This is the maintainer checklist for a tag-driven release. User behavior belongs
+in `ergo --help`, `ergo quickstart`, and `docs/spec.md`.
 
-## Pre-flight (every release)
+## Prepare
 
-- Ensure working tree is clean and up to date with `main`.
-- Run CI parity locally: `task ci` (tidy, lint, test).
-- Verify docs and behavior are coherent:
-  - `internal/ergo/help.txt` matches the current CLI surface area.
-  - `internal/ergo/quickstart.txt` examples still work and cover new behavior.
-  - `--json` outputs remain stable and machine-safe for agents.
-- Sanity check install/build:
-  - `task build` and smoke-run `./bin/ergo --help`.
+- Start from a clean, current main branch.
+- Update `CHANGELOG.md` with user-visible behavior and upgrade notes.
+- Confirm help, quickstart, spec, architecture, README, and shipped skill agree.
+- Run `task ci`.
+- Run `task build` and smoke `./bin/ergo --help`, quickstart, JSON output, and one lifecycle loop.
+- Run `goreleaser check`.
+- Run `goreleaser release --snapshot --clean` and inspect every configured target.
 
-## Versioning and changelog
+For a version candidate, inject the same linker variable as GoReleaser:
 
-- Prefer SemVer:
-  - Patch: bugfixes, perf improvements, doc fixes (no contract changes).
-  - Minor: additive features, additive JSON fields, new commands/flags.
-  - Major: breaking behavior/JSON changes or removals.
-- Update `CHANGELOG.md` with user-impacting changes:
-  - Call out any behavior/contract changes explicitly (especially `--json` schemas).
-  - Include upgrade notes when needed.
+```sh
+go build -ldflags "-s -w -X main.version=2.0.0" -o .scratch/release/ergo-v2-candidate ./cmd/ergo
+.scratch/release/ergo-v2-candidate version
+```
 
-## Cutting a release (tag-driven)
+The command must print `ergo 2.0.0`. The release tag includes the `v` prefix:
+`v2.0.0`.
 
-- Choose a version tag (e.g., `v1.0.0`).
-- Create and push the git tag.
-- Let GitHub Actions / goreleaser build and publish artifacts.
+## Versioning
 
-## Post-release verification
+- Patch releases fix defects without changing contracts.
+- Minor releases add compatible commands, flags, or JSON fields.
+- Major releases remove or change public commands, behavior, or JSON semantics.
 
-- Verify the release artifacts run:
-  - `ergo --version` matches the tag.
-  - `ergo --help` and `ergo quickstart` render correctly on a real terminal.
-- Verify agent-critical surfaces:
-  - JSON output remains parseable (no extra stdout noise).
-  - Error messages remain actionable (hint text still accurate).
+Breaking releases must map old workflows to new commands and state what is no
+longer exposed. Legacy storage compatibility must be tested against copied
+event logs rather than assumed from unit tests alone.
 
-## “Don’t break agents” rules
+## Publish
 
-- Treat `--json` output as a public API:
-  - Prefer additive changes (new fields) over shape changes.
-  - Update `docs/spec.md` and integration tests for any contract changes.
-- Keep `help.txt` and `quickstart.txt` as the complete manual:
-  - If a user-visible behavior changes, update them in the same PR.
+1. Record the exact release commit and passing CI run.
+2. Get explicit approval to publish the tag.
+3. Create and push the immutable version tag.
+4. Watch the tag-specific release workflow to completion.
+5. Verify the GitHub Release is final and contains checksums plus every configured archive.
+
+Never move or replace a published version tag. Correct a failed release with a
+new version.
+
+## Verify delivery
+
+- Download the archives and verify them against `checksums.txt`.
+- Run the released binary's version, help, and quickstart commands.
+- Verify one JSON lifecycle from claim through an exit.
+- Verify one copied legacy log containing error or claimed-blocked state.
+- Install through Homebrew and invoke `$(brew --prefix)/bin/ergo` explicitly.
+- Verify WinGet too when its publisher is configured.
+
+The release is complete only when source, artifacts, and package-manager installs
+all report the intended version and accepted CLI contract.
