@@ -72,6 +72,10 @@ Unknown keys are rejected. `new task` requires `title`.
 
 {{HEADER}}5. UPDATE WORK{{RESET}}
 
+Direct content edits:
+  {{CMD}}ergo title ABCDEF "Login API"{{RESET}}
+  {{CMD}}printf '%s\n' '## Status' '- Waiting on review' | ergo body ABCDEF{{RESET}}
+
 `set <id> [json]` updates exactly one task. The JSON argument changes metadata. If stdin is piped, it replaces the body.
 
 Rename or reparent:

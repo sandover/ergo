@@ -30,6 +30,8 @@ func init() {
 	rootCmd.AddCommand(newLifecycleCmd("block", "Mark a task blocked"))
 	rootCmd.AddCommand(newLifecycleCmd("cancel", "Cancel a task"))
 	rootCmd.AddCommand(newLifecycleCmd("release", "Return unfinished work to todo"))
+	rootCmd.AddCommand(titleCmd)
+	rootCmd.AddCommand(bodyCmd)
 	// ergo set
 	rootCmd.AddCommand(setCmd)
 	// ergo sequence
@@ -155,6 +157,24 @@ func newLifecycleCmd(kind, short string) *cobra.Command {
 		}, globalOpts)
 	}
 	return cmd
+}
+
+var titleCmd = &cobra.Command{
+	Use:   "title <id> <title>",
+	Short: "Replace a task title",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return ergo.RunTitle(args[0], args[1], globalOpts)
+	},
+}
+
+var bodyCmd = &cobra.Command{
+	Use:   "body <id>",
+	Short: "Replace a task body from stdin",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return ergo.RunBody(args[0], globalOpts)
+	},
 }
 
 // -- set --

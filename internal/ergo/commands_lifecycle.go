@@ -8,7 +8,6 @@ package ergo
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -58,20 +57,7 @@ func RunLifecycle(kind, id string, lifecycle LifecycleOptions, opts GlobalOption
 	if err != nil {
 		return err
 	}
-	if !opts.JSON {
-		return nil
-	}
-	task := outcome.Graph.Tasks[id]
-	if task == nil {
-		return errors.New("internal error: missing mutated task")
-	}
-	return writeJSON(os.Stdout, setOutput{
-		Kind:          kind,
-		ID:            id,
-		UpdatedFields: outcome.UpdatedFields,
-		State:         task.State,
-		ClaimedBy:     task.ClaimedBy,
-	})
+	return writeMutationResult(kind, id, outcome, opts.JSON)
 }
 
 func lifecycleTargetState(kind string) (string, error) {

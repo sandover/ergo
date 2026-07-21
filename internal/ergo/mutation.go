@@ -9,6 +9,7 @@ package ergo
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -38,6 +39,23 @@ type taskMutation struct {
 type mutationOutcome struct {
 	Graph         *Graph
 	UpdatedFields []string
+}
+
+func writeMutationResult(kind, id string, outcome mutationOutcome, jsonOutput bool) error {
+	if !jsonOutput {
+		return nil
+	}
+	task := outcome.Graph.Tasks[id]
+	if task == nil {
+		return errors.New("internal error: missing mutated task")
+	}
+	return writeJSON(os.Stdout, setOutput{
+		Kind:          kind,
+		ID:            id,
+		UpdatedFields: outcome.UpdatedFields,
+		State:         task.State,
+		ClaimedBy:     task.ClaimedBy,
+	})
 }
 
 func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskMutation, quiet bool) (mutationOutcome, error) {

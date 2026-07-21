@@ -28,6 +28,8 @@
   block <id> [--result <path>]            mark the task blocked
   cancel <id> [--result <path>]           cancel the task
   release <id> [--result <path>]          return unfinished work to todo
+  title <id> <title>                      replace a task or container title
+  body <id>                               replace body with piped stdin
   sequence <A> <B> [<C>...]               enforce order: A before B before C
   sequence rm <A> <B>                     remove the edge where B depends on A
   plan --file <path> [json]               create epic + children from markdown file
