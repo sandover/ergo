@@ -1,116 +1,78 @@
-// State machine tests for task state transitions.
-// Ensures transitions and invariants match the defined rules.
+// Purpose: Verify lifecycle postconditions and exact claim ownership rules.
+// Exports: none.
+// Role: Unit coverage for the v2 state model independent of CLI routing.
+// Invariants: every forward target is reachable from every readable state.
+// Invariants: doing is claimed and every other forward state is unclaimed.
 package ergo
 
-import (
-	"testing"
-)
+import "testing"
 
-// TestValidTransitions exhaustively tests all state×state combinations.
-func TestValidTransitions(t *testing.T) {
-	allStates := []string{stateTodo, stateDoing, stateDone, stateBlocked, stateCanceled, stateError}
-
-	// Expected valid transitions (from → to)
-	expected := map[string]map[string]bool{
-		stateTodo:     {stateDoing: true, stateDone: true, stateBlocked: true, stateCanceled: true},
-		stateDoing:    {stateTodo: true, stateDone: true, stateBlocked: true, stateCanceled: true, stateError: true},
-		stateBlocked:  {stateTodo: true, stateDoing: true, stateDone: true, stateCanceled: true},
-		stateDone:     {stateTodo: true},                                        // reopen only
-		stateCanceled: {stateTodo: true},                                        // reopen only
-		stateError:    {stateTodo: true, stateDoing: true, stateCanceled: true}, // retry, reassign, or give up
-	}
-
-	for _, from := range allStates {
-		for _, to := range allStates {
-			t.Run(from+"→"+to, func(t *testing.T) {
-				err := validateTransition(from, to)
-
-				if from == to {
-					// no-op always valid
-					if err != nil {
-						t.Errorf("no-op %s→%s should be valid, got: %v", from, to, err)
-					}
-					return
+func TestLifecycleStatePostconditionsAcceptEveryReadableSource(t *testing.T) {
+	sources := []string{stateTodo, stateDoing, stateBlocked, stateDone, stateCanceled, stateError}
+	targets := []string{stateTodo, stateDoing, stateBlocked, stateDone, stateCanceled}
+	for _, source := range sources {
+		for _, target := range targets {
+			t.Run(source+"-to-"+target, func(t *testing.T) {
+				mutation := taskMutation{State: target, StateSet: true}
+				if target == stateDoing {
+					mutation.Claim = "agent-1"
+					mutation.ClaimSet = true
 				}
-
-				shouldBeValid := expected[from][to]
-				if shouldBeValid && err != nil {
-					t.Errorf("%s→%s should be valid, got: %v", from, to, err)
+				state, claim, err := mutationPostcondition(&Task{State: source, ClaimedBy: legacyClaim(source)}, mutation, "")
+				if err != nil {
+					t.Fatalf("unexpected postcondition error: %v", err)
 				}
-				if !shouldBeValid && err == nil {
-					t.Errorf("%s→%s should be invalid, but was allowed", from, to)
+				if state != target {
+					t.Fatalf("state = %q, want %q", state, target)
+				}
+				if target == stateDoing && claim != "agent-1" {
+					t.Fatalf("doing claim = %q, want agent-1", claim)
+				}
+				if target != stateDoing && claim != "" {
+					t.Fatalf("non-doing claim = %q, want empty", claim)
 				}
 			})
 		}
 	}
 }
 
-// TestClaimInvariants tests the claim/state relationship.
-func TestClaimInvariants(t *testing.T) {
+func TestClaimInvariant(t *testing.T) {
 	tests := []struct {
-		name      string
-		state     string
-		claimedBy string
-		wantErr   bool
+		state string
+		claim string
+		ok    bool
 	}{
-		// doing requires claim
-		{name: "doing with claim", state: stateDoing, claimedBy: "agent-1", wantErr: false},
-		{name: "doing without claim", state: stateDoing, claimedBy: "", wantErr: true},
-
-		// error requires claim (shows who failed)
-		{name: "error with claim", state: stateError, claimedBy: "agent-1", wantErr: false},
-		{name: "error without claim", state: stateError, claimedBy: "", wantErr: true},
-
-		// todo/done/canceled must have no claim
-		{name: "todo without claim", state: stateTodo, claimedBy: "", wantErr: false},
-		{name: "todo with claim", state: stateTodo, claimedBy: "agent-1", wantErr: true},
-		{name: "done without claim", state: stateDone, claimedBy: "", wantErr: false},
-		{name: "done with claim", state: stateDone, claimedBy: "agent-1", wantErr: true},
-		{name: "canceled without claim", state: stateCanceled, claimedBy: "", wantErr: false},
-		{name: "canceled with claim", state: stateCanceled, claimedBy: "agent-1", wantErr: true},
-
-		// blocked can have or not have claim
-		{name: "blocked without claim", state: stateBlocked, claimedBy: "", wantErr: false},
-		{name: "blocked with claim", state: stateBlocked, claimedBy: "agent-1", wantErr: false},
+		{stateDoing, "agent-1", true},
+		{stateDoing, "", false},
+		{stateTodo, "", true},
+		{stateBlocked, "", true},
+		{stateDone, "", true},
+		{stateCanceled, "", true},
+		{stateTodo, "agent-1", false},
+		{stateBlocked, "agent-1", false},
+		{stateDone, "agent-1", false},
+		{stateCanceled, "agent-1", false},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateClaimInvariant(tt.state, tt.claimedBy)
-			if tt.wantErr && err == nil {
-				t.Errorf("expected error for state=%s claimedBy=%q", tt.state, tt.claimedBy)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-		})
+	for _, test := range tests {
+		err := validateClaimInvariant(test.state, test.claim)
+		if test.ok && err != nil {
+			t.Errorf("state=%s claim=%q: %v", test.state, test.claim, err)
+		}
+		if !test.ok && err == nil {
+			t.Errorf("state=%s claim=%q: expected error", test.state, test.claim)
+		}
 	}
 }
 
-// TestInvalidTransitionsFromTerminalStates verifies done/canceled/error can only go to limited states.
-func TestInvalidTransitionsFromTerminalStates(t *testing.T) {
-	// done/canceled can only go to todo
-	for _, from := range []string{stateDone, stateCanceled} {
-		for _, to := range []string{stateDoing, stateBlocked, stateDone, stateCanceled, stateError} {
-			if from == to {
-				continue // no-op is always valid
-			}
-			t.Run(from+"→"+to, func(t *testing.T) {
-				err := validateTransition(from, to)
-				if err == nil {
-					t.Errorf("%s→%s should be invalid", from, to)
-				}
-			})
-		}
+func TestForwardWritesRejectLegacyError(t *testing.T) {
+	if err := validateForwardState(stateError); err == nil {
+		t.Fatal("expected legacy error target to be rejected")
 	}
+}
 
-	// error can go to todo, doing, canceled but NOT done or blocked
-	for _, to := range []string{stateDone, stateBlocked} {
-		t.Run(stateError+"→"+to, func(t *testing.T) {
-			err := validateTransition(stateError, to)
-			if err == nil {
-				t.Errorf("error→%s should be invalid", to)
-			}
-		})
+func legacyClaim(state string) string {
+	if state == stateDoing || state == stateBlocked || state == stateError {
+		return "legacy-agent"
 	}
+	return ""
 }

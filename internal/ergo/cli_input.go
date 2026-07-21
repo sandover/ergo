@@ -125,7 +125,7 @@ func (input *InlineTaskInput) validate(requireTitle bool) *ValidationError {
 
 	if input.State != nil {
 		state := strings.TrimSpace(*input.State)
-		if _, ok := validStates[state]; !ok {
+		if _, ok := knownStates[state]; !ok {
 			invalid["state"] = "must be one of: todo, doing, done, blocked, canceled, error"
 		}
 	}

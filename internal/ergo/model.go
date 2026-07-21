@@ -1,7 +1,7 @@
 // Purpose: Define core domain types, constants, and validation rules.
 // Exports: GlobalOptions, Task, Graph, Event, and related structs.
 // Role: Shared model and state machine definitions.
-// Invariants: validTransitions and claim invariants must be enforced.
+// Invariants: lifecycle postconditions and claim ownership must stay consistent.
 // Notes: Error values are stable sentinel constants.
 package ergo
 
@@ -49,66 +49,19 @@ var (
 	ErrLockBusy  = errors.New("lock busy")
 )
 
-var validStates = map[string]struct{}{
-	stateTodo:     {},
-	stateDoing:    {},
-	stateDone:     {},
-	stateBlocked:  {},
-	stateCanceled: {},
-	stateError:    {},
-}
-
-// State machine: valid transitions and claim invariants.
-// Design decisions:
-// - done/canceled are NOT terminal (can reopen via →todo)
-// - todo→done allowed (quick completion without claiming)
-// - blocked can transition to any non-terminal state
-// - error represents failed work; can retry (→doing), reassign (→todo), or give up (→canceled)
-// - error preserves claim to show who failed
-var validTransitions = map[string]map[string]struct{}{
-	stateTodo:     {stateDoing: {}, stateDone: {}, stateBlocked: {}, stateCanceled: {}},
-	stateDoing:    {stateTodo: {}, stateDone: {}, stateBlocked: {}, stateCanceled: {}, stateError: {}},
-	stateBlocked:  {stateTodo: {}, stateDoing: {}, stateDone: {}, stateCanceled: {}},
-	stateDone:     {stateTodo: {}},                                    // reopen only
-	stateCanceled: {stateTodo: {}},                                    // reopen only
-	stateError:    {stateTodo: {}, stateDoing: {}, stateCanceled: {}}, // retry, reassign, or give up
-}
-
-// validateTransition checks if from→to is a valid state transition.
-// Returns nil if valid, error describing why if not.
-func validateTransition(from, to string) error {
-	if from == to {
-		return nil // no-op is always valid
-	}
-	allowed, ok := validTransitions[from]
-	if !ok {
-		return fmt.Errorf("unknown state: %s", from)
-	}
-	if _, valid := allowed[to]; !valid {
-		return fmt.Errorf("invalid transition: %s → %s", from, to)
-	}
-	return nil
+var knownStates = map[string]struct{}{
+	stateTodo: {}, stateDoing: {}, stateDone: {}, stateBlocked: {}, stateCanceled: {}, stateError: {},
 }
 
 // validateClaimInvariant checks that the claim/state relationship is valid.
-// doing requires a claim; todo/done/canceled must have no claim.
-// error keeps claim (shows who failed); blocked can have or not have claim.
+// Forward state writes require a claim exactly when the state is doing.
 func validateClaimInvariant(state, claimedBy string) error {
-	switch state {
-	case stateDoing:
-		if claimedBy == "" {
-			return errors.New("state=doing requires a claim")
-		}
-	case stateError:
-		if claimedBy == "" {
-			return errors.New("state=error requires a claim (shows who failed)")
-		}
-	case stateTodo, stateDone, stateCanceled:
-		if claimedBy != "" {
-			return fmt.Errorf("state=%s must have no claim", state)
-		}
+	if state == stateDoing && claimedBy == "" {
+		return errors.New("state=doing requires a claim")
 	}
-	// blocked can have or not have a claim
+	if state != stateDoing && claimedBy != "" {
+		return fmt.Errorf("state=%s must have no claim", state)
+	}
 	return nil
 }
 

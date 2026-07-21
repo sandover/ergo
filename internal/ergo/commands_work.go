@@ -65,14 +65,13 @@ func RunSet(id string, args []string, opts GlobalOptions) error {
 		return err
 	}
 
-	agentID := opts.AgentID
-	graph, err := applySetUpdates(dir, opts, id, updates, agentID, opts.JSON)
+	outcome, err := applySetUpdates(dir, opts, id, updates, opts.AgentID, opts.JSON)
 	if err != nil {
 		return err
 	}
 
 	if opts.JSON {
-		task := graph.Tasks[id]
+		task := outcome.Graph.Tasks[id]
 		if task == nil {
 			return fmt.Errorf("unknown task id %s", id)
 		}
@@ -107,10 +106,11 @@ func RunClaim(id string, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	graph, err := applySetUpdates(dir, opts, id, updates, agentID, true)
+	outcome, err := applySetUpdates(dir, opts, id, updates, agentID, true)
 	if err != nil {
 		return err
 	}
+	graph := outcome.Graph
 	task := graph.Tasks[id]
 	if task == nil {
 		return errors.New("internal error: missing claimed task")
@@ -230,246 +230,83 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 	fmt.Println(reminder)
 	return nil
 }
-func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, agentID string, quiet bool) (*Graph, error) {
-	lockPath := filepath.Join(dir, "lock")
-	eventsPath := getEventsPath(dir)
-	repoDir := filepath.Dir(dir)
-
-	var updatedGraph *Graph
-	err := withLock(lockPath, opts, func() error {
-		graph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
-
-		if _, ok := graph.Tombstones[id]; ok {
-			return prunedErr(id)
-		}
-		task, ok := graph.Tasks[id]
-		if !ok {
-			return fmt.Errorf("unknown task id %s", id)
-		}
-
-		// Containers cannot have state or claim (they complete implicitly)
-		if isContainer(task, graph) {
-			if _, hasState := updates["state"]; hasState {
-				return errors.New("containers do not have state")
-			}
-			if _, hasClaim := updates["claim"]; hasClaim {
-				return errors.New("containers cannot be claimed")
-			}
-		}
-
-		now := time.Now().UTC()
-		var events []Event
-
-		// Handle result.path (+ optional result.summary) in the same mutation lock.
-		resultPath, hasPath := updates["result.path"]
-		resultSummary, hasSummary := updates["result.summary"]
-		if hasPath || hasSummary {
-			if !hasPath {
-				return errors.New("result.summary requires result.path=")
-			}
-			if !hasSummary {
-				resultSummary = resultPath
-			}
-			event, err := buildResultEvent(repoDir, graph, id, resultSummary, resultPath, now)
-			if err != nil {
-				return err
-			}
-			events = append(events, event)
-			delete(updates, "result.path")
-			delete(updates, "result.summary")
-		}
-
-		// Build events using pure function, passing I/O-dependent body resolver
-		setEvents, remainingUpdates, err := buildSetEvents(id, task, updates, agentID, now, identityBodyResolver)
-		if err != nil {
-			return err
-		}
-		events = append(events, setEvents...)
-
-		// Check for any unhandled keys
-		if len(remainingUpdates) > 0 {
-			var unknown []string
-			for key := range remainingUpdates {
-				unknown = append(unknown, key)
-			}
-			return fmt.Errorf("unknown keys: %s", strings.Join(unknown, ", "))
-		}
-
-		if err := appendEvents(eventsPath, events); err != nil {
-			return err
-		}
-		updatedGraph, err = loadGraph(dir)
-		if err != nil {
-			return err
-		}
-		if !quiet {
-			fmt.Println(id)
-		}
-		return nil
-	})
+func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, agentID string, quiet bool) (mutationOutcome, error) {
+	mutation, remaining, err := mutationFromUpdates(updates, agentID, identityBodyResolver)
 	if err != nil {
-		return nil, err
+		return mutationOutcome{}, err
 	}
-	return updatedGraph, nil
+	if len(remaining) > 0 {
+		unknown := make([]string, 0, len(remaining))
+		for key := range remaining {
+			unknown = append(unknown, key)
+		}
+		return mutationOutcome{}, fmt.Errorf("unknown keys: %s", strings.Join(unknown, ", "))
+	}
+	mutation.Kind = "set"
+	mutation.LegacySet = true
+	mutationOpts := opts
+	mutationOpts.AgentID = agentID
+	return applyTaskMutation(dir, mutationOpts, id, mutation, quiet)
 }
 
 // buildSetEvents generates the event list for a set command.
 // Separated from I/O to improve testability and separation of concerns.
 func buildSetEvents(id string, task *Task, updates map[string]string, agentID string, now time.Time, bodyResolver func(string) (string, error)) ([]Event, map[string]string, error) {
-	var events []Event
-	remainingUpdates := make(map[string]string)
-	for k, v := range updates {
-		remainingUpdates[k] = v
+	mutation, remaining, err := mutationFromUpdates(updates, agentID, bodyResolver)
+	if err != nil {
+		return nil, nil, err
 	}
-
-	// Handle implicit claim: if transitioning to doing/error and unclaimed, and no claim provided, use session identity
-	if task.ClaimedBy == "" {
-		newState, hasState := remainingUpdates["state"]
-		_, hasClaim := remainingUpdates["claim"]
-		if hasState && (newState == stateDoing || newState == stateError) && !hasClaim {
-			if agentID == "" {
-				return nil, nil, errors.New("state requires claim; pass --agent or set claim explicitly")
-			}
-			remainingUpdates["claim"] = agentID
-		}
+	if task.IsEpic && mutation.EpicSet {
+		return nil, nil, errors.New("containers cannot be assigned to other containers")
 	}
+	mutation.LegacySet = true
+	events, _, err := buildMutationEvents(id, task, mutation, agentID, now)
+	return events, remaining, err
+}
 
-	// Handle title/body updates (explicit fields).
-	if title, hasTitle := remainingUpdates["title"]; hasTitle {
-		title = strings.TrimSpace(title)
-		if title == "" {
-			return nil, nil, errors.New("title cannot be empty")
-		}
-		event, err := newEvent("title", now, TitleUpdateEvent{
-			ID:    id,
-			Title: title,
-			TS:    formatTime(now),
-		})
+func mutationFromUpdates(updates map[string]string, agentID string, bodyResolver func(string) (string, error)) (taskMutation, map[string]string, error) {
+	mutation := taskMutation{}
+	remaining := make(map[string]string, len(updates))
+	for key, value := range updates {
+		remaining[key] = value
+	}
+	if value, ok := remaining["title"]; ok {
+		mutation.Title, mutation.TitleSet = value, true
+		delete(remaining, "title")
+	}
+	if value, ok := remaining["body"]; ok {
+		resolved, err := bodyResolver(value)
 		if err != nil {
-			return nil, nil, err
+			return taskMutation{}, nil, err
 		}
-		events = append(events, event)
-		delete(remainingUpdates, "title")
+		mutation.Body, mutation.BodySet = resolved, true
+		delete(remaining, "body")
 	}
-
-	if body, hasBody := remainingUpdates["body"]; hasBody {
-		resolvedBody, err := bodyResolver(body)
-		if err != nil {
-			return nil, nil, err
-		}
-		event, err := newEvent("body", now, BodyUpdateEvent{
-			ID:   id,
-			Body: resolvedBody,
-			TS:   formatTime(now),
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		events = append(events, event)
-		delete(remainingUpdates, "body")
+	if value, ok := remaining["epic"]; ok {
+		mutation.EpicID, mutation.EpicSet = value, true
+		delete(remaining, "epic")
 	}
-
-	// Handle epic assignment
-	if epicID, ok := remainingUpdates["epic"]; ok {
-		// task.IsEpic is set by applyContainerDerivation during graph load;
-		// buildSetEvents has no graph access so we rely on the field directly here.
-		if task.IsEpic {
-			return nil, nil, errors.New("containers cannot be assigned to other containers")
-		}
-		event, err := newEvent("epic", now, EpicAssignEvent{
-			ID:     id,
-			EpicID: epicID,
-			TS:     formatTime(now),
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		events = append(events, event)
-		delete(remainingUpdates, "epic")
+	if value, ok := remaining["claim"]; ok {
+		mutation.Claim, mutation.ClaimSet = value, true
+		delete(remaining, "claim")
 	}
-
-	// Handle claim
-	claimWasSet := false
-	claimValue := ""
-	if cv, ok := remainingUpdates["claim"]; ok {
-		claimValue = cv
-		if claimValue == "" {
-			// Clear claim
-			event, err := newEvent("unclaim", now, UnclaimEvent{
-				ID: id,
-				TS: formatTime(now),
-			})
-			if err != nil {
-				return nil, nil, err
-			}
-			events = append(events, event)
-		} else {
-			event, err := newEvent("claim", now, ClaimEvent{
-				ID:      id,
-				AgentID: claimValue,
-				TS:      formatTime(now),
-			})
-			if err != nil {
-				return nil, nil, err
-			}
-			events = append(events, event)
-		}
-		claimWasSet = true
-		delete(remainingUpdates, "claim")
+	if value, ok := remaining["state"]; ok {
+		mutation.State, mutation.StateSet = value, true
+		delete(remaining, "state")
 	}
-
-	// Handle state (must come last)
-	stateWasSet := false
-	if stateStr, ok := remainingUpdates["state"]; ok {
-		if _, valid := validStates[stateStr]; !valid {
-			return nil, nil, fmt.Errorf("invalid state: %s", stateStr)
-		}
-		// Validate state transition
-		if err := validateTransition(task.State, stateStr); err != nil {
-			return nil, nil, err
-		}
-		// Validate claim invariant for new state
-		newClaimedBy := task.ClaimedBy
-		if claimWasSet {
-			newClaimedBy = claimValue
-		}
-		// done/canceled/todo will clear claim, so check with empty
-		if stateStr == stateTodo || stateStr == stateDone || stateStr == stateCanceled {
-			newClaimedBy = ""
-		}
-		if err := validateClaimInvariant(stateStr, newClaimedBy); err != nil {
-			return nil, nil, err
-		}
-		event, err := newEvent("state", now, StateEvent{
-			ID:       id,
-			NewState: stateStr,
-			TS:       formatTime(now),
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		events = append(events, event)
-		delete(remainingUpdates, "state")
-		stateWasSet = true
+	if value, ok := remaining["result.path"]; ok {
+		mutation.ResultPath, mutation.ResultSet = value, true
+		delete(remaining, "result.path")
 	}
-
-	// If claim was set to a non-empty value and state wasn't explicitly set, default to doing
-	if claimWasSet && claimValue != "" && !stateWasSet {
-		event, err := newEvent("state", now, StateEvent{
-			ID:       id,
-			NewState: stateDoing,
-			TS:       formatTime(now),
-		})
-		if err != nil {
-			return nil, nil, err
+	if value, ok := remaining["result.summary"]; ok {
+		if !mutation.ResultSet {
+			return taskMutation{}, nil, errors.New("result.summary requires result.path=")
 		}
-		events = append(events, event)
+		mutation.ResultSummary = value
+		delete(remaining, "result.summary")
 	}
-
-	return events, remainingUpdates, nil
+	_ = agentID
+	return mutation, remaining, nil
 }
 
 // identityBodyResolver is a no-op body resolver (body comes from JSON as-is).

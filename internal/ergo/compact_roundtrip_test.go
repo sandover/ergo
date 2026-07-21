@@ -549,7 +549,7 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 			}
 			candidates := []string{stateTodo, stateDoing, stateDone, stateBlocked, stateCanceled, stateError}
 			newState := candidates[r.Intn(len(candidates))]
-			if err := validateTransition(task.State, newState); err != nil {
+			if err := validateForwardState(newState); err != nil {
 				continue
 			}
 			needClaim := newState == stateDoing || newState == stateError
