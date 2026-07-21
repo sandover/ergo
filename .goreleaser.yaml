@@ -34,13 +34,20 @@ archives:
 checksum:
   name_template: checksums.txt
 
-brews:
+homebrew_casks:
   - name: ergo
     homepage: https://github.com/sandover/ergo
     description: Minimal multi-agent DAG task planner built on an append-only JSONL event log
     license: MIT
+    binaries:
+      - ergo
     repository:
       owner: sandover
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ergo"]
+          end

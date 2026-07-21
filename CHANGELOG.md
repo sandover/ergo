@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-20
+
+### Added
+
+- Added direct lifecycle commands: `done`, `block`, `cancel`, and `release`.
+- Added direct `title`, `body`, and `move` commands for focused task changes.
+- Specific `claim` now resumes blocked, done, canceled, and legacy-error work while reusing the original task ID.
+- Claim JSON now returns exact `next_commands` for every valid lifecycle exit.
+- Lifecycle commands accept `--result <path>`, optional `--summary <text>`, and an optional piped body in one atomic mutation.
+
+### Changed
+
+- **BREAKING:** Existing-task mutation now uses intent-specific commands instead of positional mutation JSON.
+- **BREAKING:** A claim exists exactly while state is `doing`; every forward lifecycle exit clears it.
+- **BREAKING:** New commands no longer create `error`. Use `release` for retryable unfinished work or `block` for an identified impediment.
+- **BREAKING:** Direct mutation JSON reports the command `kind`, current state, and only fields that actually changed in `updated_fields`. True no-ops return an empty array.
+- Lifecycle commands establish their named postcondition directly from any applicable readable state instead of requiring intermediate transitions.
+
+### Removed
+
+- Removed the generic `set` command without an alias.
+- Removed public creation of the legacy `error` state.
+- There is no `reopen` command or operation that returns done or canceled work to unclaimed `todo`; use a specific `claim` when closed work resumes.
+
+### Upgrade from v1
+
+| V1 intent | V2 command |
+| --- | --- |
+| Set a claim or move to `doing` | `ergo claim <id> --agent <identity>` |
+| Set `done` | `ergo done <id>` |
+| Set `blocked` | `ergo block <id>` |
+| Set `canceled` | `ergo cancel <id>` |
+| Return doing, blocked, or legacy-error work to `todo` | `ergo release <id>` |
+| Resume blocked, done, canceled, or legacy-error work | `ergo claim <id> --agent <identity>` |
+| Replace `title` | `ergo title <id> <title>` |
+| Replace a body from stdin | `printf ... | ergo body <id>` |
+| Set or clear `epic` | `ergo move <id> <container-id>` or `ergo move <id> --root` |
+| Attach a result while exiting | add `--result <path>` and optional `--summary <text>` to the lifecycle command |
+| Attach a late result | repeat the task's current lifecycle command with `--result` |
+| Record a retryable failed attempt | `ergo release <id>` with an optional body and result |
+| Record a failure that needs intervention | `ergo block <id>` with an optional body and result |
+
+### Compatibility
+
+- Existing `plans.jsonl` and legacy `events.jsonl` repositories open without migration.
+- Historical `error` and claimed-blocked tasks remain readable and survive compaction without semantic changes.
+- A direct lifecycle command normalizes only the legacy task it addresses; older Ergo binaries may continue appending replayable events.
+
 ## [1.2.0] - 2026-07-18
 
 ### Added
@@ -422,7 +470,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/sandover/ergo/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/sandover/ergo/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sandover/ergo/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/sandover/ergo/compare/v0.11.2...v1.0.0
