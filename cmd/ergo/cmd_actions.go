@@ -32,6 +32,7 @@ func init() {
 	rootCmd.AddCommand(newLifecycleCmd("release", "Return unfinished work to todo"))
 	rootCmd.AddCommand(titleCmd)
 	rootCmd.AddCommand(bodyCmd)
+	rootCmd.AddCommand(moveCmd)
 	// ergo set
 	rootCmd.AddCommand(setCmd)
 	// ergo sequence
@@ -175,6 +176,33 @@ var bodyCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return ergo.RunBody(args[0], globalOpts)
 	},
+}
+
+var moveCmd = &cobra.Command{
+	Use:   "move <id> <container-id> | move <id> --root",
+	Short: "Move a task into a container or to root",
+	Args: func(cmd *cobra.Command, args []string) error {
+		toRoot, _ := cmd.Flags().GetBool("root")
+		if toRoot && len(args) == 2 {
+			return fmt.Errorf("move destination and --root are mutually exclusive")
+		}
+		if (toRoot && len(args) != 1) || (!toRoot && len(args) != 2) {
+			return fmt.Errorf("usage: ergo move <id> <container-id> | ergo move <id> --root")
+		}
+		return nil
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		toRoot, _ := cmd.Flags().GetBool("root")
+		destination := ""
+		if !toRoot {
+			destination = args[1]
+		}
+		return ergo.RunMove(args[0], destination, toRoot, globalOpts)
+	},
+}
+
+func init() {
+	moveCmd.Flags().Bool("root", false, "Move the task out of its container")
 }
 
 // -- set --

@@ -29,6 +29,7 @@ type taskMutation struct {
 	BodySet       bool
 	EpicID        string
 	EpicSet       bool
+	ValidateMove  bool
 	ResultPath    string
 	ResultSummary string
 	ResultSet     bool
@@ -81,6 +82,11 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 		}
 		if mutation.ClaimConflict && task.ClaimedBy != "" && task.ClaimedBy != mutation.Claim {
 			return fmt.Errorf("task %s is already claimed by %s", id, task.ClaimedBy)
+		}
+		if mutation.EpicSet && mutation.ValidateMove {
+			if err := validateMovePlacement(graph, task, mutation.EpicID); err != nil {
+				return err
+			}
 		}
 		if isContainer(task, graph) {
 			if mutation.StateSet {
