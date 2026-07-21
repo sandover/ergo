@@ -31,6 +31,7 @@ type taskMutation struct {
 	ResultPath    string
 	ResultSummary string
 	ResultSet     bool
+	AllowedStates []string
 }
 
 type mutationOutcome struct {
@@ -55,6 +56,9 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 		task := graph.Tasks[id]
 		if task == nil {
 			return fmt.Errorf("unknown task id %s", id)
+		}
+		if len(mutation.AllowedStates) > 0 && !containsString(mutation.AllowedStates, task.State) {
+			return fmt.Errorf("%s cannot apply to state=%s", mutation.Kind, task.State)
 		}
 		if isContainer(task, graph) {
 			if mutation.StateSet {
@@ -329,4 +333,13 @@ func sortedUniqueStrings(values []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }

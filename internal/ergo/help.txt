@@ -15,7 +15,7 @@
   → {"id":"ABCDEF","state":"doing","claim":"sonnet@myhost",...}
 
   # Mark done with result
-  ergo --json set ABCDEF '{"state":"done","result":"src/ratelimit.ts"}'
+  ergo --json done ABCDEF --result src/ratelimit.ts
   → {"id":"ABCDEF","state":"done",...}
 
 {{HEADER}}COMMANDS{{RESET}}
@@ -24,6 +24,10 @@
   show <id>                               task detail (Markdown default; --json for agents)
   list [--epic <id>] [--ready] [--all]    list tasks; default omits done/canceled
   claim [<id>] --agent <identity>         claim next ready task (or specific ID)
+  done <id> [--result <path>]             mark the task done
+  block <id> [--result <path>]            mark the task blocked
+  cancel <id> [--result <path>]           cancel the task
+  release <id> [--result <path>]          return unfinished work to todo
   sequence <A> <B> [<C>...]               enforce order: A before B before C
   sequence rm <A> <B>                     remove the edge where B depends on A
   plan --file <path> [json]               create epic + children from markdown file

@@ -26,6 +26,10 @@ func init() {
 	rootCmd.AddCommand(showCmd)
 	// ergo claim
 	rootCmd.AddCommand(claimCmd)
+	rootCmd.AddCommand(newLifecycleCmd("done", "Mark a task done"))
+	rootCmd.AddCommand(newLifecycleCmd("block", "Mark a task blocked"))
+	rootCmd.AddCommand(newLifecycleCmd("cancel", "Cancel a task"))
+	rootCmd.AddCommand(newLifecycleCmd("release", "Return unfinished work to todo"))
 	// ergo set
 	rootCmd.AddCommand(setCmd)
 	// ergo sequence
@@ -130,6 +134,27 @@ var claimCmd = &cobra.Command{
 
 func init() {
 	claimCmd.Flags().String("agent", "", "Claim identity (required; suggested: model@host)")
+}
+
+func newLifecycleCmd(kind, short string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   kind + " <id>",
+		Short: short,
+		Args:  cobra.ExactArgs(1),
+	}
+	cmd.Flags().String("result", "", "Attach an existing project-relative result file")
+	cmd.Flags().String("summary", "", "Describe the attached result")
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		resultPath, _ := cmd.Flags().GetString("result")
+		summary, _ := cmd.Flags().GetString("summary")
+		return ergo.RunLifecycle(kind, args[0], ergo.LifecycleOptions{
+			ResultPath: resultPath,
+			ResultSet:  cmd.Flags().Changed("result"),
+			Summary:    summary,
+			SummarySet: cmd.Flags().Changed("summary"),
+		}, globalOpts)
+	}
+	return cmd
 }
 
 // -- set --

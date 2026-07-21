@@ -39,10 +39,16 @@ Claim a specific task:
 Finish the task. Never leave it in `doing`.
 
 Mark blocked:
-  {{CMD}}ergo --json set ABCDEF '{"state":"blocked"}'{{RESET}}
+  {{CMD}}ergo --json block ABCDEF{{RESET}}
 
 Mark done and attach a result file:
-  {{CMD}}ergo --json set ABCDEF '{"state":"done","result":"docs/spec.md"}'{{RESET}}
+  {{CMD}}ergo --json done ABCDEF --result docs/spec.md{{RESET}}
+
+Return unfinished work to the ready pool:
+  {{CMD}}ergo --json release ABCDEF{{RESET}}
+
+Cancel work that is no longer wanted:
+  {{CMD}}ergo --json cancel ABCDEF{{RESET}}
 
 Claim and `doing` move together. Finishing (`done` or `canceled`) clears the claim. `error` retains it.
 
