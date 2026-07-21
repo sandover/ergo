@@ -105,6 +105,15 @@ func TestDoneLifecycleBodyResultAndLateResult(t *testing.T) {
 	if code == 0 || !strings.Contains(stderr, "--summary requires --result") {
 		t.Fatalf("expected summary validation error, code=%d stderr=%q", code, stderr)
 	}
+	shown := showTaskJSON(t, dir, id)
+	results, ok := shown["results"].([]any)
+	if !ok || len(results) != 2 {
+		t.Fatalf("show results = %v", shown["results"])
+	}
+	latest := results[0].(map[string]any)
+	if latest["sha256_at_attach"] == "" || !strings.HasPrefix(latest["file_url"].(string), "file://") {
+		t.Fatalf("result provenance missing: %v", latest)
+	}
 }
 
 func TestClaimResumesEverySpecificState(t *testing.T) {

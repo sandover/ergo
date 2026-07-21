@@ -118,7 +118,12 @@ var showCmd = &cobra.Command{
 var claimCmd = &cobra.Command{
 	Use:   "claim [<id>]",
 	Short: "Claim a task (or oldest ready task)",
-	Args:  cobra.RangeArgs(0, 1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 1 {
+			return fmt.Errorf("usage: ergo claim [<id>] --agent <identity>")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		agentID, _ := cmd.Flags().GetString("agent")
 
@@ -142,7 +147,12 @@ func newLifecycleCmd(kind, short string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   kind + " <id>",
 		Short: short,
-		Args:  cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("usage: ergo %s <id> [--result <path>] [--summary <text>]", kind)
+			}
+			return nil
+		},
 	}
 	cmd.Flags().String("result", "", "Attach an existing project-relative result file")
 	cmd.Flags().String("summary", "", "Describe the attached result")
@@ -162,7 +172,12 @@ func newLifecycleCmd(kind, short string) *cobra.Command {
 var titleCmd = &cobra.Command{
 	Use:   "title <id> <title>",
 	Short: "Replace a task title",
-	Args:  cobra.ExactArgs(2),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 2 {
+			return fmt.Errorf("usage: ergo title <id> <title>")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return ergo.RunTitle(args[0], args[1], globalOpts)
 	},
@@ -171,7 +186,12 @@ var titleCmd = &cobra.Command{
 var bodyCmd = &cobra.Command{
 	Use:   "body <id>",
 	Short: "Replace a task body from stdin",
-	Args:  cobra.ExactArgs(1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return fmt.Errorf("usage: printf '%%s\\n' '<body>' | ergo body <id>")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return ergo.RunBody(args[0], globalOpts)
 	},
