@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-07-20
+
+### Improved
+
+- Clarified `--help` and `quickstart` for agents starting with no prior context.
+- Added safer guidance for sending multiline bodies through stdin.
+
+### Fixed
+
+- Corrected the completion example to show claim cleanup in `updated_fields`.
+
 ## [2.0.0] - 2026-07-20
 
 ### Added
@@ -470,7 +481,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/sandover/ergo/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/sandover/ergo/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/sandover/ergo/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sandover/ergo/compare/v1.0.0...v1.1.0
