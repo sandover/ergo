@@ -107,6 +107,72 @@ func TestDoneLifecycleBodyResultAndLateResult(t *testing.T) {
 	}
 }
 
+func TestClaimResumesEverySpecificState(t *testing.T) {
+	for _, source := range []string{"todo", "blocked", "done", "canceled", "error"} {
+		t.Run(source, func(t *testing.T) {
+			dir := setupErgo(t)
+			id := createLifecycleTask(t, dir)
+			putLifecycleTaskInState(t, dir, id, source)
+			agent := "resume@local"
+			if source == "error" {
+				agent = "test@local"
+			}
+			stdout, stderr, code := runErgo(t, dir, "", "--json", "claim", id, "--agent", agent)
+			if code != 0 {
+				t.Fatalf("claim from %s failed: %s", source, stderr)
+			}
+			var out map[string]any
+			if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+				t.Fatal(err)
+			}
+			if out["id"] != id || out["state"] != "doing" || out["claimed_by"] != agent {
+				t.Fatalf("claim output = %v", out)
+			}
+		})
+	}
+}
+
+func TestClaimIsIdempotentForOwnerAndConflictsForOthers(t *testing.T) {
+	dir := setupErgo(t)
+	id := createLifecycleTask(t, dir)
+	_, stderr, code := runErgo(t, dir, "", "claim", id, "--agent", "owner@local")
+	if code != 0 {
+		t.Fatalf("first claim failed: %s", stderr)
+	}
+	before := countEventLines(t, dir)
+	_, stderr, code = runErgo(t, dir, "", "claim", id, "--agent", "owner@local")
+	if code != 0 {
+		t.Fatalf("repeat claim failed: %s", stderr)
+	}
+	if after := countEventLines(t, dir); after != before {
+		t.Fatalf("idempotent claim appended events: before=%d after=%d", before, after)
+	}
+	_, stderr, code = runErgo(t, dir, "", "claim", id, "--agent", "other@local")
+	if code == 0 || !strings.Contains(stderr, "already claimed by owner@local") {
+		t.Fatalf("expected claim conflict, code=%d stderr=%q", code, stderr)
+	}
+}
+
+func TestClaimDoneTaskReusesOriginalID(t *testing.T) {
+	dir := setupErgo(t)
+	id := createLifecycleTask(t, dir)
+	_, stderr, code := runErgo(t, dir, "", "done", id)
+	if code != 0 {
+		t.Fatalf("done failed: %s", stderr)
+	}
+	stdout, stderr, code := runErgo(t, dir, "", "--json", "claim", id, "--agent", "resume@local")
+	if code != 0 {
+		t.Fatalf("claim done task failed: %s", stderr)
+	}
+	if !strings.Contains(stdout, `"id":"`+id+`"`) {
+		t.Fatalf("claim returned a different task: %s", stdout)
+	}
+	list, _, code := runErgo(t, dir, "", "--json", "list", "--all")
+	if code != 0 || strings.Count(list, `"id":"`+id+`"`) != 1 {
+		t.Fatalf("claim duplicated the task: %s", list)
+	}
+}
+
 func createLifecycleTask(t *testing.T, dir string) string {
 	t.Helper()
 	stdout, stderr, code := runNewTask(t, dir, `{"title":"Lifecycle task"}`)

@@ -32,6 +32,7 @@ type taskMutation struct {
 	ResultSummary string
 	ResultSet     bool
 	AllowedStates []string
+	ClaimConflict bool
 }
 
 type mutationOutcome struct {
@@ -59,6 +60,9 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 		}
 		if len(mutation.AllowedStates) > 0 && !containsString(mutation.AllowedStates, task.State) {
 			return fmt.Errorf("%s cannot apply to state=%s", mutation.Kind, task.State)
+		}
+		if mutation.ClaimConflict && task.ClaimedBy != "" && task.ClaimedBy != mutation.Claim {
+			return fmt.Errorf("task %s is already claimed by %s", id, task.ClaimedBy)
 		}
 		if isContainer(task, graph) {
 			if mutation.StateSet {

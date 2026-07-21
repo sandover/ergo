@@ -90,53 +90,28 @@ func RunClaim(id string, opts GlobalOptions) error {
 	if id == "" {
 		return errors.New("usage: ergo claim <id>")
 	}
-
-	reminder := "When you have completed this claimed task, you MUST mark it done."
-
 	agentID := opts.AgentID
 	if agentID == "" {
 		return errors.New("claim requires --agent")
 	}
-	updates := map[string]string{
-		"claim": agentID,
-		"state": stateDoing,
-	}
-
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
 	}
-	outcome, err := applySetUpdates(dir, opts, id, updates, agentID, true)
+	mutation := taskMutation{
+		Kind:          "claim",
+		State:         stateDoing,
+		StateSet:      true,
+		Claim:         agentID,
+		ClaimSet:      true,
+		ClaimConflict: true,
+		AllowedStates: []string{stateTodo, stateDoing, stateBlocked, stateDone, stateCanceled, stateError},
+	}
+	outcome, err := applyTaskMutation(dir, opts, id, mutation, true)
 	if err != nil {
 		return err
 	}
-	graph := outcome.Graph
-	task := graph.Tasks[id]
-	if task == nil {
-		return errors.New("internal error: missing claimed task")
-	}
-
-	if opts.JSON {
-		claimedAt := claimedAtForTask(task, graph.Meta[id])
-		return writeJSON(os.Stdout, map[string]interface{}{
-			"id":         task.ID,
-			"epic":       task.EpicID,
-			"state":      task.State,
-			"title":      task.Title,
-			"body":       task.Body,
-			"agent_id":   agentID,
-			"claimed_at": claimedAt,
-			"reminder":   reminder,
-		})
-	}
-
-	fmt.Println(task.ID)
-	fmt.Println(task.Title)
-	if task.Body != "" {
-		fmt.Println(task.Body)
-	}
-	fmt.Println(reminder)
-	return nil
+	return writeClaimSuccess(outcome.Graph, id, agentID, opts.JSON)
 }
 
 func RunClaimOldestReady(opts GlobalOptions) error {
@@ -148,10 +123,8 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
 
-	reminder := "When you have completed this claimed task, you MUST mark it done."
-
-	var chosen *Task
-	var now time.Time
+	var chosenID string
+	var updatedGraph *Graph
 	agentID := opts.AgentID
 	if agentID == "" {
 		return errors.New("claim requires --agent")
@@ -168,28 +141,18 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 			return errors.New("no ready tasks")
 		}
 
-		chosen = ready[0]
-		now = time.Now().UTC()
-
-		claimEvent, err := newEvent("claim", now, ClaimEvent{
-			ID:      chosen.ID,
-			AgentID: agentID,
-			TS:      formatTime(now),
-		})
+		chosenID = ready[0].ID
+		now := time.Now().UTC()
+		mutation := taskMutation{Kind: "claim", State: stateDoing, StateSet: true, Claim: agentID, ClaimSet: true}
+		events, _, err := buildMutationEvents(chosenID, ready[0], mutation, agentID, now)
 		if err != nil {
 			return err
 		}
-
-		stateEvent, err := newEvent("state", now, StateEvent{
-			ID:       chosen.ID,
-			NewState: stateDoing,
-			TS:       formatTime(now),
-		})
-		if err != nil {
+		if err := appendEvents(eventsPath, events); err != nil {
 			return err
 		}
-
-		return appendEvents(eventsPath, []Event{claimEvent, stateEvent})
+		updatedGraph, err = loadGraph(dir)
+		return err
 	})
 	if err != nil {
 		if err.Error() == "no ready tasks" {
@@ -205,29 +168,47 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 		return err
 	}
 
-	if chosen == nil {
+	if chosenID == "" || updatedGraph == nil {
 		return errors.New("internal error: missing chosen task")
 	}
+	return writeClaimSuccess(updatedGraph, chosenID, agentID, opts.JSON)
+}
 
-	if opts.JSON {
+func writeClaimSuccess(graph *Graph, id, agentID string, jsonOutput bool) error {
+	task := graph.Tasks[id]
+	if task == nil {
+		return errors.New("internal error: missing claimed task")
+	}
+	next := map[string]string{
+		"done":    "ergo --json done " + id,
+		"block":   "ergo --json block " + id,
+		"cancel":  "ergo --json cancel " + id,
+		"release": "ergo --json release " + id,
+	}
+	if jsonOutput {
 		return writeJSON(os.Stdout, map[string]interface{}{
-			"id":         chosen.ID,
-			"epic":       chosen.EpicID,
-			"state":      stateDoing,
-			"title":      chosen.Title,
-			"body":       chosen.Body,
-			"agent_id":   agentID,
-			"claimed_at": formatTime(now),
-			"reminder":   reminder,
+			"kind":          "claim",
+			"id":            task.ID,
+			"epic":          task.EpicID,
+			"state":         task.State,
+			"title":         task.Title,
+			"body":          task.Body,
+			"agent_id":      agentID,
+			"claimed_by":    task.ClaimedBy,
+			"claimed_at":    claimedAtForTask(task, graph.Meta[id]),
+			"next_commands": next,
 		})
 	}
-
-	fmt.Println(chosen.ID)
-	fmt.Println(chosen.Title)
-	if chosen.Body != "" {
-		fmt.Println(chosen.Body)
+	fmt.Println(task.ID)
+	fmt.Println(task.Title)
+	if task.Body != "" {
+		fmt.Println(task.Body)
 	}
-	fmt.Println(reminder)
+	fmt.Println("Next:")
+	fmt.Println("  " + next["done"])
+	fmt.Println("  " + next["block"])
+	fmt.Println("  " + next["cancel"])
+	fmt.Println("  " + next["release"])
 	return nil
 }
 func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, agentID string, quiet bool) (mutationOutcome, error) {

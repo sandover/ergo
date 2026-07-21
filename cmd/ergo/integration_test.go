@@ -1521,7 +1521,7 @@ func TestClaim_WithAgentFlag(t *testing.T) {
 	}
 }
 
-func TestClaim_JSONIncludesReminder(t *testing.T) {
+func TestClaim_JSONIncludesNextCommands(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, _, code := runNewTaskWithBody(t, dir, "Test task", `{"title":"Test task"}`)
@@ -1540,19 +1540,25 @@ func TestClaim_JSONIncludesReminder(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
 		t.Fatalf("failed to parse claim output: %v", err)
 	}
-	if out["reminder"] != "When you have completed this claimed task, you MUST mark it done." {
-		t.Fatalf("expected reminder field, got %v", out["reminder"])
+	next, ok := out["next_commands"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected next_commands object, got %T", out["next_commands"])
+	}
+	for _, verb := range []string{"done", "block", "cancel", "release"} {
+		if next[verb] != "ergo --json "+verb+" "+taskID {
+			t.Fatalf("unexpected %s command: %v", verb, next[verb])
+		}
 	}
 }
 
-func TestClaimOldestReady_JSONIncludesReminder(t *testing.T) {
+func TestClaimOldestReady_JSONIncludesNextCommands(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, _, code := runNewTaskWithBody(t, dir, "Test task", `{"title":"Test task"}`)
 	if code != 0 {
 		t.Fatalf("new task failed: exit %d", code)
 	}
-	_ = strings.TrimSpace(stdout)
+	taskID := strings.TrimSpace(stdout)
 
 	agentID := "sonnet@agent-host"
 	stdout, _, code = runErgo(t, dir, "", "--json", "claim", "--agent", agentID)
@@ -1564,8 +1570,9 @@ func TestClaimOldestReady_JSONIncludesReminder(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
 		t.Fatalf("failed to parse claim output: %v", err)
 	}
-	if out["reminder"] != "When you have completed this claimed task, you MUST mark it done." {
-		t.Fatalf("expected reminder field, got %v", out["reminder"])
+	next, ok := out["next_commands"].(map[string]interface{})
+	if !ok || next["done"] != "ergo --json done "+taskID || next["release"] != "ergo --json release "+taskID {
+		t.Fatalf("unexpected next_commands: %v", out["next_commands"])
 	}
 }
 
