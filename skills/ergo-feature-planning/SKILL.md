@@ -1,102 +1,153 @@
 ---
 name: ergo-feature-planning
 description: >-
-  Plan software tasks with `ergo` (local task dependency graph + containers) when the work spans 3+ commits or involves multiple concerns. Run "ergo --help" to learn it.
+  Plan and execute multi-step software work with Ergo, a repo-local task dependency graph. Use when work is likely to span 3 or more commits, crosses concerns such as API, UI, tests, migration, or docs, or needs design decisions and dependency ordering before implementation. Skip for small, single-concern changes and routine housekeeping.
 ---
 
 # Ergo Feature Planning
 
-Turn a feature request into a repo-local plan tracked by `ergo`: a backlog of well-scoped tasks, with dependency edges, grouped into containers.
-
-## When to use
-
-**Use ergo when** the work would span 3+ commits, touches multiple concerns (API + UI + tests + docs), or has ambiguity that needs resolving before implementation.
-
-**Skip ergo when** the change is straightforward enough to just implement -- a bug fix, a single-concern feature, routine refactoring. Don't plan what you can just do.
-
-**Unsure?** Ask: "Want an ergo plan first, or should I just implement?"
+Turn an accepted goal into a dependency-ordered backlog that another agent can
+execute without the original conversation. Keep the plan smaller than the work.
 
 ## Bootstrap
 
-1. Expect `ergo` to be globally installed. If missing, ask the user to install it.
-2. Run `ergo --help` and `ergo quickstart` to learn the CLI before creating plans.
-3. Use `ergo` sequentially and synchronously in the main agent. Do not split `ergo` work across subagents or run concurrent `ergo` mutations; shared plan state is easier to reason about when one agent owns it at a time.
+1. Expect `ergo` to be installed. If it is missing, ask the user to install it.
+2. Run `ergo --help` and `ergo quickstart` before creating or executing a plan.
+3. Run `ergo where`. If no graph exists, confirm the repository root and run `ergo init`.
 
-## Planning
+## Resolve decisions before planning
 
-Planning naturally surfaces unknowns, ambiguities, and decisions. **Resolve them now, during planning, by asking the user.** Present options clearly with tradeoffs, get an answer, and write the decision into the container body or task AC. Do not write "Consult Me" or "TBD" into task bodies as a way to defer a conversation you could have right now -- that just creates a mid-implementation block for a future agent that has less context than you do.
+Planning exposes ambiguity. Present concrete options and tradeoffs, ask the user,
+and record the decision in the relevant container or task body. Do not hide a
+question behind `TBD`, `Consult me`, or a vague future checkpoint.
 
-The test: if you can describe the options and tradeoffs to the user today, ask today. The only decisions that belong in task bodies as checkpoints are ones that literally require an implementation artifact to evaluate, for example "produce a UI mockup, then get approval before proceeding." For those, write a **Checkpoint** section with the specific artifact to produce and the specific question to answer -- not a vague "consult me."
+Use a checkpoint only when an implementation artifact is required to decide.
+Name the artifact, the exact question, and the instruction not to continue
+without approval. If the user cannot decide yet, create a spike whose output is
+the missing knowledge.
 
-If a task's shape depends on an unresolved decision and the user can't or won't decide yet, make it a spike instead.
+Revise earlier tasks as later planning reveals better boundaries. Do not preserve
+a weak split merely because it was written first.
 
-Critique continuously as you build the plan. When writing one task reveals that earlier tasks should be merged or split, fix it immediately rather than deferring to a review pass.
+## Build the graph
 
-### Containers
+Use one root container for each coherent feature area. Put scope, non-goals,
+constraints, decisions, and assumptions in its body. Leave genuinely standalone
+tasks at root.
 
-One per coherent feature area. Body includes scope, non-goals, constraints, and if it makes sense, key decisions and assumptions. Tasks are grouped into containers, but dependencies can cross container boundaries when needed.
+Create a container candidate, then add children with its ID:
 
-Tasks that don't fit a larger feature area can be left ungrouped. Use judgment.
+```sh
+ergo --json new task '{"title":"Authentication"}'
+printf '%s\n' '## Goal' '- Add session validation.' |
+  ergo --json new task '{"title":"Validate sessions","epic":"OFKSTE"}'
+```
 
-### Tasks
+The first child promotes a clean root todo task to a container. For a prepared
+markdown backlog, use `ergo plan --file tasks.md '{"title":"Authentication"}'`.
 
-The unit of execution. Each task should be:
+Add only real ordering constraints. `ergo sequence TASK_A TASK_B` means B waits
+for A. Prefer independent tasks and maximize safe parallelism.
 
-- **One atomic, reviewable change** -- completable in a single session. Not trivial, not sprawling.
-- **Ideally, automatically verifiable** via acceptance criteria and runnable gates. When human verification is truly needed, include exact instructions so implementing agents know precisely how to verify.
-- **Split on real boundaries** only: API surface, data model, migration, tests, docs.
-- **Friendly to smaller models** -- the implementing model might not be as smart as you. Before finalizing a task, consider it from the perspective of a less capable model without the context of the full user conversation or the whole backlog. Will they succeed?
+## Shape tasks
 
-**Spikes** produce knowledge, not code. Prefix with `spike:`. Dependent tasks should note what they're waiting to learn from the spike.
+Make each task one atomic, reviewable change that normally fits one session.
+Split on real boundaries: public API, data model, migration, UI, tests, or docs.
+Avoid tiny bookkeeping tasks and broad tasks with several reviewable outcomes.
 
-Task body template. Trim to fit; omit empty sections.
+Write for a capable agent with less context and possibly less reasoning ability.
+Include the paths, behaviors, edge cases, and runnable proof needed to succeed.
+
+Use this body shape and omit empty sections:
 
 ```md
 ## Goal
-- <1-3 bullets: concrete outcome and why it matters>
+- <Concrete outcome and why it matters>
 
 ## Context
-- <Background, links to docs/designs; only when not obvious from the goal>
+- <Relevant decisions, paths, contracts, and constraints>
 
 ## Acceptance Criteria
-- <Observable behavior, edge cases, definition of done>
+- <Observable behavior and important edge cases>
 
 ## Checkpoint
-- Produce: <specific artifact, e.g. "ASCII mockup of the banner layout">
-- Then ask: <specific question, e.g. "Does this information hierarchy work?">
-- Do not proceed past this point without user approval.
+- Produce: <specific artifact>
+- Then ask: <specific decision question>
+- Do not proceed without approval.
 
 ## Validation Gates
-- <Exact commands to prove it works: tests, lint, format>
+- <Exact test, lint, build, or inspection commands>
 ```
 
-### Dependencies
+Prefix knowledge-producing work with `spike:`. State what dependent tasks must
+learn from it.
 
-Add edges only for true ordering constraints. Maximize parallelism and task independence.
+## Review the plan
 
-## Plan review
+Before presenting the backlog, check:
 
-Before presenting to the user, do a final confirmation pass:
+- Coverage: implementation, tests, docs, migration, compatibility, and release work.
+- Sizing: no task is trivial or likely to span several reviewable changes.
+- Dependencies: every edge is necessary; parallel work remains parallel.
+- Validation: every task has runnable evidence or exact human verification.
+- Risk: high-risk unknowns have a spike, mitigation, or explicit checkpoint.
+- Decisions: no answerable design call is deferred to an implementation agent.
+- Cleanup: the plan leaves no unowned compatibility path or duplicate source of truth.
 
-- **Coverage** -- API, tests, docs, migrations, edge cases all accounted for?
-- **Sizing** -- anything too small to track separately, or too large to finish in one session?
-- **Dependencies** -- missing edges that will cause churn? Unnecessary edges blocking parallelism?
-- **Validation** -- every task has runnable gates?
-- **Risk** -- 1-3 highest-risk tasks identified, with spikes or mitigation added?
-- **Open calls** -- every judgment call resolved with the user, not deferred to task bodies?
-- **Cruft** -- will the planned work leave behind unowned debt?
+Fix the graph, then give the user a concise summary of containers, key tasks,
+dependencies, decisions, and risks. Get approval before implementation when the
+user asked for a plan rather than execution.
 
-Fix what you find, then present an executive summary to the user for approval. Keep it concise: containers, key tasks, and major decisions in high-level language.
+## Execute the plan
 
-## Executing ergo plans
+Claim the oldest ready task or a specific task:
 
-1. Claim a ready task.
-2. Implement it. Stop and consult the user if important questions arise.
-3. Commit using repo conventions. Do not include `.ergo/` files in per-task commits.
-4. Mark task done. On completion:
-   - Update the task body with a brief completion note: decisions made, approach taken, anything non-obvious. Think PR description, not essay.
-  - If the task produced a concrete deliverable, attach it with `result` pointing at the file path. Do not create standalone result files just to have a link.
-   - After completing a spike, update dependent tasks with what was learned so the knowledge flows forward.
-   - If a task can't be completed, mark it blocked or error. Never leave tasks in progress.
-5. If the plan needs to change, update the plan and note why. Plans are living documents, not contracts.
-6. When a container is done, commit the `.ergo/` state with a message like `plan: complete <feature name>`. Otherwise, go to 1.
+```sh
+ergo --json claim --agent model@host
+ergo --json claim ABCDEF --agent model@host
+```
+
+Then:
+
+1. Read the full task and relevant repository state.
+2. Implement and run its validation gates.
+3. Stop for any required checkpoint or material design choice.
+4. Commit the reviewable change using repository conventions.
+5. Record a brief completion note in the task body and close it with the correct lifecycle command.
+
+Body notes record decisions, approach, and attempt history. `body` replaces the
+entire body, so preserve the existing task text when adding a completion note:
+
+```sh
+ergo --json show ABCDEF
+printf '%s\n' '<full existing body plus completion note>' | ergo body ABCDEF
+```
+
+Use `--result` only for a concrete existing file produced by the task. Do not use
+a commit hash, prose status, or a file created only to satisfy the field.
+
+```sh
+ergo done ABCDEF
+ergo done ABCDEF --result docs/spec.md --summary "Accepted specification"
+```
+
+Choose other exits by intent:
+
+```sh
+# An identified impediment must be resolved.
+printf '%s\n' '<full body with blocking evidence>' | ergo block ABCDEF
+
+# The objective remains valid and another attempt can proceed.
+ergo release ABCDEF --result .scratch/attempt.md --summary "Attempt evidence"
+
+# The objective is no longer wanted.
+ergo cancel ABCDEF
+```
+
+Never leave claimed work in doing. Block records an impediment. Release records
+unfinished but retryable work. Cancel records a deliberate stop. After a spike,
+update dependent task bodies with what was learned before closing the spike.
+
+Plans remain editable during execution. Use `title`, `body`, `move`, and
+`sequence` to keep the graph true, and note why its shape changed. When the
+container is complete, the plan is complete.
