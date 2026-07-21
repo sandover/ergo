@@ -33,7 +33,7 @@ and are safe for concurrent agents. Data lives in the repo as plain text.`,
 func init() {
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&globalOpts.StartDir, "dir", "", "Run in a specific directory")
-	rootCmd.PersistentFlags().StringVar(&globalOpts.AgentID, "agent", "", "Agent ID for claims (required for claim/implicit set; suggested: model@host)")
+	rootCmd.PersistentFlags().StringVar(&globalOpts.AgentID, "agent", "", "Agent ID for claims (suggested: model@host)")
 	rootCmd.PersistentFlags().BoolVar(&globalOpts.JSON, "json", false, "Output JSON")
 
 	// Set the version to enable --version flag

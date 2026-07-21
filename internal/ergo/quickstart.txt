@@ -50,7 +50,7 @@ Return unfinished work to the ready pool:
 Cancel work that is no longer wanted:
   {{CMD}}ergo --json cancel ABCDEF{{RESET}}
 
-Claim and `doing` move together. Finishing (`done` or `canceled`) clears the claim. `error` retains it.
+Claim and `doing` move together. Every lifecycle exit clears the claim.
 
 {{HEADER}}4. CREATE WORK{{RESET}}
 
@@ -78,19 +78,8 @@ Direct content edits:
   {{CMD}}ergo move ABCDEF OFKSTE{{RESET}}
   {{CMD}}ergo move ABCDEF --root{{RESET}}
 
-`set <id> [json]` updates exactly one task. The JSON argument changes metadata. If stdin is piped, it replaces the body.
-
-Rename or reparent:
-  {{CMD}}ergo set ABCDEF '{"title":"Login API","epic":"OFKSTE"}'{{RESET}}
-
-Replace the body with markdown from stdin:
-  {{CMD}}printf '%s\n' '## Status' '- Waiting on review' | ergo set ABCDEF '{"state":"blocked"}'{{RESET}}
-
-Clear the body:
-  {{CMD}}printf '' | ergo set ABCDEF{{RESET}}
-
 Attach another result later:
-  {{CMD}}ergo set ABCDEF '{"result":"docs/followup.md"}'{{RESET}}
+  {{CMD}}ergo done ABCDEF --result docs/followup.md{{RESET}}
 
 {{HEADER}}6. PLAN A FEATURE{{RESET}}
 
@@ -158,13 +147,12 @@ Containers:
   - cannot be nested more than one level deep
 
 State set:
-  - `todo`, `doing`, `blocked`, `error`, `done`, `canceled`
+  - `todo`, `doing`, `blocked`, `done`, `canceled`
 
 Invariants:
   - `doing` requires a claim
-  - `error` requires a claim
-  - `todo`, `done`, and `canceled` clear the claim
-  - `blocked` may keep or drop the claim
+  - every other state has no claim
+  - legacy `error` remains readable until a lifecycle command resolves it
 
 Agent ID format:
   - `<model>@<hostname>` is recommended, not enforced

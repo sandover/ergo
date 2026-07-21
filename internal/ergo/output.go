@@ -14,15 +14,15 @@ import (
 )
 
 type taskListItem struct {
-	Container bool   `json:"container,omitempty"`
-	ID        string `json:"id"`
-	EpicID    string `json:"epic_id,omitempty"`
-	State     string `json:"state"`
-	ClaimedBy string `json:"claimed_by,omitempty"`
-	Title     string `json:"title"`
-	Ready     bool   `json:"ready"`
-	Blocked   bool   `json:"blocked"`
-	HasResults bool  `json:"has_results,omitempty"`
+	Container  bool   `json:"container,omitempty"`
+	ID         string `json:"id"`
+	EpicID     string `json:"epic_id,omitempty"`
+	State      string `json:"state"`
+	ClaimedBy  string `json:"claimed_by,omitempty"`
+	Title      string `json:"title"`
+	Ready      bool   `json:"ready"`
+	Blocked    bool   `json:"blocked"`
+	HasResults bool   `json:"has_results,omitempty"`
 }
 
 // resultOutputItem is the JSON representation of a result with derived file_url.
@@ -87,7 +87,7 @@ type bulkCreateOutput struct {
 	Edges     []sequenceEdgeOutput    `json:"edges"`
 }
 
-type setOutput struct {
+type mutationOutput struct {
 	Kind          string   `json:"kind"`
 	ID            string   `json:"id"`
 	UpdatedFields []string `json:"updated_fields"`

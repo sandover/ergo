@@ -1,6 +1,6 @@
 {{BOLD}}ergo{{RESET}} — fast, local task graph for AI agents. humans welcome.
 
-  Tasks have states (todo → doing → done/blocked/error/canceled) and can depend on
+  Tasks have states (todo, doing, blocked, done, canceled) and can depend on
   each other. A task is "ready" when all its dependencies are done. A task with
   children is an epic (no state of its own; completes when children finish).
 
@@ -20,7 +20,6 @@
 
 {{HEADER}}COMMANDS{{RESET}}
   new task [json]                         create one task (stdin = body when piped)
-  set <id> [json]                         update one task (stdin = replacement body when piped)
   show <id>                               task detail (Markdown default; --json for agents)
   list [--epic <id>] [--ready] [--all]    list tasks; default omits done/canceled
   claim [<id>] --agent <identity>         claim next ready task (or specific ID)
@@ -48,18 +47,17 @@
   -h, --help                              show help
   -V, --version                           print version
 
-{{HEADER}}TASK FIELDS (JSON for new/set){{RESET}}
+{{HEADER}}TASK FIELDS (JSON for new task){{RESET}}
   Unknown keys are rejected (with suggestions for close matches).
-  `new task` requires `title`. `set` accepts any subset.
+  `new task` requires `title`.
 
   title           task title
   epic            parent task ID ("" to unassign)
-  state           todo|doing|done|blocked|canceled|error
+  state           todo|doing|done|blocked|canceled
   claim           agent identity (implies state=doing)
   result          file path to attach as a result
 
-  Stdin: piped input becomes the task body (new) or replaces it (set).
-  Empty pipe = empty/cleared body. TTY = body unchanged.
+  Stdin: piped input becomes the new task body.
 
 {{HEADER}}PLAN{{RESET}}
   ergo --json plan --file tasks.md '{"title":"Auth system"}'
@@ -68,8 +66,8 @@
   File order does not imply dependencies — use `sequence` afterwards.
 
 {{HEADER}}RULES{{RESET}}
-  1. Never leave a task in `doing`. Finish with `done`, `blocked`, `error`, or `canceled`.
-  2. `doing` and `error` require a claim. `done`/`canceled` clear it. `blocked` may keep it.
+  1. Never leave a task in `doing`. Use done, block, cancel, or release.
+  2. A claim exists exactly when state is `doing`.
   3. Epics cannot have state, claim, or results — only leaf tasks can.
   4. One level of nesting: a child cannot itself be an epic.
   5. Dependencies: any non-ancestor tasks; cycles are forbidden.

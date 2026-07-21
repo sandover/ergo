@@ -1,5 +1,5 @@
-// Purpose: Implement list/show/claim/set/sequence/compact/prune/where behaviors and output.
-// Exports: RunSet, RunClaim, RunClaimOldestReady, RunShow, RunList, RunSequence, RunCompact, RunPrune, RunWhere.
+// Purpose: Implement list/show/claim/sequence/compact/prune/where behaviors and output.
+// Exports: RunClaim, RunClaimOldestReady, RunShow, RunList, RunSequence, RunCompact, RunPrune, RunWhere.
 // Role: Command layer bridging CLI wiring to graph/storage operations.
 // Invariants: Mutations acquire the lock; JSON output is stable when requested.
 // Notes: Read operations replay the event log to build current state.
@@ -19,71 +19,6 @@ type ListOptions struct {
 	EpicID    string
 	ReadyOnly bool
 	ShowAll   bool
-}
-
-func RunSet(id string, args []string, opts GlobalOptions) error {
-	if id == "" {
-		return errors.New("usage: ergo set <id> [json]")
-	}
-
-	input, verr, err := parseInlineTaskArgs(args, "usage: ergo set <id> [json]")
-	if err != nil {
-		return err
-	}
-	if verr != nil {
-		if opts.JSON {
-			if err := verr.WriteJSON(os.Stdout); err != nil {
-				return err
-			}
-		}
-		return verr.GoError()
-	}
-	if verr := input.ValidateForSet(); verr != nil {
-		if opts.JSON {
-			if err := verr.WriteJSON(os.Stdout); err != nil {
-				return err
-			}
-		}
-		return verr.GoError()
-	}
-
-	body, bodyProvided, err := readOptionalBodyFromStdin()
-	if err != nil {
-		return err
-	}
-
-	updates := input.ToUpdates()
-	if bodyProvided {
-		updates["body"] = body
-	}
-	if len(updates) == 0 {
-		return errors.New("no fields to update")
-	}
-
-	dir, err := ergoDir(opts)
-	if err != nil {
-		return err
-	}
-
-	outcome, err := applySetUpdates(dir, opts, id, updates, opts.AgentID, opts.JSON)
-	if err != nil {
-		return err
-	}
-
-	if opts.JSON {
-		task := outcome.Graph.Tasks[id]
-		if task == nil {
-			return fmt.Errorf("unknown task id %s", id)
-		}
-		return writeJSON(os.Stdout, setOutput{
-			Kind:          "set",
-			ID:            id,
-			UpdatedFields: buildUpdatedFields(input, bodyProvided),
-			State:         task.State,
-			ClaimedBy:     task.ClaimedBy,
-		})
-	}
-	return nil
 }
 
 func RunClaim(id string, opts GlobalOptions) error {
@@ -210,90 +145,6 @@ func writeClaimSuccess(graph *Graph, id, agentID string, jsonOutput bool) error 
 	fmt.Println("  " + next["cancel"])
 	fmt.Println("  " + next["release"])
 	return nil
-}
-func applySetUpdates(dir string, opts GlobalOptions, id string, updates map[string]string, agentID string, quiet bool) (mutationOutcome, error) {
-	mutation, remaining, err := mutationFromUpdates(updates, agentID, identityBodyResolver)
-	if err != nil {
-		return mutationOutcome{}, err
-	}
-	if len(remaining) > 0 {
-		unknown := make([]string, 0, len(remaining))
-		for key := range remaining {
-			unknown = append(unknown, key)
-		}
-		return mutationOutcome{}, fmt.Errorf("unknown keys: %s", strings.Join(unknown, ", "))
-	}
-	mutation.Kind = "set"
-	mutation.LegacySet = true
-	mutationOpts := opts
-	mutationOpts.AgentID = agentID
-	return applyTaskMutation(dir, mutationOpts, id, mutation, quiet)
-}
-
-// buildSetEvents generates the event list for a set command.
-// Separated from I/O to improve testability and separation of concerns.
-func buildSetEvents(id string, task *Task, updates map[string]string, agentID string, now time.Time, bodyResolver func(string) (string, error)) ([]Event, map[string]string, error) {
-	mutation, remaining, err := mutationFromUpdates(updates, agentID, bodyResolver)
-	if err != nil {
-		return nil, nil, err
-	}
-	if task.IsEpic && mutation.EpicSet {
-		return nil, nil, errors.New("containers cannot be assigned to other containers")
-	}
-	mutation.LegacySet = true
-	events, _, err := buildMutationEvents(id, task, mutation, agentID, now)
-	return events, remaining, err
-}
-
-func mutationFromUpdates(updates map[string]string, agentID string, bodyResolver func(string) (string, error)) (taskMutation, map[string]string, error) {
-	mutation := taskMutation{}
-	remaining := make(map[string]string, len(updates))
-	for key, value := range updates {
-		remaining[key] = value
-	}
-	if value, ok := remaining["title"]; ok {
-		mutation.Title, mutation.TitleSet = value, true
-		delete(remaining, "title")
-	}
-	if value, ok := remaining["body"]; ok {
-		resolved, err := bodyResolver(value)
-		if err != nil {
-			return taskMutation{}, nil, err
-		}
-		mutation.Body, mutation.BodySet = resolved, true
-		delete(remaining, "body")
-	}
-	if value, ok := remaining["epic"]; ok {
-		mutation.EpicID, mutation.EpicSet = value, true
-		delete(remaining, "epic")
-	}
-	if value, ok := remaining["claim"]; ok {
-		mutation.Claim, mutation.ClaimSet = value, true
-		delete(remaining, "claim")
-	}
-	if value, ok := remaining["state"]; ok {
-		mutation.State, mutation.StateSet = value, true
-		delete(remaining, "state")
-	}
-	if value, ok := remaining["result.path"]; ok {
-		mutation.ResultPath, mutation.ResultSet = value, true
-		delete(remaining, "result.path")
-	}
-	if value, ok := remaining["result.summary"]; ok {
-		if !mutation.ResultSet {
-			return taskMutation{}, nil, errors.New("result.summary requires result.path=")
-		}
-		mutation.ResultSummary = value
-		delete(remaining, "result.summary")
-	}
-	_ = agentID
-	return mutation, remaining, nil
-}
-
-// identityBodyResolver is a no-op body resolver (body comes from JSON as-is).
-// With JSON-only input, we no longer support @- or @editor syntax.
-func identityBodyResolver(value string) (string, error) {
-	return value, nil
 }
 
 type sequenceEdge struct {

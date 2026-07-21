@@ -1,4 +1,4 @@
-// Purpose: Parse the forward CLI contract for create, update, and plan commands.
+// Purpose: Parse the forward CLI contract for task creation and plan commands.
 // Exports: readOptionalBodyFromStdin and inline JSON input helpers.
 // Role: Converts optional positional JSON args plus optional stdin body into mutations.
 // Invariants: Unknown keys are rejected with suggestions; stdin body is only read when piped.
@@ -100,10 +100,6 @@ func (input *InlineTaskInput) ValidateForNew() *ValidationError {
 	return input.validate(true)
 }
 
-func (input *InlineTaskInput) ValidateForSet() *ValidationError {
-	return input.validate(false)
-}
-
 func (input *InlineTaskInput) validate(requireTitle bool) *ValidationError {
 	if input == nil {
 		if requireTitle {
@@ -125,8 +121,8 @@ func (input *InlineTaskInput) validate(requireTitle bool) *ValidationError {
 
 	if input.State != nil {
 		state := strings.TrimSpace(*input.State)
-		if _, ok := knownStates[state]; !ok {
-			invalid["state"] = "must be one of: todo, doing, done, blocked, canceled, error"
+		if err := validateForwardState(state); err != nil {
+			invalid["state"] = "must be one of: todo, doing, done, blocked, canceled; error is legacy-only"
 		}
 	}
 
@@ -168,29 +164,4 @@ func (input *InlineTaskInput) ToUpdates() map[string]string {
 		updates["result.path"] = strings.TrimSpace(*input.Result)
 	}
 	return updates
-}
-
-func buildUpdatedFields(input *InlineTaskInput, bodyProvided bool) []string {
-	var fields []string
-	if input != nil {
-		if input.Title != nil {
-			fields = append(fields, "title")
-		}
-		if input.Epic != nil {
-			fields = append(fields, "epic")
-		}
-		if input.State != nil {
-			fields = append(fields, "state")
-		}
-		if input.Claim != nil {
-			fields = append(fields, "claim")
-		}
-		if input.Result != nil {
-			fields = append(fields, "result")
-		}
-	}
-	if bodyProvided {
-		fields = append(fields, "body")
-	}
-	return fields
 }

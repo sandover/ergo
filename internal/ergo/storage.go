@@ -374,18 +374,27 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 			delete(updates, "result.summary")
 		}
 
-		setEvents, remainingUpdates, err := buildSetEvents(id, newTask, updates, agentID, now, identityBodyResolver)
+		mutation := taskMutation{}
+		if state, ok := updates["state"]; ok {
+			mutation.State, mutation.StateSet = state, true
+			delete(updates, "state")
+		}
+		if claim, ok := updates["claim"]; ok {
+			mutation.Claim, mutation.ClaimSet = claim, true
+			delete(updates, "claim")
+		}
+		createEvents, _, err := buildMutationEvents(id, newTask, mutation, agentID, now)
 		if err != nil {
 			return err
 		}
-		if len(remainingUpdates) > 0 {
+		if len(updates) > 0 {
 			var unknown []string
-			for key := range remainingUpdates {
+			for key := range updates {
 				unknown = append(unknown, key)
 			}
 			return fmt.Errorf("unknown keys: %s", strings.Join(unknown, ", "))
 		}
-		events = append(events, setEvents...)
+		events = append(events, createEvents...)
 
 		if err := appendEvents(eventsPath, events); err != nil {
 			return err

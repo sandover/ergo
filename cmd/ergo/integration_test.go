@@ -92,22 +92,130 @@ func runNewTaskWithBody(t *testing.T, dir string, body string, inlineJSON string
 
 func runSetTask(t *testing.T, dir string, id string, inlineJSON string, extraArgs ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
-	args := []string{"set", id}
-	if inlineJSON != "" {
-		args = append(args, inlineJSON)
-	}
-	args = append(args, extraArgs...)
-	return runErgo(t, dir, "", args...)
+	return runLegacyMutationFixture(t, dir, id, "", false, inlineJSON, extraArgs...)
 }
 
 func runSetTaskWithBody(t *testing.T, dir string, id string, body string, inlineJSON string, extraArgs ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
-	args := []string{"set", id}
-	if inlineJSON != "" {
-		args = append(args, inlineJSON)
+	return runLegacyMutationFixture(t, dir, id, body, true, inlineJSON, extraArgs...)
+}
+
+// runLegacyMutationFixture keeps older integration scenarios readable while
+// routing them through the v2 commands. Legacy error setup appends a historical
+// state event directly because v2 deliberately has no command that creates it.
+func runLegacyMutationFixture(t *testing.T, dir, id, body string, bodySet bool, inlineJSON string, extraArgs ...string) (string, string, int) {
+	t.Helper()
+	var input struct {
+		Title  *string `json:"title"`
+		Epic   *string `json:"epic"`
+		State  *string `json:"state"`
+		Claim  *string `json:"claim"`
+		Result *string `json:"result"`
 	}
-	args = append(args, extraArgs...)
-	return runErgo(t, dir, body, args...)
+	if inlineJSON != "" {
+		if err := json.Unmarshal([]byte(inlineJSON), &input); err != nil {
+			return "", "invalid fixture JSON: " + err.Error(), 1
+		}
+	}
+	stdout, stderr, code := "", "", 0
+	run := func(stdin string, args ...string) bool {
+		args = append(args, extraArgs...)
+		stdout, stderr, code = runErgo(t, dir, stdin, args...)
+		return code == 0
+	}
+	if input.Title != nil && !run("", "title", id, *input.Title) {
+		return stdout, stderr, code
+	}
+	if input.Epic != nil {
+		args := []string{"move", id}
+		if *input.Epic == "" {
+			args = append(args, "--root")
+		} else {
+			args = append(args, *input.Epic)
+		}
+		if !run("", args...) {
+			return stdout, stderr, code
+		}
+	}
+	if bodySet && (input.State == nil || *input.State == "doing" || *input.State == "error") {
+		if !run(body, "body", id) {
+			return stdout, stderr, code
+		}
+		bodySet = false
+	}
+	if input.State != nil {
+		state := *input.State
+		switch state {
+		case "doing":
+			agent := "fixture@local"
+			if input.Claim != nil && *input.Claim != "" {
+				agent = *input.Claim
+			}
+			if !run("", "claim", id, "--agent", agent) {
+				return stdout, stderr, code
+			}
+		case "done", "blocked", "canceled", "todo":
+			verb := map[string]string{"done": "done", "blocked": "block", "canceled": "cancel", "todo": "release"}[state]
+			args := []string{verb, id}
+			if input.Result != nil {
+				args = append(args, "--result", *input.Result)
+			}
+			stdin := ""
+			if bodySet {
+				stdin = body
+			}
+			if !run(stdin, args...) {
+				return stdout, stderr, code
+			}
+			bodySet = false
+		case "error":
+			if input.Claim != nil && *input.Claim != "" {
+				if !run("", "claim", id, "--agent", *input.Claim) {
+					return stdout, stderr, code
+				}
+			}
+			appendLegacyErrorState(t, dir, id)
+			stdout, stderr, code = id+"\n", "", 0
+		default:
+			return "", "invalid state", 1
+		}
+	} else if input.Claim != nil {
+		if !run("", "claim", id, "--agent", *input.Claim) {
+			return stdout, stderr, code
+		}
+	}
+	if bodySet && !run(body, "body", id) {
+		return stdout, stderr, code
+	}
+	if input.Result != nil && input.State == nil {
+		showOut, showErr, showCode := runErgo(t, dir, "", "--json", "show", id)
+		if showCode != 0 {
+			return showOut, showErr, showCode
+		}
+		var shown map[string]any
+		if err := json.Unmarshal([]byte(showOut), &shown); err != nil {
+			return "", err.Error(), 1
+		}
+		verb := map[string]string{"todo": "release", "doing": "release", "blocked": "block", "done": "done", "canceled": "cancel", "error": "release"}[shown["state"].(string)]
+		if !run("", verb, id, "--result", *input.Result) {
+			return stdout, stderr, code
+		}
+	}
+	return stdout, stderr, code
+}
+
+func appendLegacyErrorState(t *testing.T, dir, id string) {
+	t.Helper()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	line := fmt.Sprintf("{\"type\":\"state\",\"ts\":%q,\"data\":{\"id\":%q,\"state\":\"error\",\"ts\":%q}}\n", now, id, now)
+	file, err := os.OpenFile(getEventFilePath(dir), os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if _, err := file.WriteString(line); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // setupErgo creates a temp directory and initializes .ergo/
@@ -565,8 +673,43 @@ func TestNewTask_InlineJSONValidationErrors(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
-	if !strings.Contains(stderr, "state requires claim") {
+	if !strings.Contains(stderr, "state=doing requires a claim") {
 		t.Fatalf("expected claim invariant error, got stderr=%q", stderr)
+	}
+}
+
+func TestNewTaskRejectsLegacyErrorState(t *testing.T) {
+	dir := setupErgo(t)
+	_, stderr, code := runErgo(t, dir, "", "new", "task", `{"title":"Bad state","state":"error","claim":"agent@local"}`)
+	if code == 0 || !strings.Contains(stderr, "error is legacy-only") || !strings.Contains(stderr, "blocked") {
+		t.Fatalf("code=%d stderr=%q", code, stderr)
+	}
+}
+
+func TestParentCommandsRejectUnexpectedArguments(t *testing.T) {
+	dir := setupErgo(t)
+	for _, args := range [][]string{{"list", "extra"}, {"quickstart", "extra"}, {"version", "extra"}, {"new", "extra"}} {
+		_, stderr, code := runErgo(t, dir, "", args...)
+		if code == 0 {
+			t.Fatalf("%v accepted unexpected arguments; stderr=%q", args, stderr)
+		}
+	}
+}
+
+func TestMutationCommandRegistrationMatchesV2(t *testing.T) {
+	registered := map[string]bool{}
+	for _, command := range rootCmd.Commands() {
+		registered[command.Name()] = true
+	}
+	for _, name := range []string{"claim", "done", "block", "cancel", "release", "title", "body", "move"} {
+		if !registered[name] {
+			t.Errorf("missing v2 mutation command %s", name)
+		}
+	}
+	for _, name := range []string{"set", "reopen"} {
+		if registered[name] {
+			t.Errorf("removed command %s is still registered", name)
+		}
 	}
 }
 
@@ -700,7 +843,7 @@ func TestSet_MetadataOnly_KeepsBody(t *testing.T) {
 	}
 	taskID := strings.TrimSpace(stdout)
 
-	_, stderr, code := runErgo(t, dir, "", "set", taskID, `{"state":"blocked"}`)
+	_, stderr, code := runErgo(t, dir, "", "block", taskID)
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d (stderr=%q)", code, stderr)
 	}
@@ -739,8 +882,8 @@ func TestSet_JSONOutput(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
 		t.Fatalf("failed to parse set --json output: %v", err)
 	}
-	if out["kind"] != "set" {
-		t.Errorf("expected kind=set, got %v", out["kind"])
+	if out["kind"] != "done" {
+		t.Errorf("expected kind=done, got %v", out["kind"])
 	}
 	if out["id"] != taskID {
 		t.Errorf("expected id=%s, got %v", taskID, out["id"])
@@ -763,29 +906,19 @@ func TestSet_JSONOutput(t *testing.T) {
 	}
 }
 
-func TestSet_InvalidTransition(t *testing.T) {
+func TestRemovedMutationCommandsGiveDirectHints(t *testing.T) {
 	dir := setupErgo(t)
-
-	// Create task
-	stdout, _, code := runNewTaskWithBody(t, dir, "Test task", `{"title":"Test task"}`)
-	if code != 0 {
-		t.Fatalf("new task failed: exit %d", code)
-	}
-	taskID := strings.TrimSpace(stdout)
-
-	// Set to done
-	runSetTask(t, dir, taskID, `{"state":"done"}`)
-
-	// Try invalid transition done→doing
-	_, stderr, code := runSetTask(t, dir, taskID, `{"state":"doing","claim":"agent-1"}`)
-	if code == 0 {
-		t.Fatal("expected non-zero exit for invalid transition")
-	}
-
-	// Error message should mention transition or invalid
-	errMsg := strings.ToLower(stderr)
-	if !strings.Contains(errMsg, "transition") && !strings.Contains(errMsg, "invalid") {
-		t.Errorf("expected error about invalid transition, got: %q", stderr)
+	for _, test := range []struct {
+		args []string
+		hint string
+	}{
+		{[]string{"set", "ABCDEF", `{}`}, "use claim, done, block, cancel, release, title, body, or move"},
+		{[]string{"reopen", "ABCDEF"}, "use claim <id> --agent <identity> to resume closed work"},
+	} {
+		_, stderr, code := runErgo(t, dir, "", test.args...)
+		if code == 0 || !strings.Contains(stderr, test.hint) {
+			t.Fatalf("args=%v code=%d stderr=%q", test.args, code, stderr)
+		}
 	}
 }
 

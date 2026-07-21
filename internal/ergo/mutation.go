@@ -18,7 +18,6 @@ import (
 
 type taskMutation struct {
 	Kind          string
-	LegacySet     bool
 	State         string
 	StateSet      bool
 	Claim         string
@@ -50,7 +49,7 @@ func writeMutationResult(kind, id string, outcome mutationOutcome, jsonOutput bo
 	if task == nil {
 		return errors.New("internal error: missing mutated task")
 	}
-	return writeJSON(os.Stdout, setOutput{
+	return writeJSON(os.Stdout, mutationOutput{
 		Kind:          kind,
 		ID:            id,
 		UpdatedFields: outcome.UpdatedFields,
@@ -89,11 +88,11 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 			}
 		}
 		if isContainer(task, graph) {
-			if mutation.StateSet {
-				return errors.New("containers do not have state")
-			}
 			if mutation.ClaimSet {
 				return errors.New("containers cannot be claimed")
+			}
+			if mutation.StateSet {
+				return errors.New("containers do not have state")
 			}
 			if mutation.ResultSet {
 				return errors.New("containers cannot have results")
@@ -203,9 +202,6 @@ func buildMutationEvents(id string, task *Task, mutation taskMutation, agentID s
 }
 
 func mutationPostcondition(task *Task, mutation taskMutation, agentID string) (string, string, error) {
-	if mutation.LegacySet {
-		return legacySetPostcondition(task, mutation, agentID)
-	}
 	targetState := task.State
 	targetClaim := task.ClaimedBy
 
@@ -250,81 +246,6 @@ func mutationPostcondition(task *Task, mutation taskMutation, agentID string) (s
 		}
 	}
 	return targetState, targetClaim, nil
-}
-
-func legacySetPostcondition(task *Task, mutation taskMutation, agentID string) (string, string, error) {
-	targetState := task.State
-	targetClaim := task.ClaimedBy
-	if mutation.ClaimSet {
-		targetClaim = mutation.Claim
-	}
-	if mutation.StateSet {
-		if _, ok := knownStates[mutation.State]; !ok {
-			return "", "", fmt.Errorf("invalid state: %s", mutation.State)
-		}
-		if err := validateLegacySetTransition(task.State, mutation.State); err != nil {
-			return "", "", err
-		}
-		targetState = mutation.State
-		if (targetState == stateDoing || targetState == stateError) && targetClaim == "" {
-			if agentID == "" {
-				return "", "", errors.New("state requires claim; pass --agent or set claim explicitly")
-			}
-			targetClaim = agentID
-		}
-		if targetState == stateTodo || targetState == stateDone || targetState == stateCanceled {
-			targetClaim = ""
-		}
-		if err := validateLegacyClaimInvariant(targetState, targetClaim); err != nil {
-			return "", "", err
-		}
-	} else if mutation.ClaimSet && mutation.Claim != "" {
-		targetState = stateDoing
-	}
-	return targetState, targetClaim, nil
-}
-
-func validateLegacySetTransition(from, to string) error {
-	if from == to {
-		return nil
-	}
-	valid := false
-	switch from {
-	case stateTodo:
-		valid = to == stateDoing || to == stateDone || to == stateBlocked || to == stateCanceled
-	case stateDoing:
-		valid = to == stateTodo || to == stateDone || to == stateBlocked || to == stateCanceled || to == stateError
-	case stateBlocked:
-		valid = to == stateTodo || to == stateDoing || to == stateDone || to == stateCanceled
-	case stateDone, stateCanceled:
-		valid = to == stateTodo
-	case stateError:
-		valid = to == stateTodo || to == stateDoing || to == stateCanceled
-	default:
-		return fmt.Errorf("unknown state: %s", from)
-	}
-	if !valid {
-		return fmt.Errorf("invalid transition: %s → %s", from, to)
-	}
-	return nil
-}
-
-func validateLegacyClaimInvariant(state, claimedBy string) error {
-	switch state {
-	case stateDoing:
-		if claimedBy == "" {
-			return errors.New("state=doing requires a claim")
-		}
-	case stateError:
-		if claimedBy == "" {
-			return errors.New("state=error requires a claim (shows who failed)")
-		}
-	case stateTodo, stateDone, stateCanceled:
-		if claimedBy != "" {
-			return fmt.Errorf("state=%s must have no claim", state)
-		}
-	}
-	return nil
 }
 
 func validateForwardState(state string) error {

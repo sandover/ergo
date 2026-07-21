@@ -49,10 +49,6 @@ var (
 	ErrLockBusy  = errors.New("lock busy")
 )
 
-var knownStates = map[string]struct{}{
-	stateTodo: {}, stateDoing: {}, stateDone: {}, stateBlocked: {}, stateCanceled: {}, stateError: {},
-}
-
 // validateClaimInvariant checks that the claim/state relationship is valid.
 // Forward state writes require a claim exactly when the state is doing.
 func validateClaimInvariant(state, claimedBy string) error {

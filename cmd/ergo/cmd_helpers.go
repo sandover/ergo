@@ -21,10 +21,14 @@ func printVersion() {
 
 func exitErr(err error, opts *ergo.GlobalOptions) {
 	fmt.Fprintln(os.Stderr, "error:", err)
-	if strings.HasPrefix(err.Error(), "usage:") {
+	if strings.Contains(err.Error(), `unknown command "set"`) {
+		fmt.Fprintln(os.Stderr, "hint: use claim, done, block, cancel, release, title, body, or move")
+	} else if strings.Contains(err.Error(), `unknown command "reopen"`) {
+		fmt.Fprintln(os.Stderr, "hint: use claim <id> --agent <identity> to resume closed work")
+	} else if strings.HasPrefix(err.Error(), "usage:") {
 		fmt.Fprintln(os.Stderr, "hint: run `ergo --help`")
 	} else if errors.Is(err, ergo.ErrNoErgoDir) {
-		fmt.Fprintln(os.Stderr, "hint: run `ergo init` in your repo")
+		fmt.Fprintln(os.Stderr, "hint: run `ergo init` or target an existing graph with `ergo --dir <path>`")
 	} else if isPermissionError(err) {
 		fmt.Fprintln(os.Stderr, "hint: permission error accessing .ergo/; check repo permissions (ergo needs read/write)")
 	} else if strings.Contains(err.Error(), ".ergo") && strings.Contains(err.Error(), "exists but is not a directory") {

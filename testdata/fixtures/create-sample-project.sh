@@ -18,10 +18,6 @@ new_task() {
 	$ERGO new task "$1"
 }
 
-set_task() {
-	$ERGO set "$1" "$2"
-}
-
 # ============================================
 # PHASE 1: Research & Design
 # ============================================
@@ -49,8 +45,7 @@ Teams need a lightweight task tracker that works well with AI coding agents.
 - <100ms for any command
 - Zero external dependencies at runtime
 EOF
-set_task "$REQ_TASK" '{"claim":"maya","state":"done"}'
-set_task "$REQ_TASK" '{"result":"docs/prd.md"}'
+$ERGO done "$REQ_TASK" --result docs/prd.md
 
 COMP_TASK=$(new_task '{"title":"Competitor analysis","epic":"'"$DESIGN_EPIC"'"}')
 mkdir -p docs
@@ -67,11 +62,10 @@ cat > docs/competitor-analysis.md << 'EOF'
 - Agent-friendly JSON mode
 - Minimal footprint
 EOF
-set_task "$COMP_TASK" '{"claim":"sonnet@agent-host","state":"done"}'
-set_task "$COMP_TASK" '{"result":"docs/competitor-analysis.md"}'
+$ERGO done "$COMP_TASK" --result docs/competitor-analysis.md
 
 INTERVIEW_TASK=$(new_task '{"title":"User interviews (3 customers)","epic":"'"$DESIGN_EPIC"'"}')
-set_task "$INTERVIEW_TASK" '{"claim":"human@agent-host","state":"doing"}'
+$ERGO claim "$INTERVIEW_TASK" --agent human@agent-host
 
 DESIGN_TASK=$(new_task '{"title":"Write technical design doc","epic":"'"$DESIGN_EPIC"'"}')
 $ERGO sequence "$REQ_TASK" "$DESIGN_TASK"  # Design doc needs requirements first
@@ -130,11 +124,11 @@ README_TASK=$(new_task '{"title":"Update README with new features"}')
 $ERGO sequence "$PROD_TASK" "$README_TASK"  # Doc the release after it ships
 
 TYPO_TASK=$(new_task '{"title":"Fix typo in CLI help"}')
-set_task "$TYPO_TASK" '{"claim":"maya","state":"done"}'
+$ERGO done "$TYPO_TASK"
 
 # A canceled task
 DB_TASK=$(new_task '{"title":"Evaluate alternative database (decided against)"}')
-set_task "$DB_TASK" '{"claim":"sonnet@agent-host","state":"canceled"}'
+$ERGO cancel "$DB_TASK"
 
 echo ""
 echo "✓ Sample project created in $FIXTURE_DIR"

@@ -33,8 +33,6 @@ func init() {
 	rootCmd.AddCommand(titleCmd)
 	rootCmd.AddCommand(bodyCmd)
 	rootCmd.AddCommand(moveCmd)
-	// ergo set
-	rootCmd.AddCommand(setCmd)
 	// ergo sequence
 	rootCmd.AddCommand(sequenceCmd)
 	// ergo where
@@ -87,6 +85,7 @@ var newTaskCmd = &cobra.Command{
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List tasks",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		epicID, _ := cmd.Flags().GetString("epic")
 		readyOnly, _ := cmd.Flags().GetBool("ready")
@@ -205,16 +204,6 @@ func init() {
 	moveCmd.Flags().Bool("root", false, "Move the task out of its container")
 }
 
-// -- set --
-var setCmd = &cobra.Command{
-	Use:   "set <id> [json]",
-	Short: "Update a task (stdin = new body)",
-	Args:  cobra.RangeArgs(1, 2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunSet(args[0], args[1:], globalOpts)
-	},
-}
-
 var (
 	planFile string
 )
@@ -280,6 +269,7 @@ func init() {
 var quickstartCmd = &cobra.Command{
 	Use:   "quickstart",
 	Short: "Show quickstart guide",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return ergo.RunQuickstart(args)
 	},
@@ -289,6 +279,7 @@ var quickstartCmd = &cobra.Command{
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version",
+	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		printVersion()
 	},
