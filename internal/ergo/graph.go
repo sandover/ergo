@@ -257,6 +257,27 @@ func replayEvents(events []Event) (*Graph, error) {
 			}
 			task.Results = append([]Result{result}, task.Results...)
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
+		case "message":
+			var data MessageEvent
+			if err := json.Unmarshal(event.Data, &data); err != nil {
+				return nil, err
+			}
+			if _, tombstoned := graph.Tombstones[data.TaskID]; tombstoned {
+				continue
+			}
+			task, ok := graph.Tasks[data.TaskID]
+			if !ok {
+				continue
+			}
+			if err := validateMessageKind(data.Kind); err != nil {
+				return nil, err
+			}
+			ts, err := parseTime(data.TS)
+			if err != nil {
+				return nil, err
+			}
+			task.Messages = append([]Message{{Kind: data.Kind, Text: data.Text, CreatedAt: ts}}, task.Messages...)
+			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
 		}
 	}
 
@@ -508,6 +529,21 @@ func compactEvents(graph *Graph) ([]Event, error) {
 				return nil, err
 			}
 			events = append(events, resultEvent)
+		}
+
+		// Emit lifecycle messages in chronological order, oldest first.
+		for i := len(task.Messages) - 1; i >= 0; i-- {
+			message := task.Messages[i]
+			messageEvent, err := newEvent("message", message.CreatedAt, MessageEvent{
+				TaskID: task.ID,
+				Kind:   message.Kind,
+				Text:   message.Text,
+				TS:     formatTime(message.CreatedAt),
+			})
+			if err != nil {
+				return nil, err
+			}
+			events = append(events, messageEvent)
 		}
 	}
 

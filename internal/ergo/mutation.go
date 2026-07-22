@@ -32,6 +32,9 @@ type taskMutation struct {
 	ResultPath    string
 	ResultSummary string
 	ResultSet     bool
+	MessageKind   string
+	MessageText   string
+	MessageSet    bool
 	AllowedStates []string
 	ClaimConflict bool
 }
@@ -96,6 +99,9 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 			}
 			if mutation.ResultSet {
 				return errors.New("containers cannot have results")
+			}
+			if mutation.MessageSet {
+				return errors.New("containers cannot have lifecycle messages")
 			}
 		}
 
@@ -167,6 +173,25 @@ func buildMutationEvents(id string, task *Task, mutation taskMutation, agentID s
 		}
 		events = append(events, event)
 		fields = append(fields, "epic")
+	}
+	if mutation.MessageSet {
+		if err := validateMessageKind(mutation.MessageKind); err != nil {
+			return nil, nil, err
+		}
+		if strings.TrimSpace(mutation.MessageText) == "" {
+			return nil, nil, errors.New("lifecycle message cannot be blank")
+		}
+		event, err := newEvent("message", now, MessageEvent{
+			TaskID: id,
+			Kind:   mutation.MessageKind,
+			Text:   mutation.MessageText,
+			TS:     formatTime(now),
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		events = append(events, event)
+		fields = append(fields, "message")
 	}
 
 	targetState, targetClaim, err := mutationPostcondition(task, mutation, agentID)

@@ -31,6 +31,7 @@ type taskSnapshot struct {
 	Deps      []string       `json:"deps"`
 	RDeps     []string       `json:"rdeps"`
 	Results   []resultSnap   `json:"results"`
+	Messages  []messageSnap  `json:"messages"`
 	Invariant invariantState `json:"invariant"`
 }
 
@@ -41,6 +42,12 @@ type resultSnap struct {
 	MtimeAtAttach     string    `json:"mtime_at_attach"`
 	GitCommitAtAttach string    `json:"git_commit_at_attach"`
 	CreatedAt         time.Time `json:"created_at"`
+}
+
+type messageSnap struct {
+	Kind      string    `json:"kind"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type invariantState struct {
@@ -77,6 +84,7 @@ func snapshotTaskState(task *Task) taskSnapshot {
 		Deps:      append([]string(nil), task.Deps...),
 		RDeps:     append([]string(nil), task.RDeps...),
 		Results:   snapshotResults(task.Results),
+		Messages:  snapshotMessages(task.Messages),
 	}
 	if err := validateClaimInvariant(task.State, task.ClaimedBy); err != nil {
 		snap.Invariant = invariantState{ClaimOk: false, Error: err.Error()}
@@ -84,6 +92,17 @@ func snapshotTaskState(task *Task) taskSnapshot {
 		snap.Invariant = invariantState{ClaimOk: true}
 	}
 	return snap
+}
+
+func snapshotMessages(messages []Message) []messageSnap {
+	if len(messages) == 0 {
+		return nil
+	}
+	out := make([]messageSnap, 0, len(messages))
+	for _, message := range messages {
+		out = append(out, messageSnap(message))
+	}
+	return out
 }
 
 func snapshotResults(results []Result) []resultSnap {
@@ -223,6 +242,16 @@ func resultEvent(t *testing.T, ts time.Time, taskID string, summary, path, sha25
 	})
 }
 
+func messageEvent(t *testing.T, ts time.Time, taskID, kind, text string) Event {
+	t.Helper()
+	return mustNewEventT(t, "message", ts, MessageEvent{
+		TaskID: taskID,
+		Kind:   kind,
+		Text:   text,
+		TS:     formatTime(ts),
+	})
+}
+
 func linkEvent(t *testing.T, ts time.Time, from, to string) Event {
 	t.Helper()
 	return mustNewEventT(t, "link", ts, LinkEvent{
@@ -277,6 +306,8 @@ func TestCompactEvents_RoundTrip_TaskEvolvesOverTime(t *testing.T) {
 		// Results: ensure optional evidence fields survive compaction.
 		resultEvent(t, ts(18), "T1", "First artifact", "docs/a.md", "aaa111", "", ""),
 		resultEvent(t, ts(19), "T1", "Second artifact", "docs/b.md", "bbb222", formatTime(ts(19)), "deadbeef"),
+		messageEvent(t, ts(20), "T1", "done", "Implemented and verified."),
+		messageEvent(t, ts(21), "T1", "release", "Follow-up remains."),
 	}
 
 	graphBefore, err := replayEvents(events)

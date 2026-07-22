@@ -113,7 +113,8 @@ type Task struct {
 	UpdatedAt time.Time
 	Deps      []string
 	RDeps     []string
-	Results   []Result // Attached results/artifacts, newest first
+	Results   []Result  // Attached results/artifacts, newest first
+	Messages  []Message // Lifecycle messages, newest first
 }
 
 type TaskMeta struct {
@@ -228,6 +229,30 @@ type Result struct {
 	MtimeAtAttach     string    `json:"mtime_at_attach,omitempty"`      // optional
 	GitCommitAtAttach string    `json:"git_commit_at_attach,omitempty"` // optional
 	CreatedAt         time.Time `json:"created_at"`
+}
+
+// MessageEvent records a note attached to a lifecycle postcondition.
+type MessageEvent struct {
+	TaskID string `json:"task_id"`
+	Kind   string `json:"kind"`
+	Text   string `json:"text"`
+	TS     string `json:"ts"`
+}
+
+// Message is a durable lifecycle note reconstructed from the event log.
+type Message struct {
+	Kind      string    `json:"kind"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func validateMessageKind(kind string) error {
+	switch kind {
+	case "done", "block", "cancel", "release":
+		return nil
+	default:
+		return fmt.Errorf("invalid lifecycle message kind: %s", kind)
+	}
 }
 
 const maxResultSummaryLen = 120
