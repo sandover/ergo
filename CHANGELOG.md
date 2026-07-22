@@ -9,17 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.0.0] - 2026-07-22
 
-Ergo now has one direct, readable command surface for agents and humans.
+Ergo 3 simplifies how agents read and update work.
 
 ### Changed
 
-- `list`, `show`, and `claim` use the ordinary readable output; callers no
-  longer select a separate JSON output mode.
-- Lifecycle notes use repeatable `-m <message>` arguments. Lifecycle commands
-  reject stdin, and `body` is the sole command that replaces an existing body.
-- Results use `--result <path>` without a separate summary.
-- Dependency removal uses `unsequence`, symmetric with `sequence`.
-- Lifecycle messages and results append as durable attempt history.
+- Commands now print readable text for agents and humans. Remove `--json` from
+  existing calls.
+- Add lifecycle notes with repeatable `-m <message>` arguments.
+- Lifecycle commands reject stdin. Use `body` to replace an existing body.
+- Attach results with `--result <path>`; a separate summary is no longer needed.
+- Remove dependency order with `unsequence`, symmetric with `sequence`.
+- Messages and results append, preserving attempt history.
 
 ### Upgrade from 2.x
 
@@ -27,13 +27,13 @@ Ergo now has one direct, readable command surface for agents and humans.
 | --- | --- |
 | `ergo --json <command>` | `ergo <command>` |
 | `ergo done ID --summary "note"` | `ergo done ID -m "note"` |
-| `printf ... \| ergo done ID` | `printf ... \| ergo body ID`, then `ergo done ID` |
+| `printf ... \| ergo done ID` | `printf ... \| ergo body ID`<br>`ergo done ID` |
 | `ergo sequence rm A B` | `ergo unsequence A B` |
 
 Inline JSON remains creation input, and the event log remains JSONL. Existing
-2.x logs open without migration, including distinct result summaries. After v3
-adds lifecycle-message events, older binaries are not guaranteed to read the
-updated log.
+2.x logs open without migration, including distinct result summaries. Once
+Ergo 3 writes a lifecycle message, older Ergo versions may no longer be able to
+read that log.
 
 ## [2.0.1] - 2026-07-20
 
