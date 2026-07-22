@@ -456,3 +456,8 @@
 {"type":"state","ts":"2026-07-22T21:19:58.797411Z","data":{"id":"CDOO36","state":"done","ts":"2026-07-22T21:19:58.797411Z"}}
 {"type":"claim","ts":"2026-07-22T21:20:20.374068Z","data":{"id":"BR5ZO7","agent_id":"codex@ergo","ts":"2026-07-22T21:20:20.374068Z"}}
 {"type":"state","ts":"2026-07-22T21:20:20.374068Z","data":{"id":"BR5ZO7","state":"doing","ts":"2026-07-22T21:20:20.374068Z"}}
+{"type":"message","ts":"2026-07-22T21:57:58.188799Z","data":{"task_id":"BR5ZO7","kind":"done","text":"Approved after workflow-first help and quickstart review","ts":"2026-07-22T21:57:58.188799Z"}}
+{"type":"unclaim","ts":"2026-07-22T21:57:58.188799Z","data":{"id":"BR5ZO7","ts":"2026-07-22T21:57:58.188799Z"}}
+{"type":"state","ts":"2026-07-22T21:57:58.188799Z","data":{"id":"BR5ZO7","state":"done","ts":"2026-07-22T21:57:58.188799Z"}}
+{"type":"claim","ts":"2026-07-22T21:58:01.825829Z","data":{"id":"UTHA6B","agent_id":"codex@ergo","ts":"2026-07-22T21:58:01.825829Z"}}
+{"type":"state","ts":"2026-07-22T21:58:01.825829Z","data":{"id":"UTHA6B","state":"doing","ts":"2026-07-22T21:58:01.825829Z"}}

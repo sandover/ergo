@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-07-22
+
+Ergo now has one direct, readable command surface for agents and humans.
+
+### Changed
+
+- `list`, `show`, and `claim` use the ordinary readable output; callers no
+  longer select a separate JSON output mode.
+- Lifecycle notes use repeatable `-m <message>` arguments. Lifecycle commands
+  reject stdin, and `body` is the sole command that replaces an existing body.
+- Results use `--result <path>` without a separate summary.
+- Dependency removal uses `unsequence`, symmetric with `sequence`.
+- Lifecycle messages and results append as durable attempt history.
+
+### Upgrade from 2.x
+
+| Before | Now |
+| --- | --- |
+| `ergo --json <command>` | `ergo <command>` |
+| `ergo done ID --summary "note"` | `ergo done ID -m "note"` |
+| `printf ... \| ergo done ID` | `printf ... \| ergo body ID`, then `ergo done ID` |
+| `ergo sequence rm A B` | `ergo unsequence A B` |
+
+Inline JSON remains creation input, and the event log remains JSONL. Existing
+2.x logs open without migration, including distinct result summaries. After v3
+adds lifecycle-message events, older binaries are not guaranteed to read the
+updated log.
+
 ## [2.0.1] - 2026-07-20
 
 ### Improved
