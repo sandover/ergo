@@ -38,9 +38,9 @@ tasks at root.
 Create a container candidate, then add children with its ID:
 
 ```sh
-ergo --json new task '{"title":"Authentication"}'
+ergo new task '{"title":"Authentication"}'
 printf '%s\n' '## Goal' '- Add session validation.' |
-  ergo --json new task '{"title":"Validate sessions","epic":"OFKSTE"}'
+  ergo new task '{"title":"Validate sessions","epic":"OFKSTE"}'
 ```
 
 The first child promotes a clean root todo task to a container. For a prepared
@@ -103,9 +103,13 @@ user asked for a plan rather than execution.
 Claim the oldest ready task or a specific task:
 
 ```sh
-ergo --json claim --agent model@host
-ergo --json claim ABCDEF --agent model@host
+ergo claim --agent model@host
+ergo claim ABCDEF --agent model@host
 ```
+
+Claim output begins with `---` and then `id: "ABCDEF"`. Read the task ID from
+that fixed position. The final `## Next` section gives its exact lifecycle
+commands.
 
 Then:
 
@@ -113,41 +117,37 @@ Then:
 2. Implement and run its validation gates.
 3. Stop for any required checkpoint or material design choice.
 4. Commit the reviewable change using repository conventions.
-5. Record a brief completion note in the task body and close it with the correct lifecycle command.
+5. Close it with the correct lifecycle command and a brief `-m` completion note.
 
-Body notes record decisions, approach, and attempt history. `body` replaces the
-entire body, so preserve the existing task text when adding a completion note:
-
-```sh
-ergo --json show ABCDEF
-printf '%s\n' '<full existing body plus completion note>' | ergo body ABCDEF
-```
+Lifecycle messages append. Use them for decisions, approach, completion, and
+attempt history. Use `body` only when the task specification itself changed;
+it replaces the entire body.
 
 Use `--result` only for a concrete existing file produced by the task. Do not use
 a commit hash, prose status, or a file created only to satisfy the field.
 
 ```sh
-ergo done ABCDEF
-ergo done ABCDEF --result docs/spec.md --summary "Accepted specification"
+ergo done ABCDEF -m "Implemented and verified"
+ergo done ABCDEF -m "Accepted specification" --result docs/spec.md
 ```
 
 Choose other exits by intent:
 
 ```sh
 # An identified impediment must be resolved.
-printf '%s\n' '<full body with blocking evidence>' | ergo block ABCDEF
+ergo block ABCDEF -m "Waiting for the staging credential"
 
 # The objective remains valid and another attempt can proceed.
-ergo release ABCDEF --result .scratch/attempt.md --summary "Attempt evidence"
+ergo release ABCDEF -m "Partial implementation is ready to continue" --result .scratch/attempt.md
 
 # The objective is no longer wanted.
-ergo cancel ABCDEF
+ergo cancel ABCDEF -m "Superseded by the server-side change"
 ```
 
 Never leave claimed work in doing. Block records an impediment. Release records
 unfinished but retryable work. Cancel records a deliberate stop. After a spike,
 update dependent task bodies with what was learned before closing the spike.
 
-Plans remain editable during execution. Use `title`, `body`, `move`, and
-`sequence` to keep the graph true, and note why its shape changed. When the
-container is complete, the plan is complete.
+Plans remain editable during execution. Use `title`, `body`, `move`, `sequence`,
+and `unsequence` to keep the graph true, and note why its shape changed. When
+the container is complete, the plan is complete.

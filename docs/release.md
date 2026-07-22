@@ -9,25 +9,25 @@ in `ergo --help`, `ergo quickstart`, and `docs/spec.md`.
 - Update `CHANGELOG.md` with user-visible behavior and upgrade notes.
 - Confirm help, quickstart, spec, architecture, README, and shipped skill agree.
 - Run `task ci`.
-- Run `task build` and smoke `./bin/ergo --help`, quickstart, JSON output, and one lifecycle loop.
+- Run `task build` and smoke `./bin/ergo --help`, quickstart, readable output, and one lifecycle loop.
 - Run `goreleaser check`.
 - Run `goreleaser release --snapshot --clean` and inspect every configured target.
 
 For a version candidate, inject the same linker variable as GoReleaser:
 
 ```sh
-go build -ldflags "-s -w -X main.version=2.0.0" -o .scratch/release/ergo-v2-candidate ./cmd/ergo
-.scratch/release/ergo-v2-candidate version
+go build -ldflags "-s -w -X main.version=3.0.0" -o .scratch/release/ergo-v3-candidate ./cmd/ergo
+.scratch/release/ergo-v3-candidate version
 ```
 
-The command must print `ergo 2.0.0`. The release tag includes the `v` prefix:
-`v2.0.0`.
+The command must print `ergo 3.0.0`. The release tag includes the `v` prefix:
+`v3.0.0`.
 
 ## Versioning
 
 - Patch releases fix defects without changing contracts.
-- Minor releases add compatible commands, flags, or JSON fields.
-- Major releases remove or change public commands, behavior, or JSON semantics.
+- Minor releases add compatible commands, flags, or output fields.
+- Major releases remove or change public commands, behavior, or output semantics.
 
 Breaking releases must map old workflows to new commands and state what is no
 longer exposed. Legacy storage compatibility must be tested against copied
@@ -48,7 +48,7 @@ new version.
 
 - Download the archives and verify them against `checksums.txt`.
 - Run the released binary's version, help, and quickstart commands.
-- Verify one JSON lifecycle from claim through an exit.
+- Verify one readable lifecycle from claim through an exit.
 - Verify one copied legacy log containing error or claimed-blocked state.
 - Install through Homebrew and invoke `$(brew --prefix)/bin/ergo` explicitly.
 - Verify WinGet too when its publisher is configured.

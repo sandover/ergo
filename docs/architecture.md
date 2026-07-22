@@ -102,7 +102,7 @@ commit when available. Replay orders results newest first.
 - `graph.go`: replay, derivation, readiness, and compaction.
 - `mutation.go`: the shared atomic mutation path.
 - `commands_*.go`: intent-specific command behavior.
-- `output.go` and rendering files: stable JSON and human output.
+- `output.go` and rendering files: shared command results and readable output.
 - `cmd/ergo`: Cobra routing, global flags, and process-level errors.
 
 Command handlers state intent. They do not duplicate event, claim, result, or
@@ -110,9 +110,11 @@ lock mechanics. Placement and lifecycle validation stay inside the locked path.
 
 ## Public surfaces
 
-Agents depend on JSON output. Successful `--json` calls emit one value to stdout.
-Mutation objects report only fields that changed. Output shape changes require
-integration tests, manual updates, and a changelog note.
+Agents depend on one readable output contract. List is a compact tree; show and
+claim use YAML front matter plus Markdown; focused writes return concise
+confirmations. Output changes require integration tests, manual updates, and a
+changelog note. Inline JSON is creation input, and the event log remains JSONL;
+neither creates a second output API.
 
 The documentation sources have distinct roles:
 

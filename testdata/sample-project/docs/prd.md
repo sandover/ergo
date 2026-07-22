@@ -5,7 +5,7 @@ Teams need a lightweight task tracker that works well with AI coding agents.
 
 ## Goals
 1. Minimal footprint - single binary, no database
-2. Agent-friendly - JSON output, clear task states
+2. Agent-friendly - clear output and task states
 3. Human-friendly - readable CLI output, intuitive commands
 
 ## Non-Goals

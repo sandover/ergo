@@ -52,7 +52,7 @@ Use bcrypt with cost 12.
 Use 1-hour access and 24-hour refresh tokens.
 EOF
 
-ergo --json plan --file tasks.md '{"title":"User login"}'
+ergo plan --file tasks.md '{"title":"User login"}'
 ```
 
 File order does not create dependencies. Add order explicitly:
@@ -75,23 +75,24 @@ printf '%s\n' 'Use bcrypt with cost 12.' |
 
 ```sh
 # Inspect actionable work.
-ergo --json list --ready
+ergo list --ready
 
 # Claim the oldest ready task.
-ergo --json claim --agent sonnet@hostname
+ergo claim --agent sonnet@hostname
 
 # Or resume a specific task by ID.
-ergo --json claim ABCDEF --agent sonnet@hostname
+ergo claim ABCDEF --agent sonnet@hostname
 
 # Leave the claim through one direct intent.
-ergo done ABCDEF --result src/auth.go
-ergo block ABCDEF
-ergo cancel ABCDEF
-ergo release ABCDEF
+ergo done ABCDEF -m "Implemented and verified" --result src/auth.go
+ergo block ABCDEF -m "Waiting for the staging credential"
+ergo cancel ABCDEF -m "Superseded by another task"
+ergo release ABCDEF -m "Partial work is ready to continue"
 ```
 
-Claim JSON returns the exact task-specific commands for all four exits. A claim
-exists exactly while state is `doing`. Done, block, cancel, and release clear it.
+Claim prints the complete task, beginning with its ID in YAML front matter, and
+ends with exact task-specific commands for all four exits. A claim exists exactly
+while state is `doing`. Done, block, cancel, and release clear it.
 
 Use release for unfinished work that remains valid. Use block when an identified
 impediment must be resolved before another attempt.
@@ -128,20 +129,22 @@ ergo move ABCDEF OFKSTE
 ergo move ABCDEF --root
 ```
 
-Lifecycle commands also accept a piped body and `--result` in one atomic update:
+Lifecycle commands append messages with `-m` and can attach an existing result:
 
 ```sh
-printf '%s\n' '## Completion' '- Implemented and verified.' |
-  ergo done ABCDEF --result docs/verification.md
+ergo done ABCDEF -m "Implemented and verified" --result docs/verification.md
 ```
 
-## V2 command cutover
+Lifecycle commands reject piped stdin. `body` is the only command that changes
+an existing task body.
 
-V2 replaces generic field and state mutation with direct verbs:
+## Ergo 3 command cutover
 
-| V1 intent | V2 command |
+Ergo uses direct commands for each kind of change:
+
+| Intent | Command |
 | --- | --- |
-| Claim or set doing | `claim` |
+| Claim or resume work | `claim` |
 | Mark complete | `done` |
 | Record an impediment | `block` |
 | Stop unwanted work | `cancel` |
@@ -149,11 +152,14 @@ V2 replaces generic field and state mutation with direct verbs:
 | Rename | `title` |
 | Replace body | `body` |
 | Change container | `move` |
+| Add dependency order | `sequence` |
+| Remove dependency order | `unsequence` |
 
-Resume done or canceled work with a specific claim. V2 deliberately has no
-operation that returns closed work to unclaimed todo. The historical error state
+Resume done or canceled work with a specific claim. The historical error state
 remains readable but cannot be created. Use release for a retryable attempt or
-block for an impediment.
+block for an impediment. Ergo 3 removed output `--json`, `--summary`, and
+`sequence rm`; ordinary output is agent-readable, `-m` records lifecycle notes,
+and `unsequence` removes order.
 
 Existing repositories require no migration. Ergo reads both `plans.jsonl` and
 the legacy `events.jsonl` filename, preserves unresolved legacy state during
@@ -173,4 +179,4 @@ the lock. Oldest-ready claim selects and writes under that same lock, so
 concurrent agents cannot claim the same task.
 
 Run `ergo --help` for the compact reference and `ergo quickstart` for every
-command, flag, input rule, JSON guarantee, and legacy behavior.
+command, flag, input rule, output form, and legacy behavior.
