@@ -1,6 +1,6 @@
 # Ergo public CLI contract
 
-This document defines the stable Ergo 3 command and data contract. `ergo --help`
+This document defines the stable command and data contract. `ergo --help`
 is the compact manual. `ergo quickstart` is the complete operational guide.
 
 ## Domain model
@@ -69,7 +69,7 @@ version
 ```
 
 Global flags are `--agent <identity>`, `--dir <path>`, `--help`, and
-`--version`. There is no generic mutation, reopen, or separate output mode.
+`--version`.
 
 ## Lifecycle postconditions
 
@@ -171,9 +171,7 @@ container and its children.
 Success exits 0. Failure exits nonzero and writes an actionable message to
 stderr. Missing-graph errors name `ergo init` and `ergo --dir <path>`.
 
-Inline JSON remains creation input. The append-only event log remains JSONL.
-Output `--json` is not a public mode. The removed `--json`, `--summary`, and
-`sequence rm` forms fail with their direct replacements.
+Inline JSON is creation input. The append-only event log is JSONL.
 
 ## Legacy plans
 

@@ -49,17 +49,46 @@ func TestManualSurfaceCoverage(t *testing.T) {
 		len(strings.Fields(manuals["help"])), len(strings.Fields(manuals["quickstart"])))
 }
 
-func TestManualExplainsInputAndOutputBoundaries(t *testing.T) {
+func TestManualExplainsInputAndStateBoundaries(t *testing.T) {
 	for name, manual := range map[string]string{
 		"help":       ergo.UsageText(false),
 		"quickstart": ergo.QuickstartText(false),
 	} {
 		for _, concept := range []string{
-			"inline JSON", "JSONL", "piped stdin", "lifecycle", "YAML front matter",
-			"No ready ergo tasks.", "legacy", "without migration",
+			"inline JSON", "piped stdin", "lifecycle",
 		} {
 			if !strings.Contains(manual, concept) {
 				t.Errorf("%s does not explain %q", name, concept)
+			}
+		}
+	}
+}
+
+func TestManualsLeadWithTheCoreWorkflow(t *testing.T) {
+	for name, manual := range map[string]string{
+		"help":       ergo.UsageText(false),
+		"quickstart": ergo.QuickstartText(false),
+	} {
+		workflow := strings.SplitN(manual, "COMMANDS", 2)[0]
+		if name == "quickstart" {
+			workflow = strings.SplitN(manual, "2. MODEL", 2)[0]
+		}
+
+		previous := -1
+		for _, command := range []string{"ergo init", "ergo new task", "ergo list --ready", "ergo claim", "ergo done"} {
+			index := strings.Index(workflow, command)
+			if index < 0 {
+				t.Errorf("%s workflow does not teach %q", name, command)
+			}
+			if index <= previous {
+				t.Errorf("%s workflow teaches %q out of order", name, command)
+			}
+			previous = index
+		}
+
+		for _, rejected := range []string{"AGENT LOOP", "Claim prints the complete task"} {
+			if strings.Contains(manual, rejected) {
+				t.Errorf("%s contains rejected explanatory text %q", name, rejected)
 			}
 		}
 	}

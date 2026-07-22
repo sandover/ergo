@@ -90,9 +90,9 @@ ergo cancel ABCDEF -m "Superseded by another task"
 ergo release ABCDEF -m "Partial work is ready to continue"
 ```
 
-Claim prints the complete task, beginning with its ID in YAML front matter, and
-ends with exact task-specific commands for all four exits. A claim exists exactly
-while state is `doing`. Done, block, cancel, and release clear it.
+After claiming, do the work, then run one of the task's printed exit commands.
+A claim exists exactly while state is `doing`. Done, block, cancel, and release
+clear it.
 
 Use release for unfinished work that remains valid. Use block when an identified
 impediment must be resolved before another attempt.
@@ -137,33 +137,6 @@ ergo done ABCDEF -m "Implemented and verified" --result docs/verification.md
 
 Lifecycle commands reject piped stdin. `body` is the only command that changes
 an existing task body.
-
-## Ergo 3 command cutover
-
-Ergo uses direct commands for each kind of change:
-
-| Intent | Command |
-| --- | --- |
-| Claim or resume work | `claim` |
-| Mark complete | `done` |
-| Record an impediment | `block` |
-| Stop unwanted work | `cancel` |
-| Return unfinished work to todo | `release` |
-| Rename | `title` |
-| Replace body | `body` |
-| Change container | `move` |
-| Add dependency order | `sequence` |
-| Remove dependency order | `unsequence` |
-
-Resume done or canceled work with a specific claim. The historical error state
-remains readable but cannot be created. Use release for a retryable attempt or
-block for an impediment. Ergo 3 removed output `--json`, `--summary`, and
-`sequence rm`; ordinary output is agent-readable, `-m` records lifecycle notes,
-and `unsequence` removes order.
-
-Existing repositories require no migration. Ergo reads both `plans.jsonl` and
-the legacy `events.jsonl` filename, preserves unresolved legacy state during
-compact, and normalizes it only after an explicit lifecycle command.
 
 ## Storage
 
