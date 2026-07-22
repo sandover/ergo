@@ -22,22 +22,16 @@ func TestLifecycleCommandsFromEveryState(t *testing.T) {
 				dir := setupErgo(t)
 				id := createLifecycleTask(t, dir)
 				putLifecycleTaskInState(t, dir, id, source)
-				stdout, stderr, code := runErgo(t, dir, "", "--json", verb, id)
+				stdout, stderr, code := runErgo(t, dir, "", verb, id)
 				if code != 0 {
 					t.Fatalf("%s failed: %s", verb, stderr)
 				}
-				var out struct {
-					Kind          string   `json:"kind"`
-					ID            string   `json:"id"`
-					UpdatedFields []string `json:"updated_fields"`
-					State         string   `json:"state"`
-					ClaimedBy     string   `json:"claimed_by"`
+				if stdout != id+" "+target+"\n" {
+					t.Fatalf("unexpected output: %q", stdout)
 				}
-				if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-					t.Fatalf("decode output %q: %v", stdout, err)
-				}
-				if out.Kind != verb || out.ID != id || out.State != target || out.ClaimedBy != "" {
-					t.Fatalf("unexpected output: %+v", out)
+				shown := showTaskJSON(t, dir, id)
+				if shown["state"] != target || shown["claimed_by"] != "" {
+					t.Fatalf("unexpected postcondition: %v", shown)
 				}
 			})
 		}
@@ -50,16 +44,12 @@ func TestReleaseLifecycleStates(t *testing.T) {
 			dir := setupErgo(t)
 			id := createLifecycleTask(t, dir)
 			putLifecycleTaskInState(t, dir, id, source)
-			stdout, stderr, code := runErgo(t, dir, "", "--json", "release", id)
+			stdout, stderr, code := runErgo(t, dir, "", "release", id)
 			if code != 0 {
 				t.Fatalf("release failed: %s", stderr)
 			}
-			var out map[string]any
-			if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-				t.Fatal(err)
-			}
-			if out["state"] != "todo" {
-				t.Fatalf("release state = %v", out["state"])
+			if stdout != id+" todo\n" {
+				t.Fatalf("release output = %q", stdout)
 			}
 		})
 	}
@@ -76,43 +66,83 @@ func TestReleaseLifecycleStates(t *testing.T) {
 	}
 }
 
-func TestDoneLifecycleBodyResultAndLateResult(t *testing.T) {
+func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 	dir := setupErgo(t)
 	id := createLifecycleTask(t, dir)
+	if _, stderr, code := runErgo(t, dir, "original body\n", "body", id); code != 0 {
+		t.Fatalf("set original body: %s", stderr)
+	}
 	resultPath := filepath.Join(dir, "result.txt")
 	if err := os.WriteFile(resultPath, []byte("first"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	stdout, stderr, code := runErgo(t, dir, "completion body\n", "--json", "done", id,
-		"--result", "result.txt", "--summary", "Primary result")
+	stdout, stderr, code := runErgo(t, dir, "", "done", id,
+		"--result", "result.txt", "-m", " Primary result ", "-m", "Verified cleanly")
 	if code != 0 {
 		t.Fatalf("done failed: %s", stderr)
 	}
-	for _, field := range []string{"body", "result", "state"} {
-		if !strings.Contains(stdout, `"`+field+`"`) {
-			t.Fatalf("output missing %s: %s", field, stdout)
-		}
+	if stdout != id+" done\n" {
+		t.Fatalf("done output = %q", stdout)
 	}
+	shown := showTaskJSON(t, dir, id)
+	if shown["body"] != "original body\n" {
+		t.Fatalf("lifecycle changed body: %q", shown["body"])
+	}
+	messages := readLifecycleMessages(t, dir, id)
+	if len(messages) != 1 || messages[0].Kind != "done" || messages[0].Text != "Primary result\n\nVerified cleanly" {
+		t.Fatalf("messages = %#v", messages)
+	}
+	results, ok := shown["results"].([]any)
+	if !ok || len(results) != 1 || results[0].(map[string]any)["summary"] != "result.txt" {
+		t.Fatalf("show results = %v", shown["results"])
+	}
+
 	latePath := filepath.Join(dir, "late.txt")
 	if err := os.WriteFile(latePath, []byte("late"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	stdout, stderr, code = runErgo(t, dir, "", "--json", "done", id, "--result", "late.txt")
-	if code != 0 || !strings.Contains(stdout, `"updated_fields":["result"]`) {
+	beforeLate := countEventLines(t, dir)
+	stdout, stderr, code = runErgo(t, dir, "", "done", id, "--result", "late.txt", "-m", "Late evidence")
+	if code != 0 || stdout != id+" done\n" {
 		t.Fatalf("late result failed: stdout=%s stderr=%s", stdout, stderr)
 	}
-	_, stderr, code = runErgo(t, dir, "", "done", id, "--summary", "missing result")
-	if code == 0 || !strings.Contains(stderr, "--summary requires --result") {
-		t.Fatalf("expected summary validation error, code=%d stderr=%q", code, stderr)
+	if got := countEventLines(t, dir); got != beforeLate+2 {
+		t.Fatalf("late result/message events = %d, want %d", got, beforeLate+2)
 	}
-	shown := showTaskJSON(t, dir, id)
-	results, ok := shown["results"].([]any)
+	shown = showTaskJSON(t, dir, id)
+	results, ok = shown["results"].([]any)
 	if !ok || len(results) != 2 {
 		t.Fatalf("show results = %v", shown["results"])
 	}
 	latest := results[0].(map[string]any)
 	if latest["sha256_at_attach"] == "" || !strings.HasPrefix(latest["file_url"].(string), "file://") {
 		t.Fatalf("result provenance missing: %v", latest)
+	}
+
+	beforeInvalid := countEventLines(t, dir)
+	for _, test := range []struct {
+		name  string
+		stdin string
+		args  []string
+		hint  string
+	}{
+		{"piped body", "replacement\n", []string{"done", id}, "does not read stdin"},
+		{"summary", "", []string{"done", id, "--summary", "caption"}, "use -m"},
+		{"blank message", "", []string{"done", id, "-m", "   "}, "cannot be blank"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, stderr, code := runErgo(t, dir, test.stdin, test.args...)
+			if code == 0 || !strings.Contains(stderr, test.hint) {
+				t.Fatalf("code=%d stderr=%q", code, stderr)
+			}
+		})
+	}
+	_, stderr, code = runErgoWithEmptyPipe(t, dir, "done", id)
+	if code == 0 || !strings.Contains(stderr, "does not read stdin") {
+		t.Fatalf("empty pipe: code=%d stderr=%q", code, stderr)
+	}
+	if got := countEventLines(t, dir); got != beforeInvalid {
+		t.Fatalf("invalid lifecycle input appended events: before=%d after=%d", beforeInvalid, got)
 	}
 }
 
@@ -213,4 +243,39 @@ func putLifecycleTaskInState(t *testing.T, dir, id, state string) {
 			t.Fatalf("set %s failed: %s", state, stderr)
 		}
 	}
+}
+
+type lifecycleMessageLog struct {
+	TaskID string `json:"task_id"`
+	Kind   string `json:"kind"`
+	Text   string `json:"text"`
+}
+
+func readLifecycleMessages(t *testing.T, dir, id string) []lifecycleMessageLog {
+	t.Helper()
+	data, err := os.ReadFile(getEventFilePath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var messages []lifecycleMessageLog
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		var event struct {
+			Type string          `json:"type"`
+			Data json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatal(err)
+		}
+		if event.Type != "message" {
+			continue
+		}
+		var message lifecycleMessageLog
+		if err := json.Unmarshal(event.Data, &message); err != nil {
+			t.Fatal(err)
+		}
+		if message.TaskID == id {
+			messages = append(messages, message)
+		}
+	}
+	return messages
 }

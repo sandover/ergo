@@ -6,6 +6,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/sandover/ergo/internal/ergo"
@@ -150,21 +151,27 @@ func newLifecycleCmd(kind, short string) *cobra.Command {
 		Short: short,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
-				return fmt.Errorf("usage: ergo %s <id> [--result <path>] [--summary <text>]", kind)
+				return fmt.Errorf("usage: ergo %s <id> [-m <message>] [--result <path>]", kind)
 			}
 			return nil
 		},
 	}
 	cmd.Flags().String("result", "", "Attach an existing project-relative result file")
-	cmd.Flags().String("summary", "", "Describe the attached result")
+	cmd.Flags().StringArrayP("message", "m", nil, "Append a lifecycle message (repeatable)")
+	cmd.Flags().String("summary", "", "")
+	if err := cmd.Flags().MarkHidden("summary"); err != nil {
+		panic(err)
+	}
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		if cmd.Flags().Changed("summary") {
+			return errors.New("--summary was removed in Ergo 3; use -m <message> instead")
+		}
 		resultPath, _ := cmd.Flags().GetString("result")
-		summary, _ := cmd.Flags().GetString("summary")
+		messages, _ := cmd.Flags().GetStringArray("message")
 		return ergo.RunLifecycle(kind, args[0], ergo.LifecycleOptions{
 			ResultPath: resultPath,
 			ResultSet:  cmd.Flags().Changed("result"),
-			Summary:    summary,
-			SummarySet: cmd.Flags().Changed("summary"),
+			Messages:   messages,
 		}, globalOpts)
 	}
 	return cmd

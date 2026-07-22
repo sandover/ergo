@@ -803,7 +803,7 @@ func TestSet_StateTransition(t *testing.T) {
 	}
 }
 
-func TestSet_StdinBody_UpdatesBody(t *testing.T) {
+func TestBodyThenLifecyclePreservesExplicitBodyEdit(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, _, code := runNewTaskWithBody(t, dir, "Test task", `{"title":"Test task"}`)
@@ -813,9 +813,13 @@ func TestSet_StdinBody_UpdatesBody(t *testing.T) {
 	taskID := strings.TrimSpace(stdout)
 
 	newBody := "updated\nbody\n"
-	_, stderr, code := runSetTaskWithBody(t, dir, taskID, newBody, `{"state":"done"}`)
+	_, stderr, code := runErgo(t, dir, newBody, "body", taskID)
 	if code != 0 {
-		t.Fatalf("set failed: exit %d (stderr=%q)", code, stderr)
+		t.Fatalf("body failed: exit %d (stderr=%q)", code, stderr)
+	}
+	_, stderr, code = runErgo(t, dir, "", "done", taskID)
+	if code != 0 {
+		t.Fatalf("done failed: exit %d (stderr=%q)", code, stderr)
 	}
 
 	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
@@ -1811,8 +1815,7 @@ func TestTitleAndBodyStoredCorrectly(t *testing.T) {
 	}
 }
 
-// TestSetOutputsTaskID verifies that 'ergo set' prints the task ID on success.
-func TestSetOutputsTaskID(t *testing.T) {
+func TestLifecycleOutputsTaskPostcondition(t *testing.T) {
 	dir := setupErgo(t)
 
 	// Create a task
@@ -1822,15 +1825,14 @@ func TestSetOutputsTaskID(t *testing.T) {
 	}
 	taskID := strings.TrimSpace(stdout)
 
-	// Set state and verify output
-	stdout, _, code = runSetTask(t, dir, taskID, `{"state":"done"}`)
+	stdout, _, code = runErgo(t, dir, "", "done", taskID)
 	if code != 0 {
-		t.Fatalf("set failed: exit %d", code)
+		t.Fatalf("done failed: exit %d", code)
 	}
 
 	output := strings.TrimSpace(stdout)
-	if output != taskID {
-		t.Errorf("expected set to output %q, got %q", taskID, output)
+	if output != taskID+" done" {
+		t.Errorf("expected lifecycle output %q, got %q", taskID+" done", output)
 	}
 }
 

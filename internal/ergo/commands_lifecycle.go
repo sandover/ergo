@@ -2,7 +2,7 @@
 // Exports: LifecycleOptions and RunLifecycle.
 // Role: Translate user intent into one shared atomic task mutation.
 // Invariants: done, blocked, canceled, and todo postconditions clear claims.
-// Invariants: summary is accepted only with a validated result file.
+// Invariants: lifecycle stdin is rejected; only body may replace task bodies.
 package ergo
 
 import (
@@ -14,8 +14,7 @@ import (
 type LifecycleOptions struct {
 	ResultPath string
 	ResultSet  bool
-	Summary    string
-	SummarySet bool
+	Messages   []string
 }
 
 func RunLifecycle(kind, id string, lifecycle LifecycleOptions, opts GlobalOptions) error {
@@ -24,40 +23,58 @@ func RunLifecycle(kind, id string, lifecycle LifecycleOptions, opts GlobalOption
 		return err
 	}
 	if strings.TrimSpace(id) == "" {
-		return fmt.Errorf("usage: ergo %s <id> [--result <path>] [--summary <text>]", kind)
-	}
-	if lifecycle.SummarySet && !lifecycle.ResultSet {
-		return errors.New("--summary requires --result")
+		return fmt.Errorf("usage: ergo %s <id> [-m <message>] [--result <path>]", kind)
 	}
 	if lifecycle.ResultSet && strings.TrimSpace(lifecycle.ResultPath) == "" {
 		return errors.New("--result cannot be empty")
 	}
-	body, bodySet, err := readOptionalBodyFromStdin()
+	message, messageSet, err := normalizeLifecycleMessages(lifecycle.Messages)
 	if err != nil {
 		return err
+	}
+	if stdinIsPiped() {
+		return fmt.Errorf("%s does not read stdin; use ergo body %s to replace the body or -m <message> to add a lifecycle note", kind, id)
 	}
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
 	}
 	mutation := taskMutation{
-		Kind:          kind,
-		State:         targetState,
-		StateSet:      true,
-		Body:          body,
-		BodySet:       bodySet,
-		ResultPath:    strings.TrimSpace(lifecycle.ResultPath),
-		ResultSummary: lifecycle.Summary,
-		ResultSet:     lifecycle.ResultSet,
+		Kind:        kind,
+		State:       targetState,
+		StateSet:    true,
+		ResultPath:  strings.TrimSpace(lifecycle.ResultPath),
+		ResultSet:   lifecycle.ResultSet,
+		MessageKind: kind,
+		MessageText: message,
+		MessageSet:  messageSet,
 	}
 	if kind == "release" {
 		mutation.AllowedStates = []string{stateTodo, stateDoing, stateBlocked, stateError}
 	}
-	outcome, err := applyTaskMutation(dir, opts, id, mutation, opts.JSON)
+	outcome, err := applyTaskMutation(dir, opts, id, mutation, true)
 	if err != nil {
 		return err
 	}
-	return writeMutationResult(kind, id, outcome, opts.JSON)
+	if opts.JSON {
+		return writeMutationResult(kind, id, outcome, true)
+	}
+	fmt.Printf("%s %s\n", id, targetState)
+	return nil
+}
+
+func normalizeLifecycleMessages(messages []string) (string, bool, error) {
+	if len(messages) == 0 {
+		return "", false, nil
+	}
+	paragraphs := make([]string, len(messages))
+	for i, message := range messages {
+		paragraphs[i] = strings.TrimSpace(message)
+		if paragraphs[i] == "" {
+			return "", false, errors.New("--message cannot be blank")
+		}
+	}
+	return strings.Join(paragraphs, "\n\n"), true, nil
 }
 
 func lifecycleTargetState(kind string) (string, error) {
