@@ -7,7 +7,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"os/exec"
 	"strings"
 	"testing"
@@ -22,16 +21,16 @@ func TestTitleCommandOnTaskAndContainer(t *testing.T) {
 	}
 	childID := strings.TrimSpace(stdout)
 	for _, id := range []string{childID, containerID} {
-		stdout, stderr, code = runErgo(t, dir, "", "--json", "title", id, "Renamed "+id)
+		stdout, stderr, code = runErgo(t, dir, "", "title", id, "Renamed "+id)
 		if code != 0 {
 			t.Fatalf("title failed: %s", stderr)
 		}
-		if !strings.Contains(stdout, `"updated_fields":["title"]`) {
+		if stdout != id+" title: Renamed "+id+"\n" {
 			t.Fatalf("unexpected title output: %s", stdout)
 		}
 		before := countEventLines(t, dir)
-		stdout, stderr, code = runErgo(t, dir, "", "--json", "title", id, "Renamed "+id)
-		if code != 0 || !strings.Contains(stdout, `"updated_fields":[]`) {
+		stdout, stderr, code = runErgo(t, dir, "", "title", id, "Renamed "+id)
+		if code != 0 || stdout != id+" title: Renamed "+id+"\n" {
 			t.Fatalf("title no-op failed: stdout=%s stderr=%s", stdout, stderr)
 		}
 		if countEventLines(t, dir) != before {
@@ -48,41 +47,28 @@ func TestBodyCommandLiteralEmptyAndTTY(t *testing.T) {
 	dir := setupErgo(t)
 	id := createLifecycleTask(t, dir)
 	body := "## Goal\n- Preserve this literally\n"
-	stdout, stderr, code := runErgo(t, dir, body, "--json", "body", id)
-	if code != 0 || !strings.Contains(stdout, `"updated_fields":["body"]`) {
+	stdout, stderr, code := runErgo(t, dir, body, "body", id)
+	if code != 0 || stdout != id+" body updated\n" {
 		t.Fatalf("body failed: stdout=%s stderr=%s", stdout, stderr)
 	}
-	shown := showTaskJSON(t, dir, id)
-	if shown["body"] != body {
-		t.Fatalf("body = %q, want %q", shown["body"], body)
+	shown := showTaskOutput(t, dir, id)
+	if !strings.Contains(shown, body) {
+		t.Fatalf("show output does not contain body %q: %s", body, shown)
 	}
 
-	stdout, stderr, code = runErgoWithEmptyPipe(t, dir, "--json", "body", id)
-	if code != 0 || !strings.Contains(stdout, `"updated_fields":["body"]`) {
+	stdout, stderr, code = runErgoWithEmptyPipe(t, dir, "body", id)
+	if code != 0 || stdout != id+" body updated\n" {
 		t.Fatalf("empty body failed: stdout=%s stderr=%s", stdout, stderr)
 	}
-	shown = showTaskJSON(t, dir, id)
-	if shown["body"] != "" {
-		t.Fatalf("empty pipe did not clear body: %v", shown["body"])
+	shown = showTaskOutput(t, dir, id)
+	if strings.Contains(shown, "Preserve this literally") {
+		t.Fatalf("empty pipe did not clear body: %s", shown)
 	}
 
 	_, stderr, code = runErgo(t, dir, "", "body", id)
 	if code == 0 || !strings.Contains(stderr, "printf") || !strings.Contains(stderr, "| ergo body "+id) {
 		t.Fatalf("expected TTY pipe guidance, code=%d stderr=%q", code, stderr)
 	}
-}
-
-func showTaskJSON(t *testing.T, dir, id string) map[string]any {
-	t.Helper()
-	stdout, stderr, code := runErgo(t, dir, "", "--json", "show", id)
-	if code != 0 {
-		t.Fatalf("show failed: %s", stderr)
-	}
-	var task map[string]any
-	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
-		t.Fatal(err)
-	}
-	return task
 }
 
 func runErgoWithEmptyPipe(t *testing.T, dir string, args ...string) (string, string, int) {

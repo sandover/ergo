@@ -9,7 +9,6 @@ package ergo
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -40,28 +39,10 @@ type taskMutation struct {
 }
 
 type mutationOutcome struct {
-	Graph         *Graph
-	UpdatedFields []string
+	Graph *Graph
 }
 
-func writeMutationResult(kind, id string, outcome mutationOutcome, jsonOutput bool) error {
-	if !jsonOutput {
-		return nil
-	}
-	task := outcome.Graph.Tasks[id]
-	if task == nil {
-		return errors.New("internal error: missing mutated task")
-	}
-	return writeJSON(os.Stdout, mutationOutput{
-		Kind:          kind,
-		ID:            id,
-		UpdatedFields: outcome.UpdatedFields,
-		State:         task.State,
-		ClaimedBy:     task.ClaimedBy,
-	})
-}
-
-func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskMutation, quiet bool) (mutationOutcome, error) {
+func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskMutation) (mutationOutcome, error) {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
 	repoDir := filepath.Dir(dir)
@@ -106,7 +87,7 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 		}
 
 		now := time.Now().UTC()
-		events, fields, err := buildMutationEvents(id, task, mutation, opts.AgentID, now)
+		events, _, err := buildMutationEvents(id, task, mutation, opts.AgentID, now)
 		if err != nil {
 			return err
 		}
@@ -120,9 +101,7 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 				return err
 			}
 			events = insertBeforeLifecycleEvents(events, resultEvent)
-			fields = append(fields, "result")
 		}
-		fields = sortedUniqueStrings(fields)
 
 		if err := appendEvents(eventsPath, events); err != nil {
 			return err
@@ -131,10 +110,7 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 		if err != nil {
 			return err
 		}
-		outcome = mutationOutcome{Graph: updatedGraph, UpdatedFields: fields}
-		if !quiet {
-			fmt.Println(id)
-		}
+		outcome = mutationOutcome{Graph: updatedGraph}
 		return nil
 	})
 	return outcome, err

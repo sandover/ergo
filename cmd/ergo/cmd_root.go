@@ -6,8 +6,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/sandover/ergo/internal/ergo"
 	"github.com/spf13/cobra"
@@ -34,7 +36,6 @@ func init() {
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&globalOpts.StartDir, "dir", "", "Run in a specific directory")
 	rootCmd.PersistentFlags().StringVar(&globalOpts.AgentID, "agent", "", "Agent ID for claims (suggested: model@host)")
-	rootCmd.PersistentFlags().BoolVar(&globalOpts.JSON, "json", false, "Output JSON")
 
 	// Set the version to enable --version flag
 	rootCmd.Version = version
@@ -47,7 +48,22 @@ func init() {
 }
 
 func execute() {
+	if err := removedArgumentError(os.Args[1:]); err != nil {
+		exitErr(err, &globalOpts)
+	}
 	if err := rootCmd.Execute(); err != nil {
 		exitErr(err, &globalOpts)
 	}
+}
+
+func removedArgumentError(args []string) error {
+	for _, arg := range args {
+		switch {
+		case arg == "--json" || strings.HasPrefix(arg, "--json="):
+			return errors.New("--json was removed in Ergo 3; rerun without it")
+		case arg == "--summary" || strings.HasPrefix(arg, "--summary="):
+			return errors.New("--summary was removed in Ergo 3; use -m <message> instead")
+		}
+	}
+	return nil
 }

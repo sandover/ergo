@@ -29,7 +29,7 @@ func TestLifecycleCommandsFromEveryState(t *testing.T) {
 				if stdout != id+" "+target+"\n" {
 					t.Fatalf("unexpected output: %q", stdout)
 				}
-				shown := showTaskJSON(t, dir, id)
+				shown := showTaskFields(t, dir, id)
 				if shown["state"] != target || shown["claimed_by"] != "" {
 					t.Fatalf("unexpected postcondition: %v", shown)
 				}
@@ -84,17 +84,16 @@ func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 	if stdout != id+" done\n" {
 		t.Fatalf("done output = %q", stdout)
 	}
-	shown := showTaskJSON(t, dir, id)
-	if shown["body"] != "original body\n" {
-		t.Fatalf("lifecycle changed body: %q", shown["body"])
+	shown := showTaskOutput(t, dir, id)
+	if !strings.Contains(shown, "original body\n") {
+		t.Fatalf("lifecycle changed body: %s", shown)
 	}
 	messages := readLifecycleMessages(t, dir, id)
 	if len(messages) != 1 || messages[0].Kind != "done" || messages[0].Text != "Primary result\n\nVerified cleanly" {
 		t.Fatalf("messages = %#v", messages)
 	}
-	results, ok := shown["results"].([]any)
-	if !ok || len(results) != 1 || results[0].(map[string]any)["summary"] != "result.txt" {
-		t.Fatalf("show results = %v", shown["results"])
+	if strings.Count(shown, "[result.txt](file://") != 1 {
+		t.Fatalf("show result missing: %s", shown)
 	}
 
 	latePath := filepath.Join(dir, "late.txt")
@@ -109,14 +108,9 @@ func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 	if got := countEventLines(t, dir); got != beforeLate+2 {
 		t.Fatalf("late result/message events = %d, want %d", got, beforeLate+2)
 	}
-	shown = showTaskJSON(t, dir, id)
-	results, ok = shown["results"].([]any)
-	if !ok || len(results) != 2 {
-		t.Fatalf("show results = %v", shown["results"])
-	}
-	latest := results[0].(map[string]any)
-	if latest["sha256_at_attach"] == "" || !strings.HasPrefix(latest["file_url"].(string), "file://") {
-		t.Fatalf("result provenance missing: %v", latest)
+	shown = showTaskOutput(t, dir, id)
+	if strings.Count(shown, "(file://") != 2 || !strings.Contains(shown, "[late.txt](file://") {
+		t.Fatalf("show results missing: %s", shown)
 	}
 
 	beforeInvalid := countEventLines(t, dir)
@@ -156,16 +150,14 @@ func TestClaimResumesEverySpecificState(t *testing.T) {
 			if source == "error" {
 				agent = "test@local"
 			}
-			stdout, stderr, code := runErgo(t, dir, "", "--json", "claim", id, "--agent", agent)
+			stdout, stderr, code := runErgo(t, dir, "", "claim", id, "--agent", agent)
 			if code != 0 {
 				t.Fatalf("claim from %s failed: %s", source, stderr)
 			}
-			var out map[string]any
-			if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-				t.Fatal(err)
-			}
-			if out["id"] != id || out["state"] != "doing" || out["claimed_by"] != agent {
-				t.Fatalf("claim output = %v", out)
+			if !strings.Contains(stdout, "id: \""+id+"\"") ||
+				!strings.Contains(stdout, "state: \"doing\"") ||
+				!strings.Contains(stdout, "claimed_by: \""+agent+"\"") {
+				t.Fatalf("claim output = %s", stdout)
 			}
 		})
 	}
@@ -199,15 +191,15 @@ func TestClaimDoneTaskReusesOriginalID(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("done failed: %s", stderr)
 	}
-	stdout, stderr, code := runErgo(t, dir, "", "--json", "claim", id, "--agent", "resume@local")
+	stdout, stderr, code := runErgo(t, dir, "", "claim", id, "--agent", "resume@local")
 	if code != 0 {
 		t.Fatalf("claim done task failed: %s", stderr)
 	}
-	if !strings.Contains(stdout, `"id":"`+id+`"`) {
+	if !strings.Contains(stdout, "id: \""+id+"\"") {
 		t.Fatalf("claim returned a different task: %s", stdout)
 	}
-	list, _, code := runErgo(t, dir, "", "--json", "list", "--all")
-	if code != 0 || strings.Count(list, `"id":"`+id+`"`) != 1 {
+	list, _, code := runErgo(t, dir, "", "list", "--all")
+	if code != 0 || strings.Count(list, id) != 1 {
 		t.Fatalf("claim duplicated the task: %s", list)
 	}
 }

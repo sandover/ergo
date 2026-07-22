@@ -7,6 +7,7 @@ package ergo
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -21,13 +22,14 @@ func RunTitle(id, title string, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	outcome, err := applyTaskMutation(dir, opts, id, taskMutation{
+	_, err = applyTaskMutation(dir, opts, id, taskMutation{
 		Kind: "title", Title: title, TitleSet: true,
-	}, opts.JSON)
+	})
 	if err != nil {
 		return err
 	}
-	return writeMutationResult("title", id, outcome, opts.JSON)
+	fmt.Printf("%s title: %s\n", id, title)
+	return nil
 }
 
 func RunBody(id string, opts GlobalOptions) error {
@@ -42,11 +44,12 @@ func RunBody(id string, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	outcome, err := applyTaskMutation(dir, opts, id, taskMutation{
+	_, err = applyTaskMutation(dir, opts, id, taskMutation{
 		Kind: "body", Body: string(body), BodySet: true,
-	}, opts.JSON)
+	})
 	if err != nil {
 		return err
 	}
-	return writeMutationResult("body", id, outcome, opts.JSON)
+	fmt.Printf("%s body updated\n", id)
+	return nil
 }

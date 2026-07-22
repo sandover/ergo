@@ -44,14 +44,7 @@ func RunInit(args []string, opts GlobalOptions) error {
 	if err := ensureFileExists(lockPath, 0644); err != nil {
 		return err
 	}
-	if opts.JSON {
-		if err := writeJSON(os.Stdout, initOutput{ErgoDir: target}); err != nil {
-			return err
-		}
-	} else {
-		fmt.Println(target)
-	}
-	fmt.Fprintln(os.Stderr, "Initialized ergo at", target)
+	fmt.Println(target)
 	return nil
 }
 
@@ -63,15 +56,9 @@ func RunNewTask(args []string, opts GlobalOptions) error {
 		return err
 	}
 	if verr != nil {
-		if opts.JSON {
-			_ = verr.WriteJSON(os.Stdout)
-		}
 		return verr.GoError()
 	}
 	if verr := input.ValidateForNew(); verr != nil {
-		if opts.JSON {
-			_ = verr.WriteJSON(os.Stdout)
-		}
 		return verr.GoError()
 	}
 
@@ -98,9 +85,6 @@ func RunNewTask(args []string, opts GlobalOptions) error {
 		return err
 	}
 
-	if opts.JSON {
-		return writeJSON(os.Stdout, created)
-	}
 	fmt.Println(created.ID)
 	return nil
 }
@@ -116,15 +100,9 @@ func RunPlan(filePath string, args []string, opts GlobalOptions) error {
 		return err
 	}
 	if verr != nil {
-		if opts.JSON {
-			_ = verr.WriteJSON(os.Stdout)
-		}
 		return verr.GoError()
 	}
 	if verr := input.Validate(); verr != nil {
-		if opts.JSON {
-			_ = verr.WriteJSON(os.Stdout)
-		}
 		return verr.GoError()
 	}
 
@@ -188,15 +166,10 @@ func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, contai
 		}
 
 		out = bulkCreateOutput{
-			Kind:      "create",
-			Container: true,
-			ID:        containerID,
-			UUID:      containerUUID,
-			Title:     containerTitle,
-			State:     stateTodo,
-			CreatedAt: createdAt,
-			Children:  make([]bulkCreateChildOutput, 0, len(tasks)),
-			Edges:     make([]sequenceEdgeOutput, 0),
+			ID:       containerID,
+			Title:    containerTitle,
+			Children: make([]bulkCreateChildOutput, 0, len(tasks)),
+			Edges:    make([]sequenceEdge, 0),
 		}
 
 		newEvents := make([]Event, 0, 1+len(tasks))
@@ -276,10 +249,9 @@ func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, contai
 					graph.Deps[fromID] = map[string]struct{}{}
 				}
 				graph.Deps[fromID][toID] = struct{}{}
-				out.Edges = append(out.Edges, sequenceEdgeOutput{
+				out.Edges = append(out.Edges, sequenceEdge{
 					FromID: fromID,
 					ToID:   toID,
-					Type:   dependsLinkType,
 				})
 			}
 		}
@@ -289,9 +261,10 @@ func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, contai
 		return err
 	}
 
-	if opts.JSON {
-		return writeJSON(os.Stdout, out)
+	fmt.Printf("%s - %s\n", out.ID, out.Title)
+	for _, child := range out.Children {
+		fmt.Printf("  %s - %s\n", child.ID, child.Title)
 	}
-	fmt.Printf("Created container %s: %s (%d tasks, %d dependencies)\n", out.ID, out.Title, len(out.Children), len(out.Edges))
+	fmt.Printf("%d tasks, %d dependencies\n", len(out.Children), len(out.Edges))
 	return nil
 }

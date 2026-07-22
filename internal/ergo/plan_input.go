@@ -88,5 +88,3 @@ func parsePlanChunk(chunk string) (PlanTaskInput, error) {
 	}
 	return task, nil
 }
-
-

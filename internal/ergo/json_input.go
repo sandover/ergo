@@ -1,18 +1,16 @@
 // Purpose: Provide shared input-validation helpers and structured errors.
 // Exports: ValidationError and suggestion helpers.
 // Role: Supports the forward CLI parsers plus internal validation utilities.
-// Invariants: Validation errors stay machine-readable; field suggestions remain stable.
+// Invariants: Validation errors remain precise; field suggestions remain stable.
 // Notes: The old JSON-on-stdin mutation parser was removed during the 1.0 CLI cutover.
 package ergo
 
 import (
 	"fmt"
-	"io"
 	"strings"
 )
 
-// ValidationError is a structured error for JSON input validation.
-// Returned as JSON to stdout when validation fails (with exit code 1).
+// ValidationError describes invalid JSON input before rendering it as text.
 type ValidationError struct {
 	Error   string            `json:"error"`             // "validation_failed" or "parse_error"
 	Message string            `json:"message"`           // human-readable summary
@@ -33,11 +31,6 @@ func (e *ValidationError) GoError() error {
 	}
 
 	return fmt.Errorf("%s", strings.Join(parts, "; "))
-}
-
-// WriteJSON writes the validation error as JSON to the given writer.
-func (e *ValidationError) WriteJSON(w io.Writer) error {
-	return writeJSON(w, e)
 }
 
 func extractUnknownField(err error) (string, bool) {

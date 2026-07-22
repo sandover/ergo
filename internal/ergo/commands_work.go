@@ -1,7 +1,7 @@
 // Purpose: Implement list/show/claim/sequence/compact/prune/where behaviors and output.
 // Exports: RunClaim, RunClaimOldestReady, RunShow, RunList, RunSequence, RunUnsequence, RunCompact, RunPrune, RunWhere.
 // Role: Command layer bridging CLI wiring to graph/storage operations.
-// Invariants: Mutations acquire the lock; JSON output is stable when requested.
+// Invariants: Mutations acquire the lock; each command emits one readable result.
 // Notes: Read operations replay the event log to build current state.
 package ergo
 
@@ -43,11 +43,11 @@ func RunClaim(id string, opts GlobalOptions) error {
 		ClaimConflict: true,
 		AllowedStates: []string{stateTodo, stateDoing, stateBlocked, stateDone, stateCanceled, stateError},
 	}
-	outcome, err := applyTaskMutation(dir, opts, id, mutation, true)
+	outcome, err := applyTaskMutation(dir, opts, id, mutation)
 	if err != nil {
 		return err
 	}
-	return writeClaimSuccess(outcome.Graph, id, agentID, filepath.Dir(dir), opts.JSON)
+	return writeClaimSuccess(outcome.Graph, id, filepath.Dir(dir))
 }
 
 func RunClaimOldestReady(opts GlobalOptions) error {
@@ -92,12 +92,6 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 	})
 	if err != nil {
 		if err.Error() == "no ready tasks" {
-			if opts.JSON {
-				return writeJSON(os.Stdout, map[string]string{
-					"status":  "no_ready",
-					"message": "No ready ergo tasks.",
-				})
-			}
 			fmt.Println("No ready ergo tasks.")
 			return nil
 		}
@@ -107,10 +101,10 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 	if chosenID == "" || updatedGraph == nil {
 		return errors.New("internal error: missing chosen task")
 	}
-	return writeClaimSuccess(updatedGraph, chosenID, agentID, filepath.Dir(dir), opts.JSON)
+	return writeClaimSuccess(updatedGraph, chosenID, filepath.Dir(dir))
 }
 
-func writeClaimSuccess(graph *Graph, id, agentID, repoDir string, jsonOutput bool) error {
+func writeClaimSuccess(graph *Graph, id, repoDir string) error {
 	task := graph.Tasks[id]
 	if task == nil {
 		return errors.New("internal error: missing claimed task")
@@ -120,20 +114,6 @@ func writeClaimSuccess(graph *Graph, id, agentID, repoDir string, jsonOutput boo
 		"block":   "ergo block " + id,
 		"cancel":  "ergo cancel " + id,
 		"release": "ergo release " + id,
-	}
-	if jsonOutput {
-		return writeJSON(os.Stdout, map[string]interface{}{
-			"kind":          "claim",
-			"id":            task.ID,
-			"epic":          task.EpicID,
-			"state":         task.State,
-			"title":         task.Title,
-			"body":          task.Body,
-			"agent_id":      agentID,
-			"claimed_by":    task.ClaimedBy,
-			"claimed_at":    claimedAtForTask(task, graph.Meta[id]),
-			"next_commands": next,
-		})
 	}
 	printTaskDocument(os.Stdout, task, graph.Meta[id], graph, repoDir)
 	fmt.Println("## Next")
@@ -195,21 +175,6 @@ func runSequenceChange(command, eventType string, args []string, opts GlobalOpti
 		return err
 	}
 
-	if opts.JSON {
-		outEdges := make([]sequenceEdgeOutput, 0, len(changed))
-		for _, edge := range changed {
-			outEdges = append(outEdges, sequenceEdgeOutput{
-				FromID: edge.FromID,
-				ToID:   edge.ToID,
-				Type:   dependsLinkType,
-			})
-		}
-		return writeJSON(os.Stdout, sequenceOutput{
-			Kind:   command,
-			Action: eventType,
-			Edges:  outEdges,
-		})
-	}
 	writeSequenceChanges(os.Stdout, eventType, changed)
 	return nil
 }
@@ -316,40 +281,9 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 		return err
 	}
 	repoDir := filepath.Dir(dir)
-
 	graph, err := loadGraphLocked(dir, opts)
 	if err != nil {
 		return err
-	}
-
-	// Get tasks - includeAll=true so we get everything, then filter
-	// We need all tasks for tree view hierarchy and JSON output
-	tasks := listTasks(graph, epicID, readyOnly)
-
-	// Filter out containers from tasks list (default listing shows leaf tasks)
-	var tasksOnly []*Task
-	for _, task := range tasks {
-		if !isContainer(task, graph) {
-			tasksOnly = append(tasksOnly, task)
-		}
-	}
-
-	// Apply Active Set filtering (default behavior)
-	// If --all is NOT set, and we aren't targeting specific states via --ready,
-	// hide done and canceled tasks.
-	if !showAll && !readyOnly {
-		var active []*Task
-		for _, task := range tasksOnly {
-			if task.State != stateDone && task.State != stateCanceled {
-				active = append(active, task)
-			}
-		}
-		tasksOnly = active
-	}
-
-	if opts.JSON {
-		// Default: return array of tasks
-		return writeJSON(os.Stdout, buildTaskListItems(tasksOnly, graph, repoDir))
 	}
 
 	// Tree view (human-friendly hierarchical output)
@@ -490,26 +424,6 @@ func filterReadyTasks(tasks []*Task, graph *Graph) []*Task {
 		}
 	}
 	return ready
-}
-
-// buildTaskShowOutput creates a taskShowOutput struct for JSON serialization.
-func buildTaskShowOutput(task *Task, meta *TaskMeta, repoDir string) taskShowOutput {
-	claimedAt := claimedAtForTask(task, meta)
-	return taskShowOutput{
-		ID:        task.ID,
-		UUID:      task.UUID,
-		EpicID:    task.EpicID,
-		State:     task.State,
-		ClaimedBy: task.ClaimedBy,
-		ClaimedAt: claimedAt,
-		CreatedAt: formatTime(task.CreatedAt),
-		UpdatedAt: formatTime(task.UpdatedAt),
-		Deps:      task.Deps,
-		RDeps:     task.RDeps,
-		Title:     task.Title,
-		Body:      task.Body,
-		Results:   buildResultOutputItems(task.Results, repoDir),
-	}
 }
 
 type frontMatterField struct {
@@ -675,7 +589,7 @@ func printTaskResultsMarkdown(w io.Writer, results []Result, repoDir string, hea
 
 func RunShow(id string, opts GlobalOptions) error {
 	if id == "" {
-		return errors.New("usage: ergo show <id> [--json]")
+		return errors.New("usage: ergo show <id>")
 	}
 	dir, err := ergoDir(opts)
 	if err != nil {
@@ -700,22 +614,6 @@ func RunShow(id string, opts GlobalOptions) error {
 		childTasks = collectEpicChildren(id, graph)
 	}
 
-	if opts.JSON {
-		output := buildTaskShowOutput(task, graph.Meta[id], repoDir)
-
-		// If it's a container with children, wrap with children
-		if isContainer(task, graph) && len(childTasks) > 0 {
-			childOutputs := make([]taskShowOutput, len(childTasks))
-			for i, child := range childTasks {
-				childOutputs[i] = buildTaskShowOutput(child, graph.Meta[child.ID], repoDir)
-			}
-			return writeJSON(os.Stdout, map[string]interface{}{
-				"container": output,
-				"children":  childOutputs,
-			})
-		}
-		return writeJSON(os.Stdout, output)
-	}
 	if isContainer(task, graph) {
 		printContainerDocument(os.Stdout, task, childTasks, graph, repoDir)
 		return nil
@@ -748,12 +646,7 @@ func RunCompact(opts GlobalOptions) error {
 	}); err != nil {
 		return err
 	}
-	if opts.JSON {
-		return writeJSON(os.Stdout, compactOutput{
-			Kind:   "compact",
-			Status: "ok",
-		})
-	}
+	fmt.Println("Compacted ergo plan.")
 	return nil
 }
 
@@ -771,14 +664,6 @@ func RunPrune(confirm bool, opts GlobalOptions) error {
 	}
 	if err != nil {
 		return err
-	}
-
-	if opts.JSON {
-		return writeJSON(os.Stdout, pruneOutput{
-			Kind:      "prune",
-			DryRun:    !confirm,
-			PrunedIDs: plan.PrunedIDs,
-		})
 	}
 
 	printPruneSummary(confirm, plan.Items)
@@ -1026,13 +911,6 @@ func RunWhere(opts GlobalOptions) error {
 	ergoDir, err = filepath.Abs(ergoDir)
 	if err != nil {
 		return err
-	}
-	repoDir := filepath.Dir(ergoDir)
-	if opts.JSON {
-		return writeJSON(os.Stdout, whereOutput{
-			ErgoDir: ergoDir,
-			RepoDir: repoDir,
-		})
 	}
 	fmt.Println(ergoDir)
 	return nil

@@ -21,13 +21,18 @@ func RunMove(id, destinationID string, toRoot bool, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	outcome, err := applyTaskMutation(dir, opts, id, taskMutation{
+	_, err = applyTaskMutation(dir, opts, id, taskMutation{
 		Kind: "move", EpicID: destinationID, EpicSet: true, ValidateMove: true,
-	}, opts.JSON)
+	})
 	if err != nil {
 		return err
 	}
-	return writeMutationResult("move", id, outcome, opts.JSON)
+	if toRoot {
+		fmt.Printf("%s moved to root\n", id)
+		return nil
+	}
+	fmt.Printf("%s moved to %s\n", id, destinationID)
+	return nil
 }
 
 func validateMovePlacement(graph *Graph, task *Task, destinationID string) error {

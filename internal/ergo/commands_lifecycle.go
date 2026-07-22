@@ -52,12 +52,9 @@ func RunLifecycle(kind, id string, lifecycle LifecycleOptions, opts GlobalOption
 	if kind == "release" {
 		mutation.AllowedStates = []string{stateTodo, stateDoing, stateBlocked, stateError}
 	}
-	outcome, err := applyTaskMutation(dir, opts, id, mutation, true)
+	_, err = applyTaskMutation(dir, opts, id, mutation)
 	if err != nil {
 		return err
-	}
-	if opts.JSON {
-		return writeMutationResult(kind, id, outcome, true)
 	}
 	fmt.Printf("%s %s\n", id, targetState)
 	return nil

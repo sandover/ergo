@@ -24,7 +24,7 @@ func TestV2LegacyEventsFileLifecycleNormalization(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("release legacy error failed: %s", stderr)
 	}
-	shown := showTaskJSON(t, dir, errorID)
+	shown := showTaskFields(t, dir, errorID)
 	if shown["state"] != "todo" || shown["claimed_by"] != "" {
 		t.Fatalf("legacy error was not normalized: %v", shown)
 	}
@@ -39,7 +39,7 @@ func TestV2LegacyEventsFileLifecycleNormalization(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("repeat block failed: %s", stderr)
 	}
-	shown = showTaskJSON(t, dir, blockedID)
+	shown = showTaskFields(t, dir, blockedID)
 	if shown["state"] != "blocked" || shown["claimed_by"] != "" {
 		t.Fatalf("claimed-blocked task was not normalized: %v", shown)
 	}

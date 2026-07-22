@@ -14,31 +14,31 @@ func TestMovePromotesDestinationAndReturnsToRoot(t *testing.T) {
 	dir := setupErgo(t)
 	destination := createLifecycleTask(t, dir)
 	source := createLifecycleTask(t, dir)
-	stdout, stderr, code := runErgo(t, dir, "", "--json", "move", source, destination)
+	stdout, stderr, code := runErgo(t, dir, "", "move", source, destination)
 	if code != 0 {
 		t.Fatalf("move failed: %s", stderr)
 	}
-	if !strings.Contains(stdout, `"updated_fields":["epic"]`) {
+	if stdout != source+" moved to "+destination+"\n" {
 		t.Fatalf("unexpected move output: %s", stdout)
 	}
-	if showTaskJSON(t, dir, source)["epic_id"] != destination {
+	if showTaskFields(t, dir, source)["container_id"] != destination {
 		t.Fatal("source was not moved into destination")
 	}
-	shownContainer := showTaskJSON(t, dir, destination)
-	if _, ok := shownContainer["container"].(map[string]any); !ok {
+	shownContainer := showTaskFields(t, dir, destination)
+	if shownContainer["container"] != "true" {
 		t.Fatalf("clean todo destination was not promoted: %v", shownContainer)
 	}
 
 	before := countEventLines(t, dir)
-	stdout, stderr, code = runErgo(t, dir, "", "--json", "move", source, destination)
-	if code != 0 || !strings.Contains(stdout, `"updated_fields":[]`) || countEventLines(t, dir) != before {
+	stdout, stderr, code = runErgo(t, dir, "", "move", source, destination)
+	if code != 0 || stdout != source+" moved to "+destination+"\n" || countEventLines(t, dir) != before {
 		t.Fatalf("same-parent no-op failed: stdout=%s stderr=%s", stdout, stderr)
 	}
 	_, stderr, code = runErgo(t, dir, "", "move", source, "--root")
 	if code != 0 {
 		t.Fatalf("move root failed: %s", stderr)
 	}
-	if showTaskJSON(t, dir, source)["epic_id"] != "" {
+	if _, nested := showTaskFields(t, dir, source)["container_id"]; nested {
 		t.Fatal("source did not return to root")
 	}
 }

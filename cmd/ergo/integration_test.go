@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -68,6 +69,63 @@ func runErgo(t *testing.T, dir string, stdin string, args ...string) (stdout, st
 		}
 	}
 	return outBuf.String(), errBuf.String(), exitCode
+}
+
+func showTaskOutput(t *testing.T, dir, id string) string {
+	t.Helper()
+	stdout, stderr, code := runErgo(t, dir, "", "show", id)
+	if code != 0 {
+		t.Fatalf("show %s failed: %s", id, stderr)
+	}
+	return stdout
+}
+
+func showTaskFields(t *testing.T, dir, id string) map[string]string {
+	t.Helper()
+	output := showTaskOutput(t, dir, id)
+	lines := strings.Split(output, "\n")
+	fields := map[string]string{}
+	if len(lines) == 0 || lines[0] != "---" {
+		t.Fatalf("show %s lacks YAML front matter: %q", id, output)
+	}
+	for _, line := range lines[1:] {
+		if line == "---" {
+			return fields
+		}
+		key, value, ok := strings.Cut(line, ": ")
+		if !ok {
+			t.Fatalf("invalid front matter line %q", line)
+		}
+		if unquoted, err := strconv.Unquote(value); err == nil {
+			value = unquoted
+		}
+		fields[key] = value
+	}
+	t.Fatalf("show %s has unterminated front matter", id)
+	return nil
+}
+
+func outputIDs(output string) []string {
+	var ids []string
+	for _, line := range strings.Split(output, "\n") {
+		for _, candidate := range strings.Fields(line) {
+			if len(candidate) != 6 {
+				continue
+			}
+			valid := true
+			for _, r := range candidate {
+				if !(r >= 'A' && r <= 'Z') && !(r >= '0' && r <= '9') {
+					valid = false
+					break
+				}
+			}
+			if valid {
+				ids = append(ids, candidate)
+				break
+			}
+		}
+	}
+	return ids
 }
 
 func runNewTask(t *testing.T, dir string, inlineJSON string, extraArgs ...string) (stdout, stderr string, exitCode int) {
@@ -188,15 +246,8 @@ func runLegacyMutationFixture(t *testing.T, dir, id, body string, bodySet bool, 
 		return stdout, stderr, code
 	}
 	if input.Result != nil && input.State == nil {
-		showOut, showErr, showCode := runErgo(t, dir, "", "--json", "show", id)
-		if showCode != 0 {
-			return showOut, showErr, showCode
-		}
-		var shown map[string]any
-		if err := json.Unmarshal([]byte(showOut), &shown); err != nil {
-			return "", err.Error(), 1
-		}
-		verb := map[string]string{"todo": "release", "doing": "release", "blocked": "block", "done": "done", "canceled": "cancel", "error": "release"}[shown["state"].(string)]
+		shown := showTaskFields(t, dir, id)
+		verb := map[string]string{"todo": "release", "doing": "release", "blocked": "block", "done": "done", "canceled": "cancel", "error": "release"}[shown["state"]]
 		if !run("", verb, id, "--result", *input.Result) {
 			return stdout, stderr, code
 		}
@@ -338,16 +389,9 @@ func TestNewTask_StdinBody_Multiline(t *testing.T) {
 	}
 	taskID := strings.TrimSpace(stdout)
 
-	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
-	if code != 0 {
-		t.Fatalf("show failed: exit %d", code)
-	}
-	var task map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
-		t.Fatalf("failed to parse show output: %v", err)
-	}
-	if task["body"] != body {
-		t.Errorf("expected body=%q, got %q", body, task["body"])
+	stdout = showTaskOutput(t, dir, taskID)
+	if !strings.Contains(stdout, body) {
+		t.Errorf("expected body=%q in show output: %s", body, stdout)
 	}
 }
 
@@ -361,16 +405,9 @@ func TestNewContainer_StdinBody_Multiline(t *testing.T) {
 	}
 	epicID := strings.TrimSpace(stdout)
 
-	stdout, _, code = runErgo(t, dir, "", "show", epicID, "--json")
-	if code != 0 {
-		t.Fatalf("show failed: exit %d", code)
-	}
-	var epic map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &epic); err != nil {
-		t.Fatalf("failed to parse show output: %v", err)
-	}
-	if epic["body"] != body {
-		t.Errorf("expected body=%q, got %q", body, epic["body"])
+	stdout = showTaskOutput(t, dir, epicID)
+	if !strings.Contains(stdout, body) {
+		t.Errorf("expected body=%q in show output: %s", body, stdout)
 	}
 }
 
@@ -406,34 +443,13 @@ func TestShowEpicChildrenDependencyOrder(t *testing.T) {
 		t.Fatalf("sequence failed: exit %d", code)
 	}
 
-	stdout, _, code = runErgo(t, dir, "", "show", epicID, "--json")
+	stdout, _, code = runErgo(t, dir, "", "show", epicID)
 	if code != 0 {
-		t.Fatalf("show --json failed: exit %d", code)
+		t.Fatalf("show failed: exit %d", code)
 	}
-
-	var payload map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("failed to parse show --json: %v", err)
-	}
-	rawChildren, ok := payload["children"].([]interface{})
-	if !ok {
-		t.Fatalf("expected children array in show --json payload: %v", payload)
-	}
-	if len(rawChildren) != 3 {
-		t.Fatalf("expected 3 children, got %d", len(rawChildren))
-	}
-
-	pos := map[string]int{}
-	for i, raw := range rawChildren {
-		child, ok := raw.(map[string]interface{})
-		if !ok {
-			t.Fatalf("expected child object, got %T", raw)
-		}
-		id, _ := child["id"].(string)
-		pos[id] = i
-	}
-	if !(pos[taskA] < pos[taskB] && pos[taskB] < pos[taskC]) {
-		t.Fatalf("expected child order %s -> %s -> %s, got positions %v", taskA, taskB, taskC, pos)
+	posA, posB, posC := strings.Index(stdout, "### "+taskA+" -"), strings.Index(stdout, "### "+taskB+" -"), strings.Index(stdout, "### "+taskC+" -")
+	if posA < 0 || !(posA < posB && posB < posC) {
+		t.Fatalf("expected child order %s -> %s -> %s in:\n%s", taskA, taskB, taskC, stdout)
 	}
 
 	stdout, _, code = runErgo(t, dir, "", "show", epicID)
@@ -748,26 +764,14 @@ func TestNewTask_RepairsMissingLock(t *testing.T) {
 
 func TestNewTask_ValidationError(t *testing.T) {
 	dir := setupErgo(t)
-	stdout, _, code := runNewTask(t, dir, `{}`, "--json")
+	stdout, stderr, code := runNewTask(t, dir, `{}`)
 
 	if code != 1 {
 		t.Fatalf("expected exit 1, got %d", code)
 	}
 
-	// Parse JSON output
-	var result map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-		t.Fatalf("expected JSON output, got: %q", stdout)
-	}
-
-	if result["error"] != "validation_failed" {
-		t.Errorf("expected error=validation_failed, got %v", result["error"])
-	}
-
-	// Only title is required now (body is optional)
-	missing, ok := result["missing"].([]interface{})
-	if !ok || len(missing) != 1 || missing[0] != "title" {
-		t.Errorf("expected missing=[title], got %v", result["missing"])
+	if stdout != "" || !strings.Contains(stderr, "invalid task input") || !strings.Contains(stderr, "missing required: title") {
+		t.Fatalf("unexpected validation output: stdout=%q stderr=%q", stdout, stderr)
 	}
 }
 
@@ -787,19 +791,8 @@ func TestSet_StateTransition(t *testing.T) {
 		t.Fatalf("set state=done failed: exit %d", code)
 	}
 
-	// Verify state via show --json
-	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
-	if code != 0 {
-		t.Fatalf("show failed: exit %d", code)
-	}
-
-	var task map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
-		t.Fatalf("failed to parse show output: %v", err)
-	}
-
-	if task["state"] != "done" {
-		t.Errorf("expected state=done, got %v", task["state"])
+	if state := showTaskFields(t, dir, taskID)["state"]; state != "done" {
+		t.Errorf("expected state=done, got %v", state)
 	}
 }
 
@@ -822,19 +815,12 @@ func TestBodyThenLifecyclePreservesExplicitBodyEdit(t *testing.T) {
 		t.Fatalf("done failed: exit %d (stderr=%q)", code, stderr)
 	}
 
-	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
-	if code != 0 {
-		t.Fatalf("show failed: exit %d", code)
+	stdout = showTaskOutput(t, dir, taskID)
+	if !strings.Contains(stdout, newBody) {
+		t.Errorf("expected body=%q in show output: %s", newBody, stdout)
 	}
-	var task map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
-		t.Fatalf("failed to parse show output: %v", err)
-	}
-	if task["body"] != newBody {
-		t.Errorf("expected body=%q, got %q", newBody, task["body"])
-	}
-	if task["state"] != "done" {
-		t.Errorf("expected state=done, got %v", task["state"])
+	if state := showTaskFields(t, dir, taskID)["state"]; state != "done" {
+		t.Errorf("expected state=done, got %v", state)
 	}
 }
 
@@ -852,61 +838,22 @@ func TestSet_MetadataOnly_KeepsBody(t *testing.T) {
 		t.Fatalf("expected exit 0, got %d (stderr=%q)", code, stderr)
 	}
 
-	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
-	if code != 0 {
-		t.Fatalf("show failed: exit %d", code)
+	stdout = showTaskOutput(t, dir, taskID)
+	if !strings.Contains(stdout, "Test task") {
+		t.Fatalf("expected body to remain unchanged: %s", stdout)
 	}
-	var task map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
-		t.Fatalf("failed to parse show output: %v", err)
-	}
-	if task["body"] != "Test task" {
-		t.Fatalf("expected body to remain unchanged, got %q", task["body"])
-	}
-	if task["state"] != "blocked" {
-		t.Fatalf("expected state=blocked, got %v", task["state"])
+	if state := showTaskFields(t, dir, taskID)["state"]; state != "blocked" {
+		t.Fatalf("expected state=blocked, got %v", state)
 	}
 }
 
-func TestSet_JSONOutput(t *testing.T) {
+func TestRemovedJSONFlagExplainsMigration(t *testing.T) {
 	dir := setupErgo(t)
-
-	stdout, _, code := runNewTaskWithBody(t, dir, "Test task", `{"title":"Test task"}`)
-	if code != 0 {
-		t.Fatalf("new task failed: exit %d", code)
-	}
-	taskID := strings.TrimSpace(stdout)
-
-	stdout, _, code = runSetTask(t, dir, taskID, `{"state":"done"}`, "--json")
-	if code != 0 {
-		t.Fatalf("set --json failed: exit %d", code)
-	}
-
-	var out map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-		t.Fatalf("failed to parse set --json output: %v", err)
-	}
-	if out["kind"] != "done" {
-		t.Errorf("expected kind=done, got %v", out["kind"])
-	}
-	if out["id"] != taskID {
-		t.Errorf("expected id=%s, got %v", taskID, out["id"])
-	}
-	if out["state"] != "done" {
-		t.Errorf("expected state=done, got %v", out["state"])
-	}
-	fields, ok := out["updated_fields"].([]interface{})
-	if !ok || len(fields) == 0 {
-		t.Fatalf("expected updated_fields array, got %v", out["updated_fields"])
-	}
-	foundState := false
-	for _, f := range fields {
-		if f == "state" {
-			foundState = true
+	for _, args := range [][]string{{"--json", "list"}, {"list", "--json"}} {
+		stdout, stderr, code := runErgo(t, dir, "", args...)
+		if code == 0 || stdout != "" || !strings.Contains(stderr, "--json was removed in Ergo 3; rerun without it") {
+			t.Fatalf("args=%v code=%d stdout=%q stderr=%q", args, code, stdout, stderr)
 		}
-	}
-	if !foundState {
-		t.Errorf("expected updated_fields to include state, got %v", fields)
 	}
 }
 
@@ -1061,16 +1008,12 @@ func TestSequence_ChainOrder_Readiness(t *testing.T) {
 		t.Fatalf("sequence chain failed: exit %d", code)
 	}
 
-	stdout, _, code = runErgo(t, dir, "", "list", "--ready", "--json")
+	stdout, _, code = runErgo(t, dir, "", "list", "--ready")
 	if code != 0 {
 		t.Fatalf("list --ready failed: exit %d", code)
 	}
-	var ready []map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &ready); err != nil {
-		t.Fatalf("failed to parse list --ready output: %v", err)
-	}
-	if len(ready) != 1 || ready[0]["id"] != taskA {
-		t.Fatalf("expected only Task A ready, got %v", ready)
+	if ids := outputIDs(stdout); !reflect.DeepEqual(ids, []string{taskA}) {
+		t.Fatalf("expected only Task A ready, got %v in %q", ids, stdout)
 	}
 
 	stdout, stderr, code := runErgo(t, dir, "", "unsequence", taskA, taskB, taskC)
@@ -1081,15 +1024,12 @@ func TestSequence_ChainOrder_Readiness(t *testing.T) {
 	if stdout != wantUnsequence {
 		t.Fatalf("unsequence chain output = %q, want %q", stdout, wantUnsequence)
 	}
-	stdout, _, code = runErgo(t, dir, "", "list", "--ready", "--json")
+	stdout, _, code = runErgo(t, dir, "", "list", "--ready")
 	if code != 0 {
 		t.Fatalf("list --ready after unsequence failed: exit %d", code)
 	}
-	if err := json.Unmarshal([]byte(stdout), &ready); err != nil {
-		t.Fatalf("failed to parse list --ready output: %v", err)
-	}
-	if len(ready) != 3 {
-		t.Fatalf("expected all tasks ready after unsequence, got %v", ready)
+	if ids := outputIDs(stdout); len(ids) != 3 {
+		t.Fatalf("expected all tasks ready after unsequence, got %v in %q", ids, stdout)
 	}
 	if _, _, code = runErgo(t, dir, "", "sequence", taskA, taskB, taskC); code != 0 {
 		t.Fatalf("resequence chain failed: exit %d", code)
@@ -1099,30 +1039,24 @@ func TestSequence_ChainOrder_Readiness(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("set taskA done failed: exit %d", code)
 	}
-	stdout, _, code = runErgo(t, dir, "", "list", "--ready", "--json")
+	stdout, _, code = runErgo(t, dir, "", "list", "--ready")
 	if code != 0 {
 		t.Fatalf("list --ready failed: exit %d", code)
 	}
-	if err := json.Unmarshal([]byte(stdout), &ready); err != nil {
-		t.Fatalf("failed to parse list --ready output: %v", err)
-	}
-	if len(ready) != 1 || ready[0]["id"] != taskB {
-		t.Fatalf("expected only Task B ready, got %v", ready)
+	if ids := outputIDs(stdout); !reflect.DeepEqual(ids, []string{taskB}) {
+		t.Fatalf("expected only Task B ready, got %v in %q", ids, stdout)
 	}
 
 	_, _, code = runSetTask(t, dir, taskB, `{"state":"done"}`)
 	if code != 0 {
 		t.Fatalf("set taskB done failed: exit %d", code)
 	}
-	stdout, _, code = runErgo(t, dir, "", "list", "--ready", "--json")
+	stdout, _, code = runErgo(t, dir, "", "list", "--ready")
 	if code != 0 {
 		t.Fatalf("list --ready failed: exit %d", code)
 	}
-	if err := json.Unmarshal([]byte(stdout), &ready); err != nil {
-		t.Fatalf("failed to parse list --ready output: %v", err)
-	}
-	if len(ready) != 1 || ready[0]["id"] != taskC {
-		t.Fatalf("expected only Task C ready, got %v", ready)
+	if ids := outputIDs(stdout); !reflect.DeepEqual(ids, []string{taskC}) {
+		t.Fatalf("expected only Task C ready, got %v in %q", ids, stdout)
 	}
 }
 
@@ -1158,7 +1092,7 @@ func TestPrune_DefaultIsDryRun(t *testing.T) {
 	}
 }
 
-func TestPrune_JSONDryRun(t *testing.T) {
+func TestPrune_DryRunNamesPrunedTasks(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, _, code := runNewTask(t, dir, `{"title":"Task A"}`)
@@ -1171,23 +1105,12 @@ func TestPrune_JSONDryRun(t *testing.T) {
 		t.Fatalf("set state=done failed: exit %d", code)
 	}
 
-	stdout, _, code = runErgo(t, dir, "", "prune", "--json")
+	stdout, _, code = runErgo(t, dir, "", "prune")
 	if code != 0 {
-		t.Fatalf("prune --json dry-run failed: exit %d", code)
+		t.Fatalf("prune dry-run failed: exit %d", code)
 	}
-	var out struct {
-		Kind      string   `json:"kind"`
-		DryRun    bool     `json:"dry_run"`
-		PrunedIDs []string `json:"pruned_ids"`
-	}
-	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-		t.Fatalf("failed to parse prune json: %v", err)
-	}
-	if out.Kind != "prune" || !out.DryRun {
-		t.Fatalf("expected kind=prune dry_run=true, got %+v", out)
-	}
-	if len(out.PrunedIDs) != 1 || out.PrunedIDs[0] != taskID {
-		t.Fatalf("expected pruned_ids to include %s, got %v", taskID, out.PrunedIDs)
+	if !strings.Contains(stdout, taskID) || !strings.Contains(stdout, "preview") {
+		t.Fatalf("expected prune preview to name %s: %s", taskID, stdout)
 	}
 }
 
@@ -1238,16 +1161,9 @@ func TestPrune_RemovesDepsAndErrorsOnPrunedIDs(t *testing.T) {
 		t.Fatalf("set state=done failed: exit %d", code)
 	}
 
-	stdout, _, code = runErgo(t, dir, "", "show", taskA, "--json")
-	if code != 0 {
-		t.Fatalf("show failed: exit %d", code)
-	}
-	var before map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &before); err != nil {
-		t.Fatalf("failed to parse show output: %v", err)
-	}
-	if deps, ok := before["deps"].([]interface{}); !ok || len(deps) != 1 || deps[0] != taskB {
-		t.Fatalf("expected deps to include %s, got %v", taskB, before["deps"])
+	stdout = showTaskOutput(t, dir, taskA)
+	if !strings.Contains(stdout, "depends on `"+taskB+"`") {
+		t.Fatalf("expected dependency on %s in %s", taskB, stdout)
 	}
 
 	_, _, code = runErgo(t, dir, "", "prune", "--yes")
@@ -1260,27 +1176,9 @@ func TestPrune_RemovesDepsAndErrorsOnPrunedIDs(t *testing.T) {
 		t.Fatalf("expected show to fail with pruned error, got code=%d stderr=%q", code, stderr)
 	}
 
-	stdout, _, code = runErgo(t, dir, "", "show", taskA, "--json")
-	if code != 0 {
-		t.Fatalf("show failed: exit %d", code)
-	}
-	var after map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &after); err != nil {
-		t.Fatalf("failed to parse show output: %v", err)
-	}
-	if deps, ok := after["deps"]; ok {
-		if deps == nil {
-			return
-		}
-		if list, ok := deps.([]interface{}); ok {
-			if len(list) != 0 {
-				t.Fatalf("expected deps to be empty after prune, got %v", deps)
-			}
-		} else {
-			t.Fatalf("expected deps to be empty after prune, got %v", deps)
-		}
-	} else {
-		t.Fatalf("expected deps field after prune")
+	stdout = showTaskOutput(t, dir, taskA)
+	if strings.Contains(stdout, "depends on `"+taskB+"`") {
+		t.Fatalf("expected dependency to disappear after prune: %s", stdout)
 	}
 }
 
@@ -1393,20 +1291,15 @@ func TestPrune_CompactRemovesHistory(t *testing.T) {
 	}
 }
 
-func TestCompact_JSONOutput(t *testing.T) {
+func TestCompact_ConfirmsCompletion(t *testing.T) {
 	dir := setupErgo(t)
 
-	stdout, _, code := runErgo(t, dir, "", "compact", "--json")
+	stdout, _, code := runErgo(t, dir, "", "compact")
 	if code != 0 {
-		t.Fatalf("compact --json failed: exit %d", code)
+		t.Fatalf("compact failed: exit %d", code)
 	}
-
-	var out map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-		t.Fatalf("failed to parse compact --json output: %v", err)
-	}
-	if out["kind"] != "compact" || out["status"] != "ok" {
-		t.Errorf("unexpected compact output: %v", out)
+	if stdout != "Compacted ergo plan.\n" {
+		t.Errorf("unexpected compact output: %q", stdout)
 	}
 }
 
@@ -1484,7 +1377,7 @@ func TestPrune_ConcurrentRuns(t *testing.T) {
 	results := make(chan result, 2)
 	for i := 0; i < 2; i++ {
 		go func() {
-			out, errOut, exit := runErgo(t, dir, "", "prune", "--yes", "--json")
+			out, errOut, exit := runErgo(t, dir, "", "prune", "--yes")
 			results <- result{stdout: out, stderr: errOut, code: exit}
 		}()
 	}
@@ -1511,44 +1404,24 @@ func TestCreateAndClaim_Atomic(t *testing.T) {
 	// Create task with state=doing and claim in one operation
 	stdout, _, code := runNewTaskWithBody(t, dir,
 		"Urgent task",
-		`{"title":"Urgent task","state":"doing","claim":"agent-1"}`,
-		"--json")
+		`{"title":"Urgent task","state":"doing","claim":"agent-1"}`)
 
 	if code != 0 {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
 
-	// Parse created task
-	var created map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &created); err != nil {
-		t.Fatalf("failed to parse output: %v", err)
+	taskID := strings.TrimSpace(stdout)
+	if len(taskID) != 6 {
+		t.Fatalf("expected 6-char task ID, got %q", taskID)
 	}
 
-	taskID, ok := created["id"].(string)
-	if !ok || len(taskID) != 6 {
-		t.Fatalf("expected 6-char task ID, got %v", created["id"])
-	}
-
-	// Verify via show
-	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
-	if code != 0 {
-		t.Fatalf("show failed: exit %d", code)
-	}
-
-	var task map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
-		t.Fatalf("failed to parse show output: %v", err)
-	}
-
-	if task["state"] != "doing" {
-		t.Errorf("expected state=doing, got %v", task["state"])
-	}
-	if task["claimed_by"] != "agent-1" {
-		t.Errorf("expected claimed_by=agent-1, got %v", task["claimed_by"])
+	fields := showTaskFields(t, dir, taskID)
+	if fields["state"] != "doing" || fields["claimed_by"] != "agent-1" {
+		t.Errorf("unexpected fields: %v", fields)
 	}
 }
 
-func TestCompact_PreservesShowJSON(t *testing.T) {
+func TestCompact_PreservesShowOutput(t *testing.T) {
 	dir := setupErgo(t)
 
 	// Create an epic
@@ -1607,35 +1480,22 @@ func TestCompact_PreservesShowJSON(t *testing.T) {
 		t.Fatalf("attach result failed: exit %d", code)
 	}
 
-	show := func(id string) map[string]interface{} {
-		t.Helper()
-		stdout, _, code := runErgo(t, dir, "", "show", id, "--json")
-		if code != 0 {
-			t.Fatalf("show %s failed: exit %d", id, code)
-		}
-		var out map[string]interface{}
-		if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-			t.Fatalf("parse show %s output failed: %v", id, err)
-		}
-		return out
-	}
-
-	beforeT1 := show(t1)
-	beforeT2 := show(t2)
+	beforeT1 := showTaskOutput(t, dir, t1)
+	beforeT2 := showTaskOutput(t, dir, t2)
 
 	_, _, code = runErgo(t, dir, "", "compact")
 	if code != 0 {
 		t.Fatalf("compact failed: exit %d", code)
 	}
 
-	afterT1 := show(t1)
-	afterT2 := show(t2)
+	afterT1 := showTaskOutput(t, dir, t1)
+	afterT2 := showTaskOutput(t, dir, t2)
 
 	if !reflect.DeepEqual(beforeT1, afterT1) {
-		t.Fatalf("show --json changed for %s after compact", t1)
+		t.Fatalf("show changed for %s after compact", t1)
 	}
 	if !reflect.DeepEqual(beforeT2, afterT2) {
-		t.Fatalf("show --json changed for %s after compact", t2)
+		t.Fatalf("show changed for %s after compact", t2)
 	}
 }
 
@@ -1669,25 +1529,9 @@ func TestSet_MultipleFields(t *testing.T) {
 		t.Fatalf("set failed: exit %d", code)
 	}
 
-	// Verify all fields updated
-	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
-	if code != 0 {
-		t.Fatalf("show failed: exit %d", code)
-	}
-
-	var task map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
-		t.Fatalf("failed to parse show output: %v", err)
-	}
-
-	if task["title"] != "Updated title" {
-		t.Errorf("expected title updated, got %v", task["title"])
-	}
-	if task["state"] != "doing" {
-		t.Errorf("expected state=doing, got %v", task["state"])
-	}
-	if task["claimed_by"] != "agent-1" {
-		t.Errorf("expected claimed_by=agent-1, got %v", task["claimed_by"])
+	fields := showTaskFields(t, dir, taskID)
+	if fields["title"] != "Updated title" || fields["state"] != "doing" || fields["claimed_by"] != "agent-1" {
+		t.Errorf("unexpected fields: %v", fields)
 	}
 }
 
@@ -1706,21 +1550,9 @@ func TestClaim_WithAgentFlag(t *testing.T) {
 		t.Fatalf("claim failed: exit %d", code)
 	}
 
-	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
-	if code != 0 {
-		t.Fatalf("show failed: exit %d", code)
-	}
-
-	var task map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
-		t.Fatalf("failed to parse show output: %v", err)
-	}
-
-	if task["claimed_by"] != agentID {
-		t.Errorf("expected claimed_by=%q, got %v", agentID, task["claimed_by"])
-	}
-	if task["state"] != "doing" {
-		t.Errorf("expected state=doing, got %v", task["state"])
+	fields := showTaskFields(t, dir, taskID)
+	if fields["claimed_by"] != agentID || fields["state"] != "doing" {
+		t.Errorf("unexpected fields: %v", fields)
 	}
 }
 
@@ -1788,26 +1620,10 @@ func TestTitleAndBodyStoredCorrectly(t *testing.T) {
 	}
 	taskID := strings.TrimSpace(stdout)
 
-	// Verify via show --json that title and body are distinct
-	stdout, _, code = runErgo(t, dir, "", "show", taskID, "--json")
-	if code != 0 {
-		t.Fatalf("show failed: exit %d", code)
-	}
-
-	var task map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &task); err != nil {
-		t.Fatalf("failed to parse show output: %v", err)
-	}
-
-	if task["title"] != "My Important Task" {
-		t.Errorf("expected title %q, got %v", "My Important Task", task["title"])
-	}
-	body, ok := task["body"].(string)
-	if !ok {
-		t.Fatalf("expected body string, got %T", task["body"])
-	}
-	if body != "This is the detailed body text" {
-		t.Errorf("expected body %q, got %q", "This is the detailed body text", body)
+	fields := showTaskFields(t, dir, taskID)
+	shown := showTaskOutput(t, dir, taskID)
+	if fields["title"] != "My Important Task" || !strings.Contains(shown, "This is the detailed body text") {
+		t.Errorf("title/body were not distinct: fields=%v output=%s", fields, shown)
 	}
 }
 
@@ -1871,8 +1687,8 @@ func TestSetRejectsEpicState(t *testing.T) {
 	}
 }
 
-// TestListJSONIncludesAllTasks verifies JSON output includes all tasks (no filtering).
-func TestListJSONIncludesAllTasks(t *testing.T) {
+// TestListAllIncludesTerminalTasks verifies --all disables terminal-state filtering.
+func TestListAllIncludesTerminalTasks(t *testing.T) {
 	dir := setupErgo(t)
 
 	// Create an epic with tasks in various states
@@ -1891,49 +1707,18 @@ func TestListJSONIncludesAllTasks(t *testing.T) {
 	stdout, _, _ = runNewTask(t, dir, fmt.Sprintf(`{"title":"Todo task","epic":"%s"}`, epicID))
 	todoID := strings.TrimSpace(stdout)
 
-	// List with JSON format and --all - should include ALL tasks
-	stdout, _, code := runErgo(t, dir, "", "list", "--json", "--all")
+	stdout, _, code := runErgo(t, dir, "", "list", "--all")
 	if code != 0 {
-		t.Fatalf("list --json --all failed: exit %d", code)
+		t.Fatalf("list --all failed: exit %d", code)
 	}
-
-	var tasks []map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &tasks); err != nil {
-		t.Fatalf("failed to parse JSON: %v", err)
-	}
-
-	// Should have 3 tasks
-	if len(tasks) != 3 {
-		t.Errorf("expected 3 tasks in JSON, got %d", len(tasks))
-	}
-
-	// Verify all task IDs present
-	ids := make(map[string]bool)
-	for _, task := range tasks {
-		ids[task["id"].(string)] = true
-	}
-
-	if !ids[doneID] {
-		t.Error("done task missing from JSON output")
-	}
-	if !ids[canceledID] {
-		t.Error("canceled task missing from JSON output")
-	}
-	if !ids[todoID] {
-		t.Error("todo task missing from JSON output")
-	}
-
-	// Global --json should work before the command as well
-	stdout, _, code = runErgo(t, dir, "", "--json", "list", "--all")
-	if code != 0 {
-		t.Fatalf("--json list --all failed: exit %d", code)
-	}
-	if err := json.Unmarshal([]byte(stdout), &tasks); err != nil {
-		t.Fatalf("failed to parse JSON with global --json: %v", err)
+	for _, id := range []string{doneID, canceledID, todoID} {
+		if !strings.Contains(stdout, id) {
+			t.Errorf("task %s missing from list --all: %s", id, stdout)
+		}
 	}
 }
 
-func TestListJSONReadyFilters(t *testing.T) {
+func TestListReadyFilters(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, _, _ := runNewTask(t, dir, `{"title":"Ready task"}`)
@@ -1947,33 +1732,22 @@ func TestListJSONReadyFilters(t *testing.T) {
 	blockedID := strings.TrimSpace(stdout)
 	runSetTask(t, dir, blockedID, `{"state":"blocked"}`)
 
-	stdout, _, code := runErgo(t, dir, "", "list", "--json", "--ready")
+	stdout, _, code := runErgo(t, dir, "", "list", "--ready")
 	if code != 0 {
-		t.Fatalf("list --json --ready failed: exit %d", code)
+		t.Fatalf("list --ready failed: exit %d", code)
 	}
-
-	var tasks []map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &tasks); err != nil {
-		t.Fatalf("failed to parse JSON: %v", err)
+	if !strings.Contains(stdout, readyID) {
+		t.Errorf("expected ready task %s in output", readyID)
 	}
-
-	ids := make(map[string]bool)
-	for _, task := range tasks {
-		ids[task["id"].(string)] = true
+	if strings.Contains(stdout, doneID) {
+		t.Errorf("did not expect done task %s in output", doneID)
 	}
-
-	if !ids[readyID] {
-		t.Errorf("expected ready task %s in JSON output", readyID)
-	}
-	if ids[doneID] {
-		t.Errorf("did not expect done task %s in JSON output", doneID)
-	}
-	if ids[blockedID] {
-		t.Errorf("did not expect blocked task %s in JSON output", blockedID)
+	if strings.Contains(stdout, blockedID) {
+		t.Errorf("did not expect blocked task %s in output", blockedID)
 	}
 }
 
-func TestListJSONEpicFilters(t *testing.T) {
+func TestListEpicFilters(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, _, _ := runNewTask(t, dir, `{"title":"Epic A"}`)
@@ -1988,35 +1762,24 @@ func TestListJSONEpicFilters(t *testing.T) {
 	stdout, _, _ = runNewTask(t, dir, fmt.Sprintf(`{"title":"B1","epic":"%s"}`, epicB))
 	taskB1 := strings.TrimSpace(stdout)
 
-	stdout, _, code := runErgo(t, dir, "", "list", "--json", "--epic", epicA)
+	stdout, _, code := runErgo(t, dir, "", "list", "--epic", epicA)
 	if code != 0 {
-		t.Fatalf("list --json --epic failed: exit %d", code)
+		t.Fatalf("list --epic failed: exit %d", code)
 	}
-
-	var tasks []map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &tasks); err != nil {
-		t.Fatalf("failed to parse JSON: %v", err)
+	if !strings.Contains(stdout, taskA1) {
+		t.Errorf("expected epic A task %s in output", taskA1)
 	}
-
-	ids := make(map[string]bool)
-	for _, task := range tasks {
-		ids[task["id"].(string)] = true
-	}
-
-	if !ids[taskA1] {
-		t.Errorf("expected epic A task %s in JSON output", taskA1)
-	}
-	if ids[taskB1] {
-		t.Errorf("did not expect epic B task %s in JSON output", taskB1)
+	if strings.Contains(stdout, taskB1) {
+		t.Errorf("did not expect epic B task %s in output", taskB1)
 	}
 }
 
-func TestListJSONConflictingFlags(t *testing.T) {
+func TestListConflictingFlagsBeforeGraphRead(t *testing.T) {
 	dir := setupErgo(t)
 
-	_, stderr, code := runErgo(t, dir, "", "list", "--json", "--ready", "--all")
+	_, stderr, code := runErgo(t, dir, "", "list", "--ready", "--all")
 	if code == 0 {
-		t.Fatalf("expected error for conflicting --ready and --all with --json")
+		t.Fatalf("expected error for conflicting --ready and --all")
 	}
 	if !strings.Contains(stderr, "conflicting flags: --ready and --all") {
 		t.Errorf("expected conflict error, got: %s", stderr)
@@ -2103,22 +1866,12 @@ func TestListEpicDoneTasksNotHidden(t *testing.T) {
 	}
 }
 
-func TestListJSONEpicInvalidReturnsEmpty(t *testing.T) {
+func TestListInvalidEpicReturnsError(t *testing.T) {
 	dir := setupErgo(t)
 
-	stdout, stderr, code := runErgo(t, dir, "", "list", "--json", "--epic", "ZZZZZZ")
-	if code != 0 {
-		t.Fatalf("expected success for invalid epic ID in JSON mode, got exit %d", code)
-	}
-	if strings.TrimSpace(stderr) != "" {
-		t.Errorf("expected no stderr output, got: %s", stderr)
-	}
-	var items []map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &items); err != nil {
-		t.Fatalf("failed to parse JSON: %v", err)
-	}
-	if len(items) != 0 {
-		t.Errorf("expected empty array for invalid epic ID, got %d", len(items))
+	stdout, stderr, code := runErgo(t, dir, "", "list", "--epic", "ZZZZZZ")
+	if code == 0 || stdout != "" || !strings.Contains(stderr, "no such container: ZZZZZZ") {
+		t.Fatalf("unexpected invalid epic result: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
 
@@ -2331,7 +2084,7 @@ func TestListEpicReadyEmptyState(t *testing.T) {
 	}
 }
 
-func TestPlan_JSONOutput_HappyPath(t *testing.T) {
+func TestPlan_ReadableOutput_HappyPath(t *testing.T) {
 	dir := setupErgo(t)
 	planInput := `# Add auth middleware
 Middleware body
@@ -2346,34 +2099,16 @@ Signup body
 Test body
 `
 
-	stdout, stderr, code := runPlan(t, dir, planInput, `{"title":"Add user auth"}`, "--json")
+	stdout, stderr, code := runPlan(t, dir, planInput, `{"title":"Add user auth"}`)
 	if code != 0 {
-		t.Fatalf("plan --json failed: exit %d, stderr=%s, stdout=%s", code, stderr, stdout)
+		t.Fatalf("plan failed: exit %d, stderr=%s, stdout=%s", code, stderr, stdout)
 	}
-
-	var out map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-		t.Fatalf("failed to parse plan --json output: %v", err)
+	ids := outputIDs(stdout)
+	if len(ids) != 5 {
+		t.Fatalf("expected container plus 4 child IDs, got %v in %s", ids, stdout)
 	}
-
-	if out["kind"] != "create" {
-		t.Fatalf("expected kind=create, got %v", out["kind"])
-	}
-	if out["container"] != true {
-		t.Fatalf("expected container=true, got %v", out["container"])
-	}
-	containerID := fmt.Sprint(out["id"])
-	if strings.TrimSpace(containerID) == "" {
-		t.Fatalf("expected non-empty container id, got %v", out["id"])
-	}
-	if out["title"] != "Add user auth" {
-		t.Fatalf("expected container title 'Add user auth', got %v", out["title"])
-	}
-	if out["state"] != "todo" {
-		t.Fatalf("expected state=todo, got %v", out["state"])
-	}
-	if _, hasEpic := out["epic"]; hasEpic {
-		t.Fatalf("expected no 'epic' field in plan output")
+	if !strings.Contains(stdout, ids[0]+" - Add user auth") || !strings.Contains(stdout, "4 tasks, 0 dependencies") {
+		t.Fatalf("unexpected plan summary: %s", stdout)
 	}
 	eventLog, err := os.ReadFile(getEventFilePath(dir))
 	if err != nil {
@@ -2383,42 +2118,19 @@ Test body
 		t.Fatalf("expected plan to write unified new_task events, got log: %s", eventLog)
 	}
 
-	childrenRaw, ok := out["children"].([]interface{})
-	if !ok {
-		t.Fatalf("expected children array, got %T", out["children"])
-	}
-	if len(childrenRaw) != 4 {
-		t.Fatalf("expected 4 children, got %d", len(childrenRaw))
-	}
-
-	seenTitles := map[string]bool{}
-	for _, raw := range childrenRaw {
-		child, ok := raw.(map[string]interface{})
-		if !ok {
-			t.Fatalf("expected child object, got %T", raw)
-		}
-		title := fmt.Sprint(child["title"])
-		if title == "" || fmt.Sprint(child["id"]) == "" {
-			t.Fatalf("expected non-empty child title/id, got %v", child)
-		}
-		seenTitles[title] = true
-	}
 	for _, expected := range []string{"Add auth middleware", "Add login endpoint", "Add signup endpoint", "Write integration tests"} {
-		if !seenTitles[expected] {
-			t.Fatalf("expected child title %q in output, got %v", expected, seenTitles)
+		if !strings.Contains(stdout, " - "+expected) {
+			t.Fatalf("expected child title %q in output: %s", expected, stdout)
 		}
 	}
 
-	stdout, _, code = runErgo(t, dir, "", "list", "--ready", "--json")
+	stdout, _, code = runErgo(t, dir, "", "list", "--ready")
 	if code != 0 {
-		t.Fatalf("list --ready --json failed: exit %d", code)
+		t.Fatalf("list --ready failed: exit %d", code)
 	}
-	var ready []map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &ready); err != nil {
-		t.Fatalf("failed to parse ready list: %v", err)
-	}
-	if len(ready) != 4 {
-		t.Fatalf("expected all 4 leaf tasks to be ready, got %d: %v", len(ready), ready)
+	if readyIDs := outputIDs(stdout); len(readyIDs) != 5 {
+		// Tree output includes the container plus its four ready children.
+		t.Fatalf("expected container plus 4 ready tasks, got %v in %s", readyIDs, stdout)
 	}
 }
 
@@ -2427,8 +2139,6 @@ func TestPlan_FailuresReturnErrorsAndDoNotWritePartialState(t *testing.T) {
 		name           string
 		planContent    string
 		inlineJSON     string
-		jsonOutput     bool
-		expectedError  string
 		expectedStderr string
 	}{
 		{
@@ -2450,18 +2160,16 @@ func TestPlan_FailuresReturnErrorsAndDoNotWritePartialState(t *testing.T) {
 			expectedStderr: "plan file contains no task chunks",
 		},
 		{
-			name:          "missing inline title",
-			planContent:   "# A\nbody\n",
-			inlineJSON:    `{}`,
-			jsonOutput:    true,
-			expectedError: "validation_failed",
+			name:           "missing inline title",
+			planContent:    "# A\nbody\n",
+			inlineJSON:     `{}`,
+			expectedStderr: "invalid plan input",
 		},
 		{
-			name:          "malformed json",
-			planContent:   "# A\nbody\n",
-			inlineJSON:    `{"title":"Epic"`,
-			jsonOutput:    true,
-			expectedError: "parse_error",
+			name:           "malformed json",
+			planContent:    "# A\nbody\n",
+			inlineJSON:     `{"title":"Epic"`,
+			expectedStderr: "invalid JSON",
 		},
 	}
 
@@ -2469,36 +2177,20 @@ func TestPlan_FailuresReturnErrorsAndDoNotWritePartialState(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := setupErgo(t)
 
-			extraArgs := []string{}
-			if tt.jsonOutput {
-				extraArgs = append(extraArgs, "--json")
-			}
-			stdout, stderr, code := runPlan(t, dir, tt.planContent, tt.inlineJSON, extraArgs...)
+			stdout, stderr, code := runPlan(t, dir, tt.planContent, tt.inlineJSON)
 			if code == 0 {
 				t.Fatalf("expected non-zero exit for %s (stdout=%q stderr=%q)", tt.name, stdout, stderr)
 			}
-			if tt.jsonOutput {
-				var out map[string]interface{}
-				if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-					t.Fatalf("expected JSON error output, got parse error: %v (stdout=%q)", err, stdout)
-				}
-				if out["error"] != tt.expectedError {
-					t.Fatalf("expected error=%s, got %v", tt.expectedError, out["error"])
-				}
-			} else if !strings.Contains(stderr, tt.expectedStderr) {
+			if stdout != "" || !strings.Contains(stderr, tt.expectedStderr) {
 				t.Fatalf("expected stderr to contain %q, got %q", tt.expectedStderr, stderr)
 			}
 
-			stdout, _, code = runErgo(t, dir, "", "list", "--json")
+			stdout, _, code = runErgo(t, dir, "", "list")
 			if code != 0 {
-				t.Fatalf("list --json failed: exit %d", code)
+				t.Fatalf("list failed: exit %d", code)
 			}
-			var tasks []map[string]interface{}
-			if err := json.Unmarshal([]byte(stdout), &tasks); err != nil {
-				t.Fatalf("failed to parse list --json output: %v", err)
-			}
-			if len(tasks) != 0 {
-				t.Fatalf("expected no tasks after failed bulk-create, got %d", len(tasks))
+			if !strings.Contains(stdout, "No tasks.") {
+				t.Fatalf("expected no tasks after failed bulk-create: %s", stdout)
 			}
 		})
 	}
@@ -2571,13 +2263,12 @@ func TestDepSemantics_ContainerReadiness(t *testing.T) {
 		dir := setupErgo(t)
 
 		// Create container B with two children
-		out := map[string]interface{}{}
-		stdout, _, _ := runPlan(t, dir, "# B1\n\n---\n# B2\n", `{"title":"B"}`, "--json")
-		_ = json.Unmarshal([]byte(stdout), &out)
-		bID := fmt.Sprint(out["id"])
-		children := out["children"].([]interface{})
-		b1ID := fmt.Sprint(children[0].(map[string]interface{})["id"])
-		b2ID := fmt.Sprint(children[1].(map[string]interface{})["id"])
+		stdout, _, _ := runPlan(t, dir, "# B1\n\n---\n# B2\n", `{"title":"B"}`)
+		ids := outputIDs(stdout)
+		if len(ids) != 3 {
+			t.Fatalf("unexpected plan output: %s", stdout)
+		}
+		bID, b1ID, b2ID := ids[0], ids[1], ids[2]
 
 		// Create leaf A depending on container B
 		stdout, _, _ = runNewTask(t, dir, `{"title":"A"}`)
@@ -2589,34 +2280,18 @@ func TestDepSemantics_ContainerReadiness(t *testing.T) {
 		}
 
 		// A should be blocked while B's children are incomplete
-		stdout, _, _ = runErgo(t, dir, "", "list", "--json", "--all")
-		var tasks []map[string]interface{}
-		_ = json.Unmarshal([]byte(stdout), &tasks)
-		aBlocked := false
-		for _, task := range tasks {
-			if task["id"] == aID {
-				aBlocked = task["blocked"].(bool)
-			}
-		}
-		if !aBlocked {
-			t.Fatalf("expected A to be blocked while container B has incomplete children")
+		stdout, _, _ = runErgo(t, dir, "", "list", "--ready")
+		if strings.Contains(stdout, aID) {
+			t.Fatalf("expected A to be absent while container B has incomplete children: %s", stdout)
 		}
 
 		// Complete B's children → A should become ready
 		runSetTask(t, dir, b1ID, `{"state":"done"}`)
 		runSetTask(t, dir, b2ID, `{"state":"done"}`)
 
-		stdout, _, _ = runErgo(t, dir, "", "list", "--ready", "--json")
-		var ready []map[string]interface{}
-		_ = json.Unmarshal([]byte(stdout), &ready)
-		found := false
-		for _, task := range ready {
-			if task["id"] == aID {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("expected A to be ready after all container B children done")
+		stdout, _, _ = runErgo(t, dir, "", "list", "--ready")
+		if !strings.Contains(stdout, aID) {
+			t.Fatalf("expected A to be ready after all container B children done: %s", stdout)
 		}
 		_ = b1ID
 		_ = b2ID
@@ -2631,11 +2306,12 @@ func TestDepSemantics_ContainerReadiness(t *testing.T) {
 		lID := strings.TrimSpace(stdout)
 
 		// Create container A with task T inside
-		out := map[string]interface{}{}
-		stdout, _, _ = runPlan(t, dir, "# T\n", `{"title":"A"}`, "--json")
-		_ = json.Unmarshal([]byte(stdout), &out)
-		aID := fmt.Sprint(out["id"])
-		tID := fmt.Sprint(out["children"].([]interface{})[0].(map[string]interface{})["id"])
+		stdout, _, _ = runPlan(t, dir, "# T\n", `{"title":"A"}`)
+		ids := outputIDs(stdout)
+		if len(ids) != 2 {
+			t.Fatalf("unexpected plan output: %s", stdout)
+		}
+		aID, tID := ids[0], ids[1]
 
 		// Container A depends on leaf L
 		// sequence lID aID → A depends on L (A comes after L)
@@ -2645,32 +2321,16 @@ func TestDepSemantics_ContainerReadiness(t *testing.T) {
 		}
 
 		// T (inside A) should be blocked because A's dep L is not done
-		stdout, _, _ = runErgo(t, dir, "", "list", "--json", "--all")
-		var tasks []map[string]interface{}
-		_ = json.Unmarshal([]byte(stdout), &tasks)
-		tBlocked := false
-		for _, task := range tasks {
-			if task["id"] == tID {
-				tBlocked = task["blocked"].(bool)
-			}
-		}
-		if !tBlocked {
-			t.Fatalf("expected T (inside A) to be blocked because A depends on incomplete L")
+		stdout, _, _ = runErgo(t, dir, "", "list", "--ready")
+		if strings.Contains(stdout, tID) {
+			t.Fatalf("expected T to be absent because A depends on incomplete L: %s", stdout)
 		}
 
 		// Complete L → T should become ready
 		runSetTask(t, dir, lID, `{"state":"done"}`)
-		stdout, _, _ = runErgo(t, dir, "", "list", "--ready", "--json")
-		var ready []map[string]interface{}
-		_ = json.Unmarshal([]byte(stdout), &ready)
-		found := false
-		for _, task := range ready {
-			if task["id"] == tID {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("expected T to be ready after L done")
+		stdout, _, _ = runErgo(t, dir, "", "list", "--ready")
+		if !strings.Contains(stdout, tID) {
+			t.Fatalf("expected T to be ready after L done: %s", stdout)
 		}
 		_ = aID
 	})
@@ -2730,23 +2390,12 @@ func TestFixtureScripts(t *testing.T) {
 			}
 
 			// Verify the resulting graph has at least one epic (task with children)
-			stdout, stderr, code := runErgo(t, listDir, "", "list", "--all", "--json")
+			stdout, stderr, code := runErgo(t, listDir, "", "list", "--all")
 			if code != 0 {
-				t.Fatalf("list --all --json failed: exit %d, stderr=%s", code, stderr)
+				t.Fatalf("list --all failed: exit %d, stderr=%s", code, stderr)
 			}
-			var tasks []map[string]interface{}
-			if err := json.Unmarshal([]byte(stdout), &tasks); err != nil {
-				t.Fatalf("failed to parse tasks JSON: %v (stdout=%q)", err, stdout)
-			}
-			hasEpicChild := false
-			for _, task := range tasks {
-				if epicID, ok := task["epic_id"].(string); ok && epicID != "" {
-					hasEpicChild = true
-					break
-				}
-			}
-			if !hasEpicChild {
-				t.Fatalf("expected at least one task with epic_id after running fixture script %s", filepath.Base(script))
+			if !strings.Contains(stdout, "├") && !strings.Contains(stdout, "└") {
+				t.Fatalf("expected at least one container child after running fixture script %s: %s", filepath.Base(script), stdout)
 			}
 		})
 	}

@@ -77,7 +77,7 @@ func TestMutationValidationFailureDoesNotAppend(t *testing.T) {
 	_, err = applyTaskMutation(ergoDir, GlobalOptions{StartDir: repoDir}, "ABCDEF", taskMutation{
 		State: stateDone, StateSet: true, Body: "new", BodySet: true,
 		ResultPath: "missing.txt", ResultSet: true,
-	}, true)
+	})
 	if err == nil {
 		t.Fatal("expected missing result validation error")
 	}
