@@ -8,6 +8,7 @@ package ergo
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -46,7 +47,7 @@ func RunClaim(id string, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	return writeClaimSuccess(outcome.Graph, id, agentID, opts.JSON)
+	return writeClaimSuccess(outcome.Graph, id, agentID, filepath.Dir(dir), opts.JSON)
 }
 
 func RunClaimOldestReady(opts GlobalOptions) error {
@@ -106,19 +107,19 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 	if chosenID == "" || updatedGraph == nil {
 		return errors.New("internal error: missing chosen task")
 	}
-	return writeClaimSuccess(updatedGraph, chosenID, agentID, opts.JSON)
+	return writeClaimSuccess(updatedGraph, chosenID, agentID, filepath.Dir(dir), opts.JSON)
 }
 
-func writeClaimSuccess(graph *Graph, id, agentID string, jsonOutput bool) error {
+func writeClaimSuccess(graph *Graph, id, agentID, repoDir string, jsonOutput bool) error {
 	task := graph.Tasks[id]
 	if task == nil {
 		return errors.New("internal error: missing claimed task")
 	}
 	next := map[string]string{
-		"done":    "ergo --json done " + id,
-		"block":   "ergo --json block " + id,
-		"cancel":  "ergo --json cancel " + id,
-		"release": "ergo --json release " + id,
+		"done":    "ergo done " + id,
+		"block":   "ergo block " + id,
+		"cancel":  "ergo cancel " + id,
+		"release": "ergo release " + id,
 	}
 	if jsonOutput {
 		return writeJSON(os.Stdout, map[string]interface{}{
@@ -134,16 +135,13 @@ func writeClaimSuccess(graph *Graph, id, agentID string, jsonOutput bool) error 
 			"next_commands": next,
 		})
 	}
-	fmt.Println(task.ID)
-	fmt.Println(task.Title)
-	if task.Body != "" {
-		fmt.Println(task.Body)
-	}
-	fmt.Println("Next:")
-	fmt.Println("  " + next["done"])
-	fmt.Println("  " + next["block"])
-	fmt.Println("  " + next["cancel"])
-	fmt.Println("  " + next["release"])
+	printTaskDocument(os.Stdout, task, graph.Meta[id], graph, repoDir)
+	fmt.Println("## Next")
+	fmt.Println()
+	fmt.Println("- `" + next["done"] + "`")
+	fmt.Println("- `" + next["block"] + "`")
+	fmt.Println("- `" + next["cancel"] + "`")
+	fmt.Println("- `" + next["release"] + "`")
 	return nil
 }
 
@@ -354,8 +352,6 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 		return writeJSON(os.Stdout, buildTaskListItems(tasksOnly, graph, repoDir))
 	}
 
-	fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json list' instead for structured output.")
-
 	// Tree view (human-friendly hierarchical output)
 	if epicID != "" {
 		epic := graph.Tasks[epicID]
@@ -519,74 +515,93 @@ func buildTaskShowOutput(task *Task, meta *TaskMeta, repoDir string) taskShowOut
 type frontMatterField struct {
 	key   string
 	value string
+	raw   bool
 }
 
-// printTaskDetails prints task show output as a Markdown document.
-func printTaskDetails(task *Task, repoDir string) {
-	writeShowFrontMatter([]frontMatterField{
+// printTaskDocument renders the complete leaf representation used by show and claim.
+func printTaskDocument(w io.Writer, task *Task, meta *TaskMeta, graph *Graph, repoDir string) {
+	fields := []frontMatterField{
 		{key: "id", value: task.ID},
 		{key: "title", value: task.Title},
 		{key: "state", value: task.State},
-		{key: "epic_id", value: task.EpicID},
-		{key: "created_at", value: formatTime(task.CreatedAt)},
-		{key: "updated_at", value: formatTime(task.UpdatedAt)},
-	})
+	}
+	if task.EpicID != "" {
+		fields = append(fields, frontMatterField{key: "container_id", value: task.EpicID})
+	}
+	if task.ClaimedBy != "" {
+		fields = append(fields, frontMatterField{key: "claimed_by", value: task.ClaimedBy})
+		if claimedAt := claimedAtForTask(task, meta); claimedAt != "" {
+			fields = append(fields, frontMatterField{key: "claimed_at", value: claimedAt})
+		}
+	}
+	fields = append(fields,
+		frontMatterField{key: "created_at", value: formatTime(task.CreatedAt)},
+		frontMatterField{key: "updated_at", value: formatTime(task.UpdatedAt)},
+	)
+	writeShowFrontMatter(w, fields)
 
-	fmt.Printf("# %s\n\n", showTitle(task.Title, task.ID))
+	fmt.Fprintf(w, "# %s\n\n", showTitle(task.Title, task.ID))
 	if task.Body != "" {
-		printMarkdownBody(task.Body)
-		fmt.Println()
+		printMarkdownBody(w, task.Body)
+		fmt.Fprintln(w)
 	}
 
-	printTaskResultsMarkdown(task.Results, repoDir, "## Results")
+	printTaskDependenciesMarkdown(w, task, graph, "## Dependencies")
+	printTaskMessagesMarkdown(w, task.Messages, "## Messages")
+	printTaskResultsMarkdown(w, task.Results, repoDir, "## Results")
 }
 
-// printEpicDetails renders epic show output as a Markdown document.
-func printEpicDetails(epic *Task, children []*Task, repoDir string) {
-	writeShowFrontMatter([]frontMatterField{
-		{key: "container", value: "true"},
+// printContainerDocument renders a container and the complete details of each child.
+func printContainerDocument(w io.Writer, epic *Task, children []*Task, graph *Graph, repoDir string) {
+	writeShowFrontMatter(w, []frontMatterField{
+		{key: "container", value: "true", raw: true},
 		{key: "id", value: epic.ID},
 		{key: "title", value: epic.Title},
 		{key: "created_at", value: formatTime(epic.CreatedAt)},
 		{key: "updated_at", value: formatTime(epic.UpdatedAt)},
 	})
 
-	fmt.Printf("# %s\n\n", showTitle(epic.Title, epic.ID))
+	fmt.Fprintf(w, "# %s\n\n", showTitle(epic.Title, epic.ID))
 	if epic.Body != "" {
-		printMarkdownBody(epic.Body)
-		fmt.Println()
+		printMarkdownBody(w, epic.Body)
+		fmt.Fprintln(w)
 	}
+	printTaskDependenciesMarkdown(w, epic, graph, "## Dependencies")
 
-	fmt.Println("## Tasks")
-	fmt.Println()
+	fmt.Fprintln(w, "## Tasks")
+	fmt.Fprintln(w)
 	for index, child := range children {
-		fmt.Printf("### %s - %s\n\n", child.ID, showTitle(child.Title, child.ID))
-		fmt.Printf("- state: %s\n", child.State)
-		if len(child.Results) > 0 {
-			fmt.Println("- results:")
-			for _, result := range child.Results {
-				fileURL := deriveFileURL(result.Path, repoDir)
-				fmt.Printf("  - [%s](%s): %s\n", result.Path, fileURL, result.Summary)
-			}
+		fmt.Fprintf(w, "### %s - %s\n\n", child.ID, showTitle(child.Title, child.ID))
+		fmt.Fprintf(w, "- state: %s\n", child.State)
+		if child.ClaimedBy != "" {
+			fmt.Fprintf(w, "- claimed by: %s\n", child.ClaimedBy)
 		}
-		fmt.Println()
+		fmt.Fprintln(w)
 
 		if child.Body != "" {
-			printMarkdownBody(child.Body)
+			printMarkdownBody(w, child.Body)
+			fmt.Fprintln(w)
 		}
+		printTaskDependenciesMarkdown(w, child, graph, "#### Dependencies")
+		printTaskMessagesMarkdown(w, child.Messages, "#### Messages")
+		printTaskResultsMarkdown(w, child.Results, repoDir, "#### Results")
 		if index < len(children)-1 {
-			fmt.Println()
+			fmt.Fprintln(w)
 		}
 	}
 }
 
-func writeShowFrontMatter(fields []frontMatterField) {
-	fmt.Println("---")
+func writeShowFrontMatter(w io.Writer, fields []frontMatterField) {
+	fmt.Fprintln(w, "---")
 	for _, field := range fields {
-		fmt.Printf("%s: %s\n", field.key, yamlString(field.value))
+		if field.raw {
+			fmt.Fprintf(w, "%s: %s\n", field.key, field.value)
+			continue
+		}
+		fmt.Fprintf(w, "%s: %s\n", field.key, yamlString(field.value))
 	}
-	fmt.Println("---")
-	fmt.Println()
+	fmt.Fprintln(w, "---")
+	fmt.Fprintln(w)
 }
 
 func yamlString(value string) string {
@@ -600,23 +615,62 @@ func showTitle(title string, fallback string) string {
 	return title
 }
 
-func printMarkdownBody(body string) {
-	fmt.Print(body)
+func printMarkdownBody(w io.Writer, body string) {
+	fmt.Fprint(w, body)
 	if !strings.HasSuffix(body, "\n") {
-		fmt.Println()
+		fmt.Fprintln(w)
 	}
 }
 
-func printTaskResultsMarkdown(results []Result, repoDir string, heading string) {
+func printTaskDependenciesMarkdown(w io.Writer, task *Task, graph *Graph, heading string) {
+	if len(task.Deps) == 0 && len(task.RDeps) == 0 {
+		return
+	}
+	fmt.Fprintln(w, heading)
+	for _, id := range task.Deps {
+		fmt.Fprintf(w, "- depends on `%s`", id)
+		if dep := graph.Tasks[id]; dep != nil && dep.Title != "" {
+			fmt.Fprintf(w, ": %s", dep.Title)
+		}
+		fmt.Fprintln(w)
+	}
+	for _, id := range task.RDeps {
+		fmt.Fprintf(w, "- blocks `%s`", id)
+		if dependent := graph.Tasks[id]; dependent != nil && dependent.Title != "" {
+			fmt.Fprintf(w, ": %s", dependent.Title)
+		}
+		fmt.Fprintln(w)
+	}
+	fmt.Fprintln(w)
+}
+
+func printTaskMessagesMarkdown(w io.Writer, messages []Message, heading string) {
+	if len(messages) == 0 {
+		return
+	}
+	fmt.Fprintln(w, heading)
+	fmt.Fprintln(w)
+	for _, message := range messages {
+		fmt.Fprintf(w, "**%s - %s**\n\n", message.Kind, formatTime(message.CreatedAt))
+		printMarkdownBody(w, message.Text)
+		fmt.Fprintln(w)
+	}
+}
+
+func printTaskResultsMarkdown(w io.Writer, results []Result, repoDir string, heading string) {
 	if len(results) == 0 {
 		return
 	}
-	fmt.Println(heading)
+	fmt.Fprintln(w, heading)
 	for _, result := range results {
 		fileURL := deriveFileURL(result.Path, repoDir)
-		fmt.Printf("- [%s](%s): %s\n", result.Path, fileURL, result.Summary)
+		fmt.Fprintf(w, "- [%s](%s)", result.Path, fileURL)
+		if result.Summary != "" && result.Summary != result.Path {
+			fmt.Fprintf(w, ": %s", result.Summary)
+		}
+		fmt.Fprintln(w)
 	}
-	fmt.Println()
+	fmt.Fprintln(w)
 }
 
 func RunShow(id string, opts GlobalOptions) error {
@@ -662,13 +716,11 @@ func RunShow(id string, opts GlobalOptions) error {
 		}
 		return writeJSON(os.Stdout, output)
 	}
-	fmt.Fprintln(os.Stderr, "Coding agents should call 'ergo --json show <id>' instead for structured output.")
-
 	if isContainer(task, graph) {
-		printEpicDetails(task, childTasks, repoDir)
+		printContainerDocument(os.Stdout, task, childTasks, graph, repoDir)
 		return nil
 	}
-	printTaskDetails(task, repoDir)
+	printTaskDocument(os.Stdout, task, graph.Meta[id], graph, repoDir)
 	return nil
 }
 

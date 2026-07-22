@@ -499,7 +499,7 @@ func TestShowEpicHumanDocumentFirstLayout(t *testing.T) {
 	if !strings.HasPrefix(stdout, "---\n") {
 		t.Fatalf("expected front matter document start: %s", stdout)
 	}
-	if !strings.Contains(stdout, "\ncontainer: \"true\"\n") || !strings.Contains(stdout, "\nid: \""+epicID+"\"\n") {
+	if !strings.Contains(stdout, "\ncontainer: true\n") || !strings.Contains(stdout, "\nid: \""+epicID+"\"\n") {
 		t.Fatalf("expected container front matter keys in output: %s", stdout)
 	}
 	if !strings.Contains(stdout, "# Plan Epic") {
@@ -533,11 +533,11 @@ func TestShowEpicHumanDocumentFirstLayout(t *testing.T) {
 	if !strings.Contains(task1Section, "- state: ") {
 		t.Fatalf("expected child state metadata in task section: %s", task1Section)
 	}
-	if !strings.Contains(task1Section, "- results:") {
+	if !strings.Contains(task1Section, "#### Results") {
 		t.Fatalf("expected child results metadata in task section: %s", task1Section)
 	}
-	if strings.Contains(task1Section, "claim:") || strings.Contains(task1Section, "deps:") || strings.Contains(task1Section, "rdeps:") || strings.Contains(task1Section, "created:") || strings.Contains(task1Section, "updated:") {
-		t.Fatalf("expected child metadata to exclude claim/deps/rdeps/timestamps: %s", task1Section)
+	if !strings.Contains(task1Section, "#### Dependencies") || !strings.Contains(task1Section, "blocks `"+task2+"`") {
+		t.Fatalf("expected child dependencies in task section: %s", task1Section)
 	}
 }
 
@@ -1724,7 +1724,7 @@ func TestClaim_WithAgentFlag(t *testing.T) {
 	}
 }
 
-func TestClaim_JSONIncludesNextCommands(t *testing.T) {
+func TestClaimIncludesTaskAndNextCommands(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, _, code := runNewTaskWithBody(t, dir, "Test task", `{"title":"Test task"}`)
@@ -1734,27 +1734,26 @@ func TestClaim_JSONIncludesNextCommands(t *testing.T) {
 	taskID := strings.TrimSpace(stdout)
 
 	agentID := "sonnet@agent-host"
-	stdout, _, code = runErgo(t, dir, "", "--json", "claim", taskID, "--agent", agentID)
+	stdout, stderr, code := runErgo(t, dir, "", "claim", taskID, "--agent", agentID)
 	if code != 0 {
-		t.Fatalf("claim --json failed: exit %d", code)
+		t.Fatalf("claim failed: exit %d stderr=%q", code, stderr)
 	}
-
-	var out map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-		t.Fatalf("failed to parse claim output: %v", err)
+	if !strings.HasPrefix(stdout, "---\nid: \""+taskID+"\"\n") {
+		t.Fatalf("claim ID is not in fixed front matter position: %s", stdout)
 	}
-	next, ok := out["next_commands"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected next_commands object, got %T", out["next_commands"])
+	for _, want := range []string{"state: \"doing\"", "claimed_by: \"" + agentID + "\"", "# Test task", "Test task", "## Next"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("claim output missing %q: %s", want, stdout)
+		}
 	}
 	for _, verb := range []string{"done", "block", "cancel", "release"} {
-		if next[verb] != "ergo --json "+verb+" "+taskID {
-			t.Fatalf("unexpected %s command: %v", verb, next[verb])
+		if !strings.Contains(stdout, "`ergo "+verb+" "+taskID+"`") {
+			t.Fatalf("claim output missing %s command: %s", verb, stdout)
 		}
 	}
 }
 
-func TestClaimOldestReady_JSONIncludesNextCommands(t *testing.T) {
+func TestClaimOldestReadyIncludesNextCommands(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, _, code := runNewTaskWithBody(t, dir, "Test task", `{"title":"Test task"}`)
@@ -1764,18 +1763,15 @@ func TestClaimOldestReady_JSONIncludesNextCommands(t *testing.T) {
 	taskID := strings.TrimSpace(stdout)
 
 	agentID := "sonnet@agent-host"
-	stdout, _, code = runErgo(t, dir, "", "--json", "claim", "--agent", agentID)
+	stdout, stderr, code := runErgo(t, dir, "", "claim", "--agent", agentID)
 	if code != 0 {
-		t.Fatalf("claim oldest-ready --json failed: exit %d", code)
+		t.Fatalf("claim oldest-ready failed: exit %d stderr=%q", code, stderr)
 	}
-
-	var out map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-		t.Fatalf("failed to parse claim output: %v", err)
+	if !strings.HasPrefix(stdout, "---\nid: \""+taskID+"\"\n") {
+		t.Fatalf("claim ID is not in fixed front matter position: %s", stdout)
 	}
-	next, ok := out["next_commands"].(map[string]interface{})
-	if !ok || next["done"] != "ergo --json done "+taskID || next["release"] != "ergo --json release "+taskID {
-		t.Fatalf("unexpected next_commands: %v", out["next_commands"])
+	if !strings.Contains(stdout, "`ergo done "+taskID+"`") || !strings.Contains(stdout, "`ergo release "+taskID+"`") {
+		t.Fatalf("unexpected next commands: %s", stdout)
 	}
 }
 
@@ -2194,8 +2190,8 @@ func TestListEpicFilterHuman(t *testing.T) {
 	if strings.Contains(stdout, "No tasks in this epic.") {
 		t.Errorf("did not expect 'No tasks in this epic.' when epic has tasks")
 	}
-	if !strings.Contains(stderr, "Coding agents should call 'ergo --json list'") {
-		t.Errorf("expected agents hint in stderr, got: %s", stderr)
+	if stderr != "" {
+		t.Errorf("expected no list warning on stderr, got: %s", stderr)
 	}
 
 	_, stderr, code = runErgo(t, dir, "", "list", "--epic", "ZZZZZZ")

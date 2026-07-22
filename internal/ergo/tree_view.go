@@ -538,12 +538,12 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 	icon := stateIcon(task, node.isReady)
 	title := task.Title
 
-	// Annotations - keep minimal to reduce noise
-	var annotations []string
+	// Literal status keeps the compact view understandable without an icon legend.
+	annotations := []string{"[" + taskStatusLabel(task, node.isReady) + "]"}
 
 	// Claimed by (always show - this is actionable info)
 	if task.ClaimedBy != "" {
-		annotations = append(annotations, "@"+task.ClaimedBy)
+		annotations = append(annotations, "claimed:"+task.ClaimedBy)
 	}
 
 	// Blocking info - only show blockers that aren't already shown by parent
@@ -615,6 +615,19 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 	for i, child := range node.children {
 		renderNode(w, child, childPrefix, i == len(node.children)-1, false, graph, repoDir, useColor, childBlockers, termWidth)
 	}
+}
+
+func taskStatusLabel(task *Task, ready bool) string {
+	if task.IsEpic {
+		return "container"
+	}
+	if task.State == stateTodo {
+		if ready {
+			return "ready"
+		}
+		return "waiting"
+	}
+	return task.State
 }
 
 // abbreviate truncates a string to maxLen, adding "…" if truncated.

@@ -263,6 +263,23 @@ func TestRenderTreeRootRowsNoConnectors(t *testing.T) {
 	}
 }
 
+func TestRenderTreeUsesLiteralAgentStatuses(t *testing.T) {
+	graph := &Graph{
+		Tasks: map[string]*Task{
+			"READY1": {ID: "READY1", State: stateTodo, Title: "Ready"},
+			"DOING1": {ID: "DOING1", State: stateDoing, ClaimedBy: "agent@host", Title: "Doing"},
+		},
+		Deps: map[string]map[string]struct{}{},
+	}
+	roots := buildListRoots(graph, false, false, "")
+	var buf bytes.Buffer
+	renderTreeView(&buf, roots, graph, "/repo", false)
+	output := buf.String()
+	if !strings.Contains(output, "[ready]") || !strings.Contains(output, "[doing]") || !strings.Contains(output, "claimed:agent@host") {
+		t.Fatalf("list output lacks literal status or claim context: %s", output)
+	}
+}
+
 // TestFilterNodesByReady verifies that --ready filtering works correctly.
 func TestFilterNodesByReady(t *testing.T) {
 	// Create a graph with various task states
@@ -282,9 +299,9 @@ func TestFilterNodesByReady(t *testing.T) {
 		RDeps: map[string]map[string]struct{}{},
 	}
 
-		t.Run("readyOnly filters out non-ready tasks", func(t *testing.T) {
-			nodes := []*treeNode{
-				{task: graph.Tasks["T1"]}, // ready
+	t.Run("readyOnly filters out non-ready tasks", func(t *testing.T) {
+		nodes := []*treeNode{
+			{task: graph.Tasks["T1"]}, // ready
 			{task: graph.Tasks["T2"]}, // done, not ready
 			{task: graph.Tasks["T3"]}, // canceled, not ready
 			{task: graph.Tasks["T4"]}, // doing, not ready
@@ -292,7 +309,7 @@ func TestFilterNodesByReady(t *testing.T) {
 			{task: graph.Tasks["T6"]}, // ready
 		}
 
-			filtered := filterNodesByReady(nodes, graph)
+		filtered := filterNodesByReady(nodes, graph)
 
 		// Should only have T1 and T6 (both ready)
 		if len(filtered) != 2 {
@@ -304,9 +321,9 @@ func TestFilterNodesByReady(t *testing.T) {
 		}
 	})
 
-		t.Run("readyOnly excludes epics with no ready children", func(t *testing.T) {
-			nodes := []*treeNode{
-				{
+	t.Run("readyOnly excludes epics with no ready children", func(t *testing.T) {
+		nodes := []*treeNode{
+			{
 				task: &Task{ID: "E1", IsEpic: true},
 				children: []*treeNode{
 					{task: graph.Tasks["T2"]}, // done, not ready
@@ -322,7 +339,7 @@ func TestFilterNodesByReady(t *testing.T) {
 			},
 		}
 
-			filtered := filterNodesByReady(nodes, graph)
+		filtered := filterNodesByReady(nodes, graph)
 
 		// Should only have E2 (has ready child T1), not E1
 		if len(filtered) != 1 {
@@ -340,7 +357,7 @@ func TestFilterNodesByReady(t *testing.T) {
 		}
 	})
 
-	}
+}
 
 // TestFormatTreeLineTruncation verifies that long lines are truncated to prevent wrapping.
 func TestFormatTreeLineTruncation(t *testing.T) {
