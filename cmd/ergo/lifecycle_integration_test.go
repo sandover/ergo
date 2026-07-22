@@ -66,6 +66,35 @@ func TestReleaseLifecycleStates(t *testing.T) {
 	}
 }
 
+func TestLifecycleMessageCardinality(t *testing.T) {
+	for _, verb := range []string{"done", "block", "cancel", "release"} {
+		for _, messages := range [][]string{nil, {"one note"}, {"first note", "second note"}} {
+			name := verb + "-" + string(rune('0'+len(messages)))
+			t.Run(name, func(t *testing.T) {
+				dir := setupErgo(t)
+				id := createLifecycleTask(t, dir)
+				args := []string{verb, id}
+				for _, message := range messages {
+					args = append(args, "-m", message)
+				}
+				if _, stderr, code := runErgo(t, dir, "", args...); code != 0 {
+					t.Fatalf("%s failed: %s", verb, stderr)
+				}
+				logged := readLifecycleMessages(t, dir, id)
+				if len(messages) == 0 {
+					if len(logged) != 0 {
+						t.Fatalf("unexpected messages: %#v", logged)
+					}
+					return
+				}
+				if len(logged) != 1 || logged[0].Kind != verb || logged[0].Text != strings.Join(messages, "\n\n") {
+					t.Fatalf("messages = %#v", logged)
+				}
+			})
+		}
+	}
+}
+
 func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 	dir := setupErgo(t)
 	id := createLifecycleTask(t, dir)
@@ -92,7 +121,7 @@ func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 	if len(messages) != 1 || messages[0].Kind != "done" || messages[0].Text != "Primary result\n\nVerified cleanly" {
 		t.Fatalf("messages = %#v", messages)
 	}
-	if strings.Count(shown, "[result.txt](file://") != 1 {
+	if strings.Count(shown, "[result.txt](file://") != 1 || strings.Contains(shown, "): result.txt") {
 		t.Fatalf("show result missing: %s", shown)
 	}
 
@@ -225,12 +254,12 @@ func putLifecycleTaskInState(t *testing.T, dir, id, state string) {
 		}
 	case "error":
 		putLifecycleTaskInState(t, dir, id, "doing")
-		_, stderr, code := runSetTask(t, dir, id, `{"state":"error"}`)
+		_, stderr, code := putTaskInState(t, dir, id, "error", "")
 		if code != 0 {
 			t.Fatalf("set error failed: %s", stderr)
 		}
 	default:
-		_, stderr, code := runSetTask(t, dir, id, `{"state":"`+state+`"}`)
+		_, stderr, code := putTaskInState(t, dir, id, state, "")
 		if code != 0 {
 			t.Fatalf("set %s failed: %s", state, stderr)
 		}

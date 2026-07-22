@@ -8,7 +8,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -148,111 +147,45 @@ func runNewTaskWithBody(t *testing.T, dir string, body string, inlineJSON string
 	return runErgo(t, dir, body, args...)
 }
 
-func runSetTask(t *testing.T, dir string, id string, inlineJSON string, extraArgs ...string) (stdout, stderr string, exitCode int) {
+// putTaskInState prepares graph scenarios through the public lifecycle verbs.
+// Legacy error is the one exception because v3 intentionally cannot create it.
+func putTaskInState(t *testing.T, dir, id, state, agent string) (string, string, int) {
 	t.Helper()
-	return runLegacyMutationFixture(t, dir, id, "", false, inlineJSON, extraArgs...)
-}
-
-func runSetTaskWithBody(t *testing.T, dir string, id string, body string, inlineJSON string, extraArgs ...string) (stdout, stderr string, exitCode int) {
-	t.Helper()
-	return runLegacyMutationFixture(t, dir, id, body, true, inlineJSON, extraArgs...)
-}
-
-// runLegacyMutationFixture keeps older integration scenarios readable while
-// routing them through the v2 commands. Legacy error setup appends a historical
-// state event directly because v2 deliberately has no command that creates it.
-func runLegacyMutationFixture(t *testing.T, dir, id, body string, bodySet bool, inlineJSON string, extraArgs ...string) (string, string, int) {
-	t.Helper()
-	var input struct {
-		Title  *string `json:"title"`
-		Epic   *string `json:"epic"`
-		State  *string `json:"state"`
-		Claim  *string `json:"claim"`
-		Result *string `json:"result"`
-	}
-	if inlineJSON != "" {
-		if err := json.Unmarshal([]byte(inlineJSON), &input); err != nil {
-			return "", "invalid fixture JSON: " + err.Error(), 1
+	switch state {
+	case "todo":
+		return runErgo(t, dir, "", "release", id)
+	case "doing":
+		if agent == "" {
+			agent = "fixture@local"
 		}
-	}
-	stdout, stderr, code := "", "", 0
-	run := func(stdin string, args ...string) bool {
-		args = append(args, extraArgs...)
-		stdout, stderr, code = runErgo(t, dir, stdin, args...)
-		return code == 0
-	}
-	if input.Title != nil && !run("", "title", id, *input.Title) {
-		return stdout, stderr, code
-	}
-	if input.Epic != nil {
-		args := []string{"move", id}
-		if *input.Epic == "" {
-			args = append(args, "--root")
-		} else {
-			args = append(args, *input.Epic)
-		}
-		if !run("", args...) {
-			return stdout, stderr, code
-		}
-	}
-	if bodySet && (input.State == nil || *input.State == "doing" || *input.State == "error") {
-		if !run(body, "body", id) {
-			return stdout, stderr, code
-		}
-		bodySet = false
-	}
-	if input.State != nil {
-		state := *input.State
-		switch state {
-		case "doing":
-			agent := "fixture@local"
-			if input.Claim != nil && *input.Claim != "" {
-				agent = *input.Claim
-			}
-			if !run("", "claim", id, "--agent", agent) {
+		return runErgo(t, dir, "", "claim", id, "--agent", agent)
+	case "blocked":
+		return runErgo(t, dir, "", "block", id)
+	case "done":
+		return runErgo(t, dir, "", "done", id)
+	case "canceled":
+		return runErgo(t, dir, "", "cancel", id)
+	case "error":
+		if agent != "" {
+			if stdout, stderr, code := runErgo(t, dir, "", "claim", id, "--agent", agent); code != 0 {
 				return stdout, stderr, code
 			}
-		case "done", "blocked", "canceled", "todo":
-			verb := map[string]string{"done": "done", "blocked": "block", "canceled": "cancel", "todo": "release"}[state]
-			args := []string{verb, id}
-			if input.Result != nil {
-				args = append(args, "--result", *input.Result)
-			}
-			stdin := ""
-			if bodySet {
-				stdin = body
-			}
-			if !run(stdin, args...) {
-				return stdout, stderr, code
-			}
-			bodySet = false
-		case "error":
-			if input.Claim != nil && *input.Claim != "" {
-				if !run("", "claim", id, "--agent", *input.Claim) {
-					return stdout, stderr, code
-				}
-			}
-			appendLegacyErrorState(t, dir, id)
-			stdout, stderr, code = id+"\n", "", 0
-		default:
-			return "", "invalid state", 1
 		}
-	} else if input.Claim != nil {
-		if !run("", "claim", id, "--agent", *input.Claim) {
-			return stdout, stderr, code
-		}
+		appendLegacyErrorState(t, dir, id)
+		return id + "\n", "", 0
+	default:
+		return "", "invalid fixture state", 1
 	}
-	if bodySet && !run(body, "body", id) {
-		return stdout, stderr, code
-	}
-	if input.Result != nil && input.State == nil {
-		shown := showTaskFields(t, dir, id)
-		verb := map[string]string{"todo": "release", "doing": "release", "blocked": "block", "done": "done", "canceled": "cancel", "error": "release"}[shown["state"]]
-		if !run("", verb, id, "--result", *input.Result) {
-			return stdout, stderr, code
-		}
-	}
-	return stdout, stderr, code
+}
+
+func attachResultForTest(t *testing.T, dir, id, path string) (string, string, int) {
+	t.Helper()
+	state := showTaskFields(t, dir, id)["state"]
+	verb := map[string]string{
+		"todo": "release", "doing": "release", "blocked": "block",
+		"done": "done", "canceled": "cancel", "error": "release",
+	}[state]
+	return runErgo(t, dir, "", verb, id, "--result", path)
 }
 
 func appendLegacyErrorState(t *testing.T, dir, id string) {
@@ -494,11 +427,11 @@ func TestShowEpicHumanDocumentFirstLayout(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "docs", "r1.md"), []byte("hello"), 0644); err != nil {
 		t.Fatalf("write result file failed: %v", err)
 	}
-	_, _, code = runSetTask(t, dir, task1, `{"result":"docs/r1.md"}`)
+	_, _, code = attachResultForTest(t, dir, task1, "docs/r1.md")
 	if code != 0 {
 		t.Fatalf("set result failed: exit %d", code)
 	}
-	_, _, code = runSetTask(t, dir, task2, `{"claim":"agent-x"}`)
+	_, _, code = putTaskInState(t, dir, task2, "doing", "agent-x")
 	if code != 0 {
 		t.Fatalf("set claim failed: exit %d", code)
 	}
@@ -639,7 +572,7 @@ func TestShowTaskHeaderDense(t *testing.T) {
 		t.Fatalf("sequence failed: exit %d", code)
 	}
 
-	_, _, code = runSetTask(t, dir, taskB, `{"claim":"agent-x"}`)
+	_, _, code = putTaskInState(t, dir, taskB, "doing", "agent-x")
 	if code != 0 {
 		t.Fatalf("set claim failed: exit %d", code)
 	}
@@ -649,7 +582,7 @@ func TestShowTaskHeaderDense(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "docs", "r1.md"), []byte("hello"), 0644); err != nil {
 		t.Fatalf("write result file failed: %v", err)
 	}
-	_, _, code = runSetTask(t, dir, taskB, `{"result":"docs/r1.md"}`)
+	_, _, code = attachResultForTest(t, dir, taskB, "docs/r1.md")
 	if code != 0 {
 		t.Fatalf("set result failed: exit %d", code)
 	}
@@ -712,19 +645,65 @@ func TestParentCommandsRejectUnexpectedArguments(t *testing.T) {
 	}
 }
 
-func TestMutationCommandRegistrationMatchesV2(t *testing.T) {
+func TestCommandRegistrationMatchesV3(t *testing.T) {
 	registered := map[string]bool{}
 	for _, command := range rootCmd.Commands() {
 		registered[command.Name()] = true
 	}
-	for _, name := range []string{"claim", "done", "block", "cancel", "release", "title", "body", "move"} {
+	for _, name := range []string{"claim", "done", "block", "cancel", "release", "title", "body", "move", "sequence", "unsequence"} {
 		if !registered[name] {
-			t.Errorf("missing v2 mutation command %s", name)
+			t.Errorf("missing v3 command %s", name)
 		}
 	}
 	for _, name := range []string{"set", "reopen"} {
 		if registered[name] {
 			t.Errorf("removed command %s is still registered", name)
+		}
+	}
+}
+
+func TestPathAndCreationConfirmations(t *testing.T) {
+	dir := t.TempDir()
+	stdout, stderr, code := runErgo(t, dir, "", "init")
+	wantPath := filepath.Join(dir, ".ergo")
+	if code != 0 || strings.TrimSpace(stdout) != ".ergo" || stderr != "" {
+		t.Fatalf("init: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	stdout, stderr, code = runErgo(t, dir, "", "where")
+	if code != 0 || strings.TrimSpace(stdout) != wantPath || stderr != "" {
+		t.Fatalf("where: code=%d stdout=%q stderr=%q want=%q", code, stdout, stderr, wantPath)
+	}
+	stdout, stderr, code = runNewTask(t, dir, `{"title":"Confirmed task"}`)
+	if code != 0 || len(strings.TrimSpace(stdout)) != 6 || stderr != "" {
+		t.Fatalf("new task: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
+func TestNoReadyClaimIsReadable(t *testing.T) {
+	dir := setupErgo(t)
+	stdout, stderr, code := runErgo(t, dir, "", "claim", "--agent", "agent@local")
+	if code != 0 || stdout != "No ready ergo tasks.\n" || stderr != "" {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
+func TestSuccessfulOutputNeverRedirectsAgentsToAnotherEncoding(t *testing.T) {
+	dir := setupErgo(t)
+	stdout, _, code := runNewTask(t, dir, `{"title":"Readable task"}`)
+	if code != 0 {
+		t.Fatal("new task failed")
+	}
+	id := strings.TrimSpace(stdout)
+	commands := [][]string{{"list"}, {"show", id}, {"claim", id, "--agent", "agent@local"}}
+	for _, args := range commands {
+		stdout, stderr, code := runErgo(t, dir, "", args...)
+		if code != 0 {
+			t.Fatalf("%v failed: %s", args, stderr)
+		}
+		trimmed := strings.TrimSpace(stdout)
+		if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") ||
+			strings.Contains(strings.ToLower(stdout), "json output") || strings.Contains(strings.ToLower(stderr), "encoding") {
+			t.Fatalf("%v emitted alternate-encoding output: stdout=%q stderr=%q", args, stdout, stderr)
 		}
 	}
 }
@@ -775,7 +754,7 @@ func TestNewTask_ValidationError(t *testing.T) {
 	}
 }
 
-func TestSet_StateTransition(t *testing.T) {
+func TestDoneStateTransition(t *testing.T) {
 	dir := setupErgo(t)
 
 	// Create task
@@ -786,7 +765,7 @@ func TestSet_StateTransition(t *testing.T) {
 	taskID := strings.TrimSpace(stdout)
 
 	// Set state to done
-	_, _, code = runSetTask(t, dir, taskID, `{"state":"done"}`)
+	_, _, code = putTaskInState(t, dir, taskID, "done", "")
 	if code != 0 {
 		t.Fatalf("set state=done failed: exit %d", code)
 	}
@@ -824,7 +803,7 @@ func TestBodyThenLifecyclePreservesExplicitBodyEdit(t *testing.T) {
 	}
 }
 
-func TestSet_MetadataOnly_KeepsBody(t *testing.T) {
+func TestBlockKeepsBody(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, _, code := runNewTaskWithBody(t, dir, "Test task", `{"title":"Test task"}`)
@@ -1035,7 +1014,7 @@ func TestSequence_ChainOrder_Readiness(t *testing.T) {
 		t.Fatalf("resequence chain failed: exit %d", code)
 	}
 
-	_, _, code = runSetTask(t, dir, taskA, `{"state":"done"}`)
+	_, _, code = putTaskInState(t, dir, taskA, "done", "")
 	if code != 0 {
 		t.Fatalf("set taskA done failed: exit %d", code)
 	}
@@ -1047,7 +1026,7 @@ func TestSequence_ChainOrder_Readiness(t *testing.T) {
 		t.Fatalf("expected only Task B ready, got %v in %q", ids, stdout)
 	}
 
-	_, _, code = runSetTask(t, dir, taskB, `{"state":"done"}`)
+	_, _, code = putTaskInState(t, dir, taskB, "done", "")
 	if code != 0 {
 		t.Fatalf("set taskB done failed: exit %d", code)
 	}
@@ -1068,7 +1047,7 @@ func TestPrune_DefaultIsDryRun(t *testing.T) {
 		t.Fatalf("new task failed: exit %d", code)
 	}
 	taskID := strings.TrimSpace(stdout)
-	_, _, code = runSetTask(t, dir, taskID, `{"state":"done"}`)
+	_, _, code = putTaskInState(t, dir, taskID, "done", "")
 	if code != 0 {
 		t.Fatalf("set state=done failed: exit %d", code)
 	}
@@ -1100,7 +1079,7 @@ func TestPrune_DryRunNamesPrunedTasks(t *testing.T) {
 		t.Fatalf("new task failed: exit %d", code)
 	}
 	taskID := strings.TrimSpace(stdout)
-	_, _, code = runSetTask(t, dir, taskID, `{"state":"done"}`)
+	_, _, code = putTaskInState(t, dir, taskID, "done", "")
 	if code != 0 {
 		t.Fatalf("set state=done failed: exit %d", code)
 	}
@@ -1122,7 +1101,7 @@ func TestPrune_YesWrites(t *testing.T) {
 		t.Fatalf("new task failed: exit %d", code)
 	}
 	taskID := strings.TrimSpace(stdout)
-	_, _, code = runSetTask(t, dir, taskID, `{"state":"done"}`)
+	_, _, code = putTaskInState(t, dir, taskID, "done", "")
 	if code != 0 {
 		t.Fatalf("set state=done failed: exit %d", code)
 	}
@@ -1156,7 +1135,7 @@ func TestPrune_RemovesDepsAndErrorsOnPrunedIDs(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("sequence failed: exit %d", code)
 	}
-	_, _, code = runSetTask(t, dir, taskB, `{"state":"done"}`)
+	_, _, code = putTaskInState(t, dir, taskB, "done", "")
 	if code != 0 {
 		t.Fatalf("set state=done failed: exit %d", code)
 	}
@@ -1201,7 +1180,7 @@ func TestPrune_PrunesEmptyEpicsAndPreservesActiveTasks(t *testing.T) {
 		t.Fatalf("new task failed: exit %d", code)
 	}
 	taskDone := strings.TrimSpace(stdout)
-	_, _, code = runSetTask(t, dir, taskDone, `{"state":"done"}`)
+	_, _, code = putTaskInState(t, dir, taskDone, "done", "")
 	if code != 0 {
 		t.Fatalf("set state=done failed: exit %d", code)
 	}
@@ -1217,7 +1196,7 @@ func TestPrune_PrunesEmptyEpicsAndPreservesActiveTasks(t *testing.T) {
 		t.Fatalf("new task failed: exit %d", code)
 	}
 	taskBlocked := strings.TrimSpace(stdout)
-	_, _, code = runSetTask(t, dir, taskBlocked, `{"state":"blocked"}`)
+	_, _, code = putTaskInState(t, dir, taskBlocked, "blocked", "")
 	if code != 0 {
 		t.Fatalf("set state=blocked failed: exit %d", code)
 	}
@@ -1258,7 +1237,7 @@ func TestPrune_CompactRemovesHistory(t *testing.T) {
 		t.Fatalf("new task failed: exit %d", code)
 	}
 	taskID := strings.TrimSpace(stdout)
-	_, _, code = runSetTask(t, dir, taskID, `{"state":"done"}`)
+	_, _, code = putTaskInState(t, dir, taskID, "done", "")
 	if code != 0 {
 		t.Fatalf("set state=done failed: exit %d", code)
 	}
@@ -1364,7 +1343,7 @@ func TestPrune_ConcurrentRuns(t *testing.T) {
 		t.Fatalf("new task failed: exit %d", code)
 	}
 	taskID := strings.TrimSpace(stdout)
-	_, _, code = runSetTask(t, dir, taskID, `{"state":"done"}`)
+	_, _, code = putTaskInState(t, dir, taskID, "done", "")
 	if code != 0 {
 		t.Fatalf("set state=done failed: exit %d", code)
 	}
@@ -1450,22 +1429,22 @@ func TestCompact_PreservesShowOutput(t *testing.T) {
 		t.Fatalf("sequence %s %s failed: exit %d", t1, t2, code)
 	}
 
-	// Mutate T1 across multiple dimensions.
-	_, stderr, code := runSetTaskWithBody(t, dir, t1, "T1\\n\\n## v2\\nmore", `{"claim":"agent-1","state":"doing"}`)
+	// Mutate T1 across multiple dimensions through focused commands.
+	_, stderr, code := runErgo(t, dir, "T1\\n\\n## v2\\nmore", "body", t1)
 	if code != 0 {
-		t.Fatalf("set %s failed: exit %d stderr=%q", t1, code, stderr)
+		t.Fatalf("body %s failed: exit %d stderr=%q", t1, code, stderr)
 	}
-	_, stderr, code = runSetTask(t, dir, t1, `{"state":"error","claim":"agent-1"}`)
+	_, stderr, code = putTaskInState(t, dir, t1, "error", "agent-1")
 	if code != 0 {
-		t.Fatalf("set %s state=error failed: exit %d stderr=%q", t1, code, stderr)
+		t.Fatalf("prepare %s state=error failed: exit %d stderr=%q", t1, code, stderr)
 	}
-	_, stderr, code = runSetTask(t, dir, t1, `{"state":"doing","claim":"agent-1"}`)
+	_, stderr, code = putTaskInState(t, dir, t1, "doing", "agent-1")
 	if code != 0 {
-		t.Fatalf("set %s state=doing failed: exit %d stderr=%q", t1, code, stderr)
+		t.Fatalf("claim %s failed: exit %d stderr=%q", t1, code, stderr)
 	}
-	_, stderr, code = runSetTask(t, dir, t1, `{"state":"done"}`)
+	_, stderr, code = putTaskInState(t, dir, t1, "done", "")
 	if code != 0 {
-		t.Fatalf("set %s state=done failed: exit %d stderr=%q", t1, code, stderr)
+		t.Fatalf("done %s failed: exit %d stderr=%q", t1, code, stderr)
 	}
 
 	// Attach a result to T1 (ensures evidence fields survive compaction).
@@ -1475,7 +1454,7 @@ func TestCompact_PreservesShowOutput(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "docs", "r1.md"), []byte("hello"), 0644); err != nil {
 		t.Fatalf("write result file failed: %v", err)
 	}
-	_, _, code = runSetTask(t, dir, t1, `{"result":"docs/r1.md"}`)
+	_, _, code = attachResultForTest(t, dir, t1, "docs/r1.md")
 	if code != 0 {
 		t.Fatalf("attach result failed: exit %d", code)
 	}
@@ -1512,7 +1491,7 @@ func TestNewContainer_HappyPath(t *testing.T) {
 	}
 }
 
-func TestSet_MultipleFields(t *testing.T) {
+func TestFocusedCommandsCompose(t *testing.T) {
 	dir := setupErgo(t)
 
 	// Create task
@@ -1522,11 +1501,13 @@ func TestSet_MultipleFields(t *testing.T) {
 	}
 	taskID := strings.TrimSpace(stdout)
 
-	// Update multiple fields in one call
-	_, _, code = runSetTask(t, dir, taskID,
-		`{"title":"Updated title","state":"doing","claim":"agent-1"}`)
+	_, _, code = runErgo(t, dir, "", "title", taskID, "Updated title")
 	if code != 0 {
-		t.Fatalf("set failed: exit %d", code)
+		t.Fatalf("title failed: exit %d", code)
+	}
+	_, _, code = putTaskInState(t, dir, taskID, "doing", "agent-1")
+	if code != 0 {
+		t.Fatalf("claim failed: exit %d", code)
 	}
 
 	fields := showTaskFields(t, dir, taskID)
@@ -1648,8 +1629,8 @@ func TestLifecycleOutputsTaskPostcondition(t *testing.T) {
 	}
 }
 
-// TestSetRejectsEpicState verifies that containers cannot have state/claim set.
-func TestSetRejectsEpicState(t *testing.T) {
+// TestContainersRejectLifecycleAndClaim verifies that containers have no work state.
+func TestContainersRejectLifecycleAndClaim(t *testing.T) {
 	dir := setupErgo(t)
 
 	// Create a container (task with children)
@@ -1667,16 +1648,16 @@ func TestSetRejectsEpicState(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		input   string
+		args    []string
 		wantErr string
 	}{
-		{"state rejected", `{"state":"done"}`, "containers do not have state"},
-		{"claim rejected", `{"claim":"agent-1"}`, "containers cannot be claimed"},
+		{"state rejected", []string{"done", epicID}, "containers do not have state"},
+		{"claim rejected", []string{"claim", epicID, "--agent", "agent-1"}, "containers cannot be claimed"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, stderr, code := runSetTask(t, dir, epicID, tt.input)
+			_, stderr, code := runErgo(t, dir, "", tt.args...)
 			if code == 0 {
 				t.Errorf("expected error, got success")
 			}
@@ -1698,11 +1679,11 @@ func TestListAllIncludesTerminalTasks(t *testing.T) {
 	// Create tasks: one done, one canceled, one todo
 	stdout, _, _ = runNewTask(t, dir, fmt.Sprintf(`{"title":"Done task","epic":"%s"}`, epicID))
 	doneID := strings.TrimSpace(stdout)
-	runSetTask(t, dir, doneID, `{"state":"done"}`)
+	putTaskInState(t, dir, doneID, "done", "")
 
 	stdout, _, _ = runNewTask(t, dir, fmt.Sprintf(`{"title":"Canceled task","epic":"%s"}`, epicID))
 	canceledID := strings.TrimSpace(stdout)
-	runSetTask(t, dir, canceledID, `{"state":"canceled"}`)
+	putTaskInState(t, dir, canceledID, "canceled", "")
 
 	stdout, _, _ = runNewTask(t, dir, fmt.Sprintf(`{"title":"Todo task","epic":"%s"}`, epicID))
 	todoID := strings.TrimSpace(stdout)
@@ -1726,11 +1707,11 @@ func TestListReadyFilters(t *testing.T) {
 
 	stdout, _, _ = runNewTask(t, dir, `{"title":"Done task"}`)
 	doneID := strings.TrimSpace(stdout)
-	runSetTask(t, dir, doneID, `{"state":"done"}`)
+	putTaskInState(t, dir, doneID, "done", "")
 
 	stdout, _, _ = runNewTask(t, dir, `{"title":"Blocked task"}`)
 	blockedID := strings.TrimSpace(stdout)
-	runSetTask(t, dir, blockedID, `{"state":"blocked"}`)
+	putTaskInState(t, dir, blockedID, "blocked", "")
 
 	stdout, _, code := runErgo(t, dir, "", "list", "--ready")
 	if code != 0 {
@@ -1833,7 +1814,7 @@ func TestListSummaryIncludesErrorBucket(t *testing.T) {
 	stdout, _, _ := runNewTask(t, dir, `{"title":"Error task"}`)
 	errorID := strings.TrimSpace(stdout)
 	_, _, _ = runErgo(t, dir, "", "claim", errorID, "--agent", "test@local")
-	_, _, _ = runSetTask(t, dir, errorID, `{"state":"error"}`)
+	_, _, _ = putTaskInState(t, dir, errorID, "error", "")
 
 	stdout, _, code := runErgo(t, dir, "", "list")
 	if code != 0 {
@@ -1852,7 +1833,7 @@ func TestListEpicDoneTasksNotHidden(t *testing.T) {
 
 	stdout, _, _ = runNewTask(t, dir, fmt.Sprintf(`{"title":"Done","epic":"%s"}`, epicID))
 	doneID := strings.TrimSpace(stdout)
-	_, _, _ = runSetTask(t, dir, doneID, `{"state":"done"}`)
+	_, _, _ = putTaskInState(t, dir, doneID, "done", "")
 
 	stdout, _, code := runErgo(t, dir, "", "list", "--epic", epicID)
 	if code != 0 {
@@ -1884,7 +1865,7 @@ func TestListReadyExcludesCompletedTasks(t *testing.T) {
 
 	stdout, _, _ = runNewTask(t, dir, `{"title":"Done task"}`)
 	doneID := strings.TrimSpace(stdout)
-	runSetTask(t, dir, doneID, `{"state":"done"}`)
+	putTaskInState(t, dir, doneID, "done", "")
 
 	stdout, _, code := runErgo(t, dir, "", "list", "--ready")
 	if code != 0 {
@@ -1913,7 +1894,7 @@ func TestListEpicFilterHuman(t *testing.T) {
 
 	stdout, _, _ = runNewTask(t, dir, fmt.Sprintf(`{"title":"A2","epic":"%s"}`, epicA))
 	taskA2 := strings.TrimSpace(stdout)
-	_, _, _ = runSetTask(t, dir, taskA2, `{"state":"done"}`)
+	_, _, _ = putTaskInState(t, dir, taskA2, "done", "")
 
 	stdout, _, _ = runNewTask(t, dir, fmt.Sprintf(`{"title":"B1","epic":"%s"}`, epicB))
 	taskB1 := strings.TrimSpace(stdout)
@@ -1977,7 +1958,7 @@ func TestListReadyEmptyStateWithContext(t *testing.T) {
 
 	stdout, _, _ = runNewTask(t, dir, `{"title":"Blocked task"}`)
 	blockedID := strings.TrimSpace(stdout)
-	_, _, _ = runSetTask(t, dir, blockedID, `{"state":"blocked"}`)
+	_, _, _ = putTaskInState(t, dir, blockedID, "blocked", "")
 
 	stdout, _, code := runErgo(t, dir, "", "list", "--ready")
 	if code != 0 {
@@ -1999,11 +1980,11 @@ func TestListNoActiveTasksSummary(t *testing.T) {
 
 	stdout, _, _ := runNewTask(t, dir, `{"title":"Done task"}`)
 	doneID := strings.TrimSpace(stdout)
-	_, _, _ = runSetTask(t, dir, doneID, `{"state":"done"}`)
+	_, _, _ = putTaskInState(t, dir, doneID, "done", "")
 
 	stdout, _, _ = runNewTask(t, dir, `{"title":"Canceled task"}`)
 	canceledID := strings.TrimSpace(stdout)
-	_, _, _ = runSetTask(t, dir, canceledID, `{"state":"canceled"}`)
+	_, _, _ = putTaskInState(t, dir, canceledID, "canceled", "")
 
 	stdout, _, code := runErgo(t, dir, "", "list")
 	if code != 0 {
@@ -2029,20 +2010,20 @@ func TestListAllSummaryIncludesTerminalStates(t *testing.T) {
 
 	stdout, _, _ = runNewTask(t, dir, `{"title":"Blocked task"}`)
 	blockedID := strings.TrimSpace(stdout)
-	_, _, _ = runSetTask(t, dir, blockedID, `{"state":"blocked"}`)
+	_, _, _ = putTaskInState(t, dir, blockedID, "blocked", "")
 
 	stdout, _, _ = runNewTask(t, dir, `{"title":"Error task"}`)
 	errorID := strings.TrimSpace(stdout)
 	_, _, _ = runErgo(t, dir, "", "claim", errorID, "--agent", "test@local")
-	_, _, _ = runSetTask(t, dir, errorID, `{"state":"error"}`)
+	_, _, _ = putTaskInState(t, dir, errorID, "error", "")
 
 	stdout, _, _ = runNewTask(t, dir, `{"title":"Done task"}`)
 	doneID := strings.TrimSpace(stdout)
-	_, _, _ = runSetTask(t, dir, doneID, `{"state":"done"}`)
+	_, _, _ = putTaskInState(t, dir, doneID, "done", "")
 
 	stdout, _, _ = runNewTask(t, dir, `{"title":"Canceled task"}`)
 	canceledID := strings.TrimSpace(stdout)
-	_, _, _ = runSetTask(t, dir, canceledID, `{"state":"canceled"}`)
+	_, _, _ = putTaskInState(t, dir, canceledID, "canceled", "")
 
 	stdout, _, code := runErgo(t, dir, "", "list", "--all")
 	if code != 0 {
@@ -2067,7 +2048,7 @@ func TestListEpicReadyEmptyState(t *testing.T) {
 
 	stdout, _, _ = runNewTask(t, dir, fmt.Sprintf(`{"title":"Blocked","epic":"%s"}`, epicID))
 	blockedID := strings.TrimSpace(stdout)
-	_, _, _ = runSetTask(t, dir, blockedID, `{"state":"blocked"}`)
+	_, _, _ = putTaskInState(t, dir, blockedID, "blocked", "")
 
 	stdout, _, code := runErgo(t, dir, "", "list", "--epic", epicID, "--ready")
 	if code != 0 {
@@ -2203,7 +2184,7 @@ func TestContainerPromotion_RejectsIfLeafIsDirty(t *testing.T) {
 		dir := setupErgo(t)
 		stdout, _, _ := runNewTask(t, dir, `{"title":"Parent"}`)
 		parentID := strings.TrimSpace(stdout)
-		_, _, _ = runSetTask(t, dir, parentID, `{"state":"doing","claim":"agent-1"}`)
+		_, _, _ = putTaskInState(t, dir, parentID, "doing", "agent-1")
 
 		_, stderr, code := runNewTask(t, dir, fmt.Sprintf(`{"title":"Child","epic":"%s"}`, parentID))
 		if code == 0 {
@@ -2218,7 +2199,7 @@ func TestContainerPromotion_RejectsIfLeafIsDirty(t *testing.T) {
 		dir := setupErgo(t)
 		stdout, _, _ := runNewTask(t, dir, `{"title":"Parent"}`)
 		parentID := strings.TrimSpace(stdout)
-		_, _, _ = runSetTask(t, dir, parentID, `{"state":"done"}`)
+		_, _, _ = putTaskInState(t, dir, parentID, "done", "")
 
 		_, stderr, code := runNewTask(t, dir, fmt.Sprintf(`{"title":"Child","epic":"%s"}`, parentID))
 		if code == 0 {
@@ -2286,8 +2267,8 @@ func TestDepSemantics_ContainerReadiness(t *testing.T) {
 		}
 
 		// Complete B's children → A should become ready
-		runSetTask(t, dir, b1ID, `{"state":"done"}`)
-		runSetTask(t, dir, b2ID, `{"state":"done"}`)
+		putTaskInState(t, dir, b1ID, "done", "")
+		putTaskInState(t, dir, b2ID, "done", "")
 
 		stdout, _, _ = runErgo(t, dir, "", "list", "--ready")
 		if !strings.Contains(stdout, aID) {
@@ -2327,7 +2308,7 @@ func TestDepSemantics_ContainerReadiness(t *testing.T) {
 		}
 
 		// Complete L → T should become ready
-		runSetTask(t, dir, lID, `{"state":"done"}`)
+		putTaskInState(t, dir, lID, "done", "")
 		stdout, _, _ = runErgo(t, dir, "", "list", "--ready")
 		if !strings.Contains(stdout, tID) {
 			t.Fatalf("expected T to be ready after L done: %s", stdout)

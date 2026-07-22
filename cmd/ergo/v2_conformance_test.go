@@ -1,15 +1,17 @@
-// Purpose: Lock the complete v2 mutation vocabulary to real CLI behavior.
+// Purpose: Prove v3 behavior against representative v2 logs and malformed calls.
 // Exports: none.
-// Role: Black-box regressions for legacy logs, malformed calls, and cutover hints.
+// Role: Black-box regressions for legacy replay, malformed calls, and cutover hints.
 // Invariants: fixtures stay isolated and both supported event filenames work.
 // Invariants: no removed or guessed command can silently succeed.
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestV2LegacyEventsFileLifecycleNormalization(t *testing.T) {
@@ -45,6 +47,49 @@ func TestV2LegacyEventsFileLifecycleNormalization(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".ergo", "plans.jsonl")); !os.IsNotExist(err) {
 		t.Fatalf("v2 rewrote legacy events.jsonl into plans.jsonl: %v", err)
+	}
+}
+
+func TestV2BodyAndSummarizedResultRenderWithoutMigration(t *testing.T) {
+	dir := setupErgoWithEventsOnly(t)
+	id := createLifecycleTask(t, dir)
+	path := getEventFilePath(dir)
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	bodyEvent := fmt.Sprintf("{\"type\":\"body\",\"ts\":%q,\"data\":{\"id\":%q,\"body\":\"legacy lifecycle body\\n\",\"ts\":%q}}\n", now, id, now)
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString(bodyEvent); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "legacy.txt"), []byte("legacy"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, stderr, code := runErgo(t, dir, "", "done", id, "--result", "legacy.txt"); code != 0 {
+		t.Fatalf("attach result: %s", stderr)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = []byte(strings.Replace(string(data), `"summary":"legacy.txt"`, `"summary":"Legacy verification"`, 1))
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	shown := showTaskOutput(t, dir, id)
+	if !strings.Contains(shown, "legacy lifecycle body") ||
+		!strings.Contains(shown, "[legacy.txt](file://") ||
+		!strings.Contains(shown, ": Legacy verification") {
+		t.Fatalf("legacy data was not rendered: %s", shown)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".ergo", "plans.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("legacy log was migrated on read: %v", err)
 	}
 }
 
