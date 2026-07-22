@@ -461,3 +461,7 @@
 {"type":"state","ts":"2026-07-22T21:57:58.188799Z","data":{"id":"BR5ZO7","state":"done","ts":"2026-07-22T21:57:58.188799Z"}}
 {"type":"claim","ts":"2026-07-22T21:58:01.825829Z","data":{"id":"UTHA6B","agent_id":"codex@ergo","ts":"2026-07-22T21:58:01.825829Z"}}
 {"type":"state","ts":"2026-07-22T21:58:01.825829Z","data":{"id":"UTHA6B","state":"doing","ts":"2026-07-22T21:58:01.825829Z"}}
+{"type":"message","ts":"2026-07-22T22:03:03.695149Z","data":{"task_id":"UTHA6B","kind":"done","text":"Published v3.0.0 from ebda77a; release workflow and remote CI passed; archives and checksum verified; Homebrew 3.0.0 installed and exercised; WinGet is not configured","ts":"2026-07-22T22:03:03.695149Z"}}
+{"type":"result","ts":"2026-07-22T22:03:03.695149Z","data":{"task_id":"UTHA6B","summary":"CHANGELOG.md","path":"CHANGELOG.md","sha256_at_attach":"2b6e9c08e3973d9189a3fc3b73714f8df41866adceeea89c9657b26f443bf9c2","mtime_at_attach":"2026-07-22T21:58:15.620372127Z","git_commit_at_attach":"ebda77a425fdf53e3556bef8bb365be19fe51d6a","ts":"2026-07-22T22:03:03.695149Z"}}
+{"type":"unclaim","ts":"2026-07-22T22:03:03.695149Z","data":{"id":"UTHA6B","ts":"2026-07-22T22:03:03.695149Z"}}
+{"type":"state","ts":"2026-07-22T22:03:03.695149Z","data":{"id":"UTHA6B","state":"done","ts":"2026-07-22T22:03:03.695149Z"}}
