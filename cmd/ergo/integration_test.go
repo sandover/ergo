@@ -922,7 +922,7 @@ func TestRemovedMutationCommandsGiveDirectHints(t *testing.T) {
 	}
 }
 
-func TestSequence_JSONOutput(t *testing.T) {
+func TestSequenceAndUnsequenceOutput(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, _, code := runNewTask(t, dir, `{"title":"Task A"}`)
@@ -937,53 +937,97 @@ func TestSequence_JSONOutput(t *testing.T) {
 	}
 	taskB := strings.TrimSpace(stdout)
 
-	stdout, _, code = runErgo(t, dir, "", "sequence", taskB, taskA, "--json")
+	stdout, stderr, code := runErgo(t, dir, "", "sequence", taskA, taskB)
 	if code != 0 {
-		t.Fatalf("sequence --json failed: exit %d", code)
+		t.Fatalf("sequence failed: exit %d stderr=%q", code, stderr)
 	}
-	var out map[string]interface{}
-	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-		t.Fatalf("failed to parse sequence --json output: %v", err)
-	}
-	if out["kind"] != "sequence" || out["action"] != "link" {
-		t.Errorf("expected kind=sequence action=link, got %v", out)
-	}
-	edges, ok := out["edges"].([]interface{})
-	if !ok || len(edges) != 1 {
-		t.Fatalf("expected 1 edge, got %v", out["edges"])
-	}
-	edge, ok := edges[0].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected edge object, got %v", edges[0])
-	}
-	if edge["from_id"] != taskA || edge["to_id"] != taskB {
-		t.Errorf("unexpected edge ids: %v", edge)
-	}
-	if edge["type"] != "depends" {
-		t.Errorf("expected type=depends, got %v", edge["type"])
+	if stdout != taskB+" depends on "+taskA+"\n" {
+		t.Fatalf("sequence output = %q", stdout)
 	}
 
-	stdout, _, code = runErgo(t, dir, "", "sequence", "rm", taskB, taskA, "--json")
+	path := filepath.Join(dir, ".ergo", "plans.jsonl")
+	beforeNoop, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code = runErgo(t, dir, "", "sequence", taskA, taskB)
+	if code != 0 || stdout != "No dependency changes.\n" {
+		t.Fatalf("sequence no-op: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	afterNoop, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(beforeNoop, afterNoop) {
+		t.Fatal("sequence no-op appended an event")
+	}
+
+	stdout, stderr, code = runErgo(t, dir, "", "unsequence", taskA, taskB)
 	if code != 0 {
-		t.Fatalf("sequence rm --json failed: exit %d", code)
+		t.Fatalf("unsequence failed: exit %d stderr=%q", code, stderr)
 	}
-	out = map[string]interface{}{}
-	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-		t.Fatalf("failed to parse sequence rm --json output: %v", err)
+	if stdout != taskB+" no longer depends on "+taskA+"\n" {
+		t.Fatalf("unsequence output = %q", stdout)
 	}
-	if out["kind"] != "sequence" || out["action"] != "unlink" {
-		t.Errorf("expected kind=sequence action=unlink, got %v", out)
+
+	stdout, stderr, code = runErgo(t, dir, "", "unsequence", taskA, taskB)
+	if code != 0 || stdout != "No dependency changes.\n" {
+		t.Fatalf("unsequence no-op: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	edges, ok = out["edges"].([]interface{})
-	if !ok || len(edges) != 1 {
-		t.Fatalf("expected 1 edge, got %v", out["edges"])
+
+	_, stderr, code = runErgo(t, dir, "", "sequence", "rm", taskA, taskB)
+	if code == 0 || !strings.Contains(stderr, "use ergo unsequence") {
+		t.Fatalf("sequence rm: code=%d stderr=%q", code, stderr)
 	}
-	edge, ok = edges[0].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected edge object, got %v", edges[0])
+}
+
+func TestSequenceAndUnsequenceChainsAreAtomic(t *testing.T) {
+	dir := setupErgo(t)
+	stdout, _, code := runNewTask(t, dir, `{"title":"Task A"}`)
+	if code != 0 {
+		t.Fatalf("new task A failed: exit %d", code)
 	}
-	if edge["from_id"] != taskA || edge["to_id"] != taskB {
-		t.Errorf("unexpected edge ids: %v", edge)
+	taskA := strings.TrimSpace(stdout)
+	stdout, _, code = runNewTask(t, dir, `{"title":"Task B"}`)
+	if code != 0 {
+		t.Fatalf("new task B failed: exit %d", code)
+	}
+	taskB := strings.TrimSpace(stdout)
+
+	path := filepath.Join(dir, ".ergo", "plans.jsonl")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, code = runErgo(t, dir, "", "sequence", taskA, taskB, "UNKNOWN")
+	if code == 0 {
+		t.Fatal("sequence chain with unknown ID succeeded")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("failed sequence chain appended a partial edge")
+	}
+
+	if _, _, code = runErgo(t, dir, "", "sequence", taskA, taskB); code != 0 {
+		t.Fatalf("sequence setup failed: exit %d", code)
+	}
+	before, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, code = runErgo(t, dir, "", "unsequence", taskA, taskB, "UNKNOWN")
+	if code == 0 {
+		t.Fatal("unsequence chain with unknown ID succeeded")
+	}
+	after, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("failed unsequence chain appended a partial unlink")
 	}
 }
 
@@ -1023,6 +1067,28 @@ func TestSequence_ChainOrder_Readiness(t *testing.T) {
 	}
 	if len(ready) != 1 || ready[0]["id"] != taskA {
 		t.Fatalf("expected only Task A ready, got %v", ready)
+	}
+
+	stdout, stderr, code := runErgo(t, dir, "", "unsequence", taskA, taskB, taskC)
+	if code != 0 {
+		t.Fatalf("unsequence chain failed: exit %d stderr=%q", code, stderr)
+	}
+	wantUnsequence := taskB + " no longer depends on " + taskA + "\n" + taskC + " no longer depends on " + taskB + "\n"
+	if stdout != wantUnsequence {
+		t.Fatalf("unsequence chain output = %q, want %q", stdout, wantUnsequence)
+	}
+	stdout, _, code = runErgo(t, dir, "", "list", "--ready", "--json")
+	if code != 0 {
+		t.Fatalf("list --ready after unsequence failed: exit %d", code)
+	}
+	if err := json.Unmarshal([]byte(stdout), &ready); err != nil {
+		t.Fatalf("failed to parse list --ready output: %v", err)
+	}
+	if len(ready) != 3 {
+		t.Fatalf("expected all tasks ready after unsequence, got %v", ready)
+	}
+	if _, _, code = runErgo(t, dir, "", "sequence", taskA, taskB, taskC); code != 0 {
+		t.Fatalf("resequence chain failed: exit %d", code)
 	}
 
 	_, _, code = runSetTask(t, dir, taskA, `{"state":"done"}`)

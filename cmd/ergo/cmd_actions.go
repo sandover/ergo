@@ -35,6 +35,7 @@ func init() {
 	rootCmd.AddCommand(moveCmd)
 	// ergo sequence
 	rootCmd.AddCommand(sequenceCmd)
+	rootCmd.AddCommand(unsequenceCmd)
 	// ergo where
 	rootCmd.AddCommand(whereCmd)
 	// ergo compact
@@ -243,10 +244,18 @@ func init() {
 
 // -- sequence --
 var sequenceCmd = &cobra.Command{
-	Use:   "sequence <A> <B> [<C>...] | sequence rm <A> <B>",
+	Use:   "sequence <A> <B> [<C>...]",
 	Short: "Enforce task order (A then B then C)",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return ergo.RunSequence(args, globalOpts)
+	},
+}
+
+var unsequenceCmd = &cobra.Command{
+	Use:   "unsequence <A> <B> [<C>...]",
+	Short: "Remove task order (A then B then C)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return ergo.RunUnsequence(args, globalOpts)
 	},
 }
 

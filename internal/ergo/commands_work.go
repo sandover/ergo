@@ -1,5 +1,5 @@
 // Purpose: Implement list/show/claim/sequence/compact/prune/where behaviors and output.
-// Exports: RunClaim, RunClaimOldestReady, RunShow, RunList, RunSequence, RunCompact, RunPrune, RunWhere.
+// Exports: RunClaim, RunClaimOldestReady, RunShow, RunList, RunSequence, RunUnsequence, RunCompact, RunPrune, RunWhere.
 // Role: Command layer bridging CLI wiring to graph/storage operations.
 // Invariants: Mutations acquire the lock; JSON output is stable when requested.
 // Notes: Read operations replay the event log to build current state.
@@ -167,42 +167,39 @@ func buildSequenceEdges(order []string) []sequenceEdge {
 }
 
 func RunSequence(args []string, opts GlobalOptions) error {
+	if len(args) > 0 && args[0] == "rm" {
+		return errors.New("sequence rm was removed in Ergo 3; use ergo unsequence <A> <B> [<C>...]")
+	}
+	return runSequenceChange("sequence", "link", args, opts)
+}
+
+func RunUnsequence(args []string, opts GlobalOptions) error {
+	return runSequenceChange("unsequence", "unlink", args, opts)
+}
+
+func runSequenceChange(command, eventType string, args []string, opts GlobalOptions) error {
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
 	}
 
-	usage := "usage: ergo sequence <A> <B> [<C>...] | ergo sequence rm <A> <B>"
+	usage := fmt.Sprintf("usage: ergo %s <A> <B> [<C>...]", command)
 	if len(args) < 2 {
 		return errors.New(usage)
 	}
-
-	action := "link"
-	var edges []sequenceEdge
-	if args[0] == "rm" {
-		if len(args) != 3 {
-			return errors.New(usage)
-		}
-		action = "unlink"
-		edges = buildSequenceEdges([]string{args[1], args[2]})
-	} else {
-		if len(args) < 2 {
-			return errors.New(usage)
-		}
-		edges = buildSequenceEdges(args)
-	}
-
+	edges := buildSequenceEdges(args)
 	if len(edges) == 0 {
 		return errors.New(usage)
 	}
 
-	if err := writeLinkEvents(dir, opts, action, edges); err != nil {
+	changed, err := writeLinkEvents(dir, opts, eventType, edges)
+	if err != nil {
 		return err
 	}
 
 	if opts.JSON {
-		outEdges := make([]sequenceEdgeOutput, 0, len(edges))
-		for _, edge := range edges {
+		outEdges := make([]sequenceEdgeOutput, 0, len(changed))
+		for _, edge := range changed {
 			outEdges = append(outEdges, sequenceEdgeOutput{
 				FromID: edge.FromID,
 				ToID:   edge.ToID,
@@ -210,18 +207,34 @@ func RunSequence(args []string, opts GlobalOptions) error {
 			})
 		}
 		return writeJSON(os.Stdout, sequenceOutput{
-			Kind:   "sequence",
-			Action: action,
+			Kind:   command,
+			Action: eventType,
 			Edges:  outEdges,
 		})
 	}
+	writeSequenceChanges(os.Stdout, eventType, changed)
 	return nil
 }
 
-func writeLinkEvents(dir string, opts GlobalOptions, eventType string, edges []sequenceEdge) error {
+func writeSequenceChanges(w *os.File, eventType string, edges []sequenceEdge) {
+	if len(edges) == 0 {
+		fmt.Fprintln(w, "No dependency changes.")
+		return
+	}
+	for _, edge := range edges {
+		if eventType == "unlink" {
+			fmt.Fprintf(w, "%s no longer depends on %s\n", edge.FromID, edge.ToID)
+			continue
+		}
+		fmt.Fprintf(w, "%s depends on %s\n", edge.FromID, edge.ToID)
+	}
+}
+
+func writeLinkEvents(dir string, opts GlobalOptions, eventType string, edges []sequenceEdge) ([]sequenceEdge, error) {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
-	return withLock(lockPath, opts, func() error {
+	var changed []sequenceEdge
+	err := withLock(lockPath, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -249,11 +262,20 @@ func writeLinkEvents(dir string, opts GlobalOptions, eventType string, edges []s
 			if err := validateDepSelf(from, to); err != nil {
 				return err
 			}
-			if err := validateDepAncestry(fromItem, toItem); err != nil {
-				return err
-			}
-			if eventType == "link" && hasCycle(graph, from, to) {
-				return errors.New("dependency would create a cycle")
+			if eventType == "link" {
+				if err := validateDepAncestry(fromItem, toItem); err != nil {
+					return err
+				}
+				if _, exists := graph.Deps[from][to]; exists {
+					continue
+				}
+				if hasCycle(graph, from, to) {
+					return errors.New("dependency would create a cycle")
+				}
+			} else {
+				if _, exists := graph.Deps[from][to]; !exists {
+					continue
+				}
 			}
 			event, err := newEvent(eventType, now, LinkEvent{
 				FromID: from,
@@ -264,6 +286,7 @@ func writeLinkEvents(dir string, opts GlobalOptions, eventType string, edges []s
 				return err
 			}
 			events = append(events, event)
+			changed = append(changed, edge)
 			if eventType == "link" {
 				if graph.Deps[from] == nil {
 					graph.Deps[from] = map[string]struct{}{}
@@ -273,8 +296,12 @@ func writeLinkEvents(dir string, opts GlobalOptions, eventType string, edges []s
 				delete(graph.Deps[from], to)
 			}
 		}
+		if len(events) == 0 {
+			return nil
+		}
 		return appendEvents(eventsPath, events)
 	})
+	return changed, err
 }
 
 func RunList(listOpts ListOptions, opts GlobalOptions) error {
