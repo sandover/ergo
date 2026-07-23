@@ -52,11 +52,29 @@ func RunLifecycle(kind, id string, lifecycle LifecycleOptions, opts GlobalOption
 	if kind == "release" {
 		mutation.AllowedStates = []string{stateTodo, stateDoing, stateBlocked, stateError}
 	}
-	_, err = applyTaskMutation(dir, opts, id, mutation)
+	outcome, err := applyTaskMutation(dir, opts, id, mutation)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s %s\n", id, targetState)
+	task := outcome.Graph.Tasks[id]
+	fmt.Printf("%s - %s\n", task.ID, task.Title)
+	fmt.Printf("State: %s\n", task.State)
+	if containsString(outcome.ChangedFields, "claim") {
+		fmt.Println("Claim: cleared")
+	}
+	if messageSet {
+		fmt.Println("Message: appended")
+	}
+	if lifecycle.ResultSet {
+		fmt.Printf("Result: %s\n", strings.TrimSpace(lifecycle.ResultPath))
+	}
+	if len(outcome.ChangedFields) == 0 {
+		fmt.Println("No changes.")
+	}
+	ready := readyTasks(outcome.Graph)
+	if len(ready) > 0 {
+		fmt.Printf("Ready: %s - %s\n", ready[0].ID, ready[0].Title)
+	}
 	return nil
 }
 

@@ -32,14 +32,14 @@ func TestDepAncestry(t *testing.T) {
 			from:        &Task{ID: "A", EpicID: "E1"},
 			to:          &Task{ID: "E1", EpicID: ""},
 			wantErr:     true,
-			errContains: "task cannot depend on its own container",
+			errContains: "task cannot depend on its own epic",
 		},
 		{
 			name:        "parent cannot depend on child",
 			from:        &Task{ID: "E1", EpicID: ""},
 			to:          &Task{ID: "A", EpicID: "E1"},
 			wantErr:     true,
-			errContains: "container cannot depend on its own child",
+			errContains: "epic cannot depend on its own child",
 		},
 		{
 			name:    "cross-container dep allowed",

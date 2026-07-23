@@ -75,10 +75,10 @@ func validateDepAncestry(from, to *Task) error {
 		return nil
 	}
 	if from.EpicID == to.ID {
-		return errors.New("task cannot depend on its own container")
+		return errors.New("task cannot depend on its own epic")
 	}
 	if to.EpicID == from.ID {
-		return errors.New("container cannot depend on its own child")
+		return errors.New("epic cannot depend on its own child")
 	}
 	return nil
 }

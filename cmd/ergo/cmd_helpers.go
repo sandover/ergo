@@ -26,7 +26,7 @@ func exitErr(err error, opts *ergo.GlobalOptions) {
 	} else if strings.Contains(err.Error(), `unknown command "reopen"`) {
 		fmt.Fprintln(os.Stderr, "hint: use claim <id> --agent <identity> to resume closed work")
 	} else if strings.HasPrefix(err.Error(), "usage:") {
-		fmt.Fprintln(os.Stderr, "hint: run `ergo --help`")
+		fmt.Fprintf(os.Stderr, "hint: run `%s --help`\n", helpInvocation(os.Args[1:]))
 	} else if errors.Is(err, ergo.ErrNoErgoDir) {
 		fmt.Fprintln(os.Stderr, "hint: run `ergo init` or target an existing graph with `ergo --dir <path>`")
 	} else if isPermissionError(err) {
@@ -37,6 +37,29 @@ func exitErr(err error, opts *ergo.GlobalOptions) {
 		fmt.Fprintln(os.Stderr, "hint: another ergo process is still running; try again in a moment")
 	}
 	os.Exit(1)
+}
+
+func helpInvocation(args []string) string {
+	path := "ergo"
+	skipValue := false
+	for _, arg := range args {
+		if skipValue {
+			skipValue = false
+			continue
+		}
+		if arg == "--dir" || arg == "--agent" {
+			skipValue = true
+			continue
+		}
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		path += " " + arg
+		if arg != "new" {
+			break
+		}
+	}
+	return path
 }
 
 func isPermissionError(err error) bool {

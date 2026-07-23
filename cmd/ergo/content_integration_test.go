@@ -15,7 +15,7 @@ import (
 func TestTitleCommandOnTaskAndContainer(t *testing.T) {
 	dir := setupErgo(t)
 	containerID := createLifecycleTask(t, dir)
-	stdout, stderr, code := runNewTask(t, dir, `{"title":"Child","epic":"`+containerID+`"}`)
+	stdout, stderr, code := runNewTask(t, dir, "Child", "--epic", containerID)
 	if code != 0 {
 		t.Fatalf("create child failed: %s", stderr)
 	}
@@ -25,12 +25,12 @@ func TestTitleCommandOnTaskAndContainer(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("title failed: %s", stderr)
 		}
-		if stdout != id+" title: Renamed "+id+"\n" {
+		if stdout != id+" - Renamed "+id+"\n" {
 			t.Fatalf("unexpected title output: %s", stdout)
 		}
 		before := countEventLines(t, dir)
 		stdout, stderr, code = runErgo(t, dir, "", "title", id, "Renamed "+id)
-		if code != 0 || stdout != id+" title: Renamed "+id+"\n" {
+		if code != 0 || stdout != id+" - Renamed "+id+" (title unchanged)\n" {
 			t.Fatalf("title no-op failed: stdout=%s stderr=%s", stdout, stderr)
 		}
 		if countEventLines(t, dir) != before {
@@ -48,7 +48,7 @@ func TestBodyCommandLiteralEmptyAndTTY(t *testing.T) {
 	id := createLifecycleTask(t, dir)
 	body := "## Goal\n- Preserve this literally\n"
 	stdout, stderr, code := runErgo(t, dir, body, "body", id)
-	if code != 0 || stdout != id+" body updated\n" {
+	if code != 0 || stdout != id+" body: 34 bytes\n" {
 		t.Fatalf("body failed: stdout=%s stderr=%s", stdout, stderr)
 	}
 	shown := showTaskOutput(t, dir, id)
@@ -57,7 +57,7 @@ func TestBodyCommandLiteralEmptyAndTTY(t *testing.T) {
 	}
 
 	stdout, stderr, code = runErgoWithEmptyPipe(t, dir, "body", id)
-	if code != 0 || stdout != id+" body updated\n" {
+	if code != 0 || stdout != id+" body: 0 bytes\n" {
 		t.Fatalf("empty body failed: stdout=%s stderr=%s", stdout, stderr)
 	}
 	shown = showTaskOutput(t, dir, id)

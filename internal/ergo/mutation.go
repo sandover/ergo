@@ -39,7 +39,8 @@ type taskMutation struct {
 }
 
 type mutationOutcome struct {
-	Graph *Graph
+	Graph         *Graph
+	ChangedFields []string
 }
 
 func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskMutation) (mutationOutcome, error) {
@@ -73,21 +74,21 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 		}
 		if isContainer(task, graph) {
 			if mutation.ClaimSet {
-				return errors.New("containers cannot be claimed")
+				return errors.New("epics cannot be claimed")
 			}
 			if mutation.StateSet {
-				return errors.New("containers do not have state")
+				return errors.New("epics do not have state")
 			}
 			if mutation.ResultSet {
-				return errors.New("containers cannot have results")
+				return errors.New("epics cannot have results")
 			}
 			if mutation.MessageSet {
-				return errors.New("containers cannot have lifecycle messages")
+				return errors.New("epics cannot have lifecycle messages")
 			}
 		}
 
 		now := time.Now().UTC()
-		events, _, err := buildMutationEvents(id, task, mutation, opts.AgentID, now)
+		events, fields, err := buildMutationEvents(id, task, mutation, opts.AgentID, now)
 		if err != nil {
 			return err
 		}
@@ -110,7 +111,10 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 		if err != nil {
 			return err
 		}
-		outcome = mutationOutcome{Graph: updatedGraph}
+		outcome = mutationOutcome{Graph: updatedGraph, ChangedFields: fields}
+		if mutation.ResultSet {
+			outcome.ChangedFields = append(outcome.ChangedFields, "result")
+		}
 		return nil
 	})
 	return outcome, err

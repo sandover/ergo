@@ -121,12 +121,15 @@ func TestReadEvents_TombstoneRoundTrip(t *testing.T) {
 	}
 }
 
-func TestGetEventsPath_PrefersPlansDotJsonl(t *testing.T) {
+func TestGetEventsPath_PrefersBacklogDotJsonl(t *testing.T) {
 	dir := t.TempDir()
+	backlogPath := filepath.Join(dir, backlogFileName)
 	plansPath := filepath.Join(dir, plansFileName)
 	oldPath := filepath.Join(dir, oldEventsFileName)
 
-	// Create both files
+	if err := os.WriteFile(backlogPath, []byte{}, 0644); err != nil {
+		t.Fatalf("write backlog.jsonl: %v", err)
+	}
 	if err := os.WriteFile(plansPath, []byte{}, 0644); err != nil {
 		t.Fatalf("write plans.jsonl: %v", err)
 	}
@@ -134,9 +137,23 @@ func TestGetEventsPath_PrefersPlansDotJsonl(t *testing.T) {
 		t.Fatalf("write events.jsonl: %v", err)
 	}
 
-	// Should prefer plans.jsonl when both exist
 	result := getEventsPath(dir)
-	if result != plansPath {
+	if result != backlogPath {
+		t.Fatalf("expected %q, got %q", backlogPath, result)
+	}
+}
+
+func TestGetEventsPath_FallbackToPlansJsonl(t *testing.T) {
+	dir := t.TempDir()
+	plansPath := filepath.Join(dir, plansFileName)
+	oldPath := filepath.Join(dir, oldEventsFileName)
+	if err := os.WriteFile(plansPath, []byte{}, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oldPath, []byte{}, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if result := getEventsPath(dir); result != plansPath {
 		t.Fatalf("expected %q, got %q", plansPath, result)
 	}
 }
@@ -157,14 +174,29 @@ func TestGetEventsPath_FallbackToEventsJsonl(t *testing.T) {
 	}
 }
 
-func TestGetEventsPath_DefaultToPlansJsonl(t *testing.T) {
+func TestGetEventsPath_DefaultToBacklogJsonl(t *testing.T) {
 	dir := t.TempDir()
-	plansPath := filepath.Join(dir, plansFileName)
+	backlogPath := filepath.Join(dir, backlogFileName)
 
-	// Neither file exists
 	result := getEventsPath(dir)
-	if result != plansPath {
-		t.Fatalf("expected %q, got %q", plansPath, result)
+	if result != backlogPath {
+		t.Fatalf("expected %q, got %q", backlogPath, result)
+	}
+}
+
+func TestLoadGraph_WorksWithBacklogJsonl(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, backlogFileName)
+	now := time.Now().UTC()
+	events := []Event{mustNewEvent("new_task", now, NewTaskEvent{
+		ID: "T0", UUID: "uuid-0", State: stateTodo, Title: "Task 0", CreatedAt: formatTime(now),
+	})}
+	if err := appendEvents(path, events); err != nil {
+		t.Fatal(err)
+	}
+	graph, err := loadGraph(dir)
+	if err != nil || graph.Tasks["T0"] == nil {
+		t.Fatalf("graph=%v err=%v", graph, err)
 	}
 }
 

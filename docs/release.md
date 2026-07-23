@@ -16,12 +16,13 @@ in `ergo --help`, `ergo quickstart`, and `docs/spec.md`.
 For a version candidate, inject the same linker variable as GoReleaser:
 
 ```sh
-go build -ldflags "-s -w -X main.version=3.0.0" -o .scratch/release/ergo-v3-candidate ./cmd/ergo
-.scratch/release/ergo-v3-candidate version
+release_version=4.0.0
+go build -ldflags "-s -w -X main.version=$release_version" -o .scratch/release/ergo-candidate ./cmd/ergo
+.scratch/release/ergo-candidate version
 ```
 
-The command must print `ergo 3.0.0`. The release tag includes the `v` prefix:
-`v3.0.0`.
+The command must print the selected version. The release tag uses the same
+version with a `v` prefix.
 
 ## Versioning
 

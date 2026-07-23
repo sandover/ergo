@@ -1,22 +1,19 @@
 # Ergo public CLI contract
 
-This document defines the stable command and data contract. `ergo --help`
-is the compact manual. `ergo quickstart` is the complete operational guide.
+This document defines Ergo's stable command, behavior, output, and storage
+contract. `ergo --help`, command help, and `ergo quickstart` are the user
+manuals.
 
-## Domain model
+## Backlog model
 
 Ergo stores tasks. A leaf task has an ID, title, body, lifecycle state, optional
-claim, dependencies, lifecycle messages, results, and timestamps. A container is
-a root task with children. It has no lifecycle, claim, message, or result of its
-own. It completes when every child is done or canceled.
-
-Leaf states are:
+claim, dependencies, lifecycle messages, results, and timestamps.
 
 | State | Meaning |
 | --- | --- |
 | `todo` | Open and unclaimed. |
-| `doing` | Open and claimed by one agent. |
-| `blocked` | Open with an identified impediment. |
+| `doing` | Claimed by one agent. |
+| `blocked` | An identified impediment requires action. |
 | `done` | The objective was satisfied. |
 | `canceled` | The objective is no longer wanted. |
 
@@ -26,20 +23,21 @@ The claim invariant is exact:
 claimed_by is present if and only if state is doing
 ```
 
-Readiness is derived:
+A task is ready when it is todo and every direct and inherited dependency is
+complete. A todo task with unmet dependencies is waiting, not blocked.
 
-```text
-state is todo + every dependency is complete = ready
-```
-
-A todo task with unmet dependencies is waiting. The legacy `error` state remains
-readable, but no current command creates it.
+An epic is a root task with children. It has no lifecycle state, claim,
+lifecycle message, or result. Its completion is derived when every child is done
+or canceled. Epics cannot be nested.
 
 ## Command surface
 
-Existing tasks change through focused commands:
-
 ```text
+init [dir]
+new task "<title>" [--epic <id>]
+new epic "<title>" --file <path>
+list [--epic <id>] [--ready | --all]
+show <id>
 claim [<id>] --agent <identity>
 done <id> [-m <message>] [--result <path>]
 block <id> [-m <message>] [--result <path>]
@@ -47,20 +45,10 @@ cancel <id> [-m <message>] [--result <path>]
 release <id> [-m <message>] [--result <path>]
 title <id> <title>
 body <id>
-move <id> <container-id>
+move <id> <epic-id>
 move <id> --root
 sequence <A> <B> [<C>...]
 unsequence <A> <B> [<C>...]
-```
-
-Other commands are:
-
-```text
-init [dir]
-new task [json]
-new epic --file <path> [json]
-show <id>
-list [--epic <id>] [--ready | --all]
 where
 prune [--yes]
 compact
@@ -71,128 +59,130 @@ version
 Global flags are `--agent <identity>`, `--dir <path>`, `--help`, and
 `--version`.
 
-## Lifecycle postconditions
+## Creation
 
-### Claim
+`new task` requires one nonblank positional title. It creates an unclaimed todo
+task. Optional piped stdin becomes the literal initial body. No pipe or an empty
+pipe creates an empty body.
 
-- Without an ID, claim selects the oldest ready todo leaf.
-- With an ID, claim accepts todo, blocked, done, canceled, or legacy error.
-- A specific claim may resume work that automatic readiness would not select.
-- Claim writes doing and its identity in one locked batch.
-- Repeating a claim by its owner succeeds without an event.
-- Claiming work held by another identity is a conflict.
-- Containers cannot be claimed.
-- No automatic candidate prints `No ready ergo tasks.` and exits 0.
+`--epic <id>` places the task in an existing epic or in a clean, unclaimed root
+todo task with no results. The latter becomes an epic when it receives its first
+child. Unknown, nested, claimed, closed, or result-bearing destinations fail.
 
-Claim output starts with `---` and then `id: "ABCDEF"`. This fixed position lets
-an agent recover the claimed ID without interpreting prose. The complete task
-follows, then a `## Next` section with exact lifecycle commands.
+Successful task creation prints only the generated six-character ID.
 
-### Done, block, and cancel
+`new epic` requires one nonblank positional title and a nonempty `--file`. The
+file contains one or more Markdown chunks separated by a line that is exactly
+`---`. Each chunk starts with `# Title`; the remaining text is the child body.
+Titles are unique within the file. File order adds no dependencies.
 
-- Each accepts any readable leaf state, including legacy error.
-- Each establishes its named state and clears the claim.
-- Repeating an established postcondition adds no state event.
-- A repeated command may still append a message or result.
+Optional piped stdin becomes the literal epic body. The file is fully parsed and
+validated before one atomic write. An empty or malformed file or duplicate
+title fails without partial state. Successful output names the epic ID and
+title, every child ID and title, and task and dependency counts.
 
-### Release
+For both creation commands, a positional operand that parses as a JSON object
+containing `title`, `epic`, `state`, `claim`, or `result` is reserved for an
+actionable syntax error. Malformed brace-prefixed text and JSON objects without
+those keys remain valid titles.
 
-- Release accepts todo, doing, blocked, or legacy error.
-- It establishes unclaimed todo and preserves prior content and results.
-- Releasing todo adds no state event unless the call also appends a message or result.
-- It rejects done and canceled. A specific claim resumes closed work.
-- Release means unfinished work remains valid. Block means an impediment requires action.
+## Claim and lifecycle
 
-## Content, messages, and results
+Without an ID, claim selects the oldest ready todo leaf. With an ID, claim
+accepts any readable leaf state and may resume work that automatic readiness
+would not select. It establishes doing plus the supplied identity under one
+lock. Repeating a claim by its owner is a no-op; another identity conflicts.
 
-`new task [json]` accepts one inline JSON object:
+Claim output is the complete task document followed by exact lifecycle commands.
+When no automatic candidate exists, claim exits successfully without mutation.
 
-- `title`: required, nonblank text.
-- `epic`: destination container ID.
-- `state`: todo, doing, blocked, done, or canceled.
-- `claim`: agent identity; implies doing.
-- `result`: one existing project-relative file.
+Done, block, and cancel accept any readable leaf state. Each establishes its
+named state and clears the claim. Release accepts unfinished readable work,
+establishes unclaimed todo, and rejects done and canceled work. Repeating an
+established postcondition may still append a message or result.
 
-Unknown fields fail. New tasks cannot use legacy error. Piped stdin is the
-literal initial body. An empty pipe creates an empty body.
+Lifecycle commands do not read stdin. Each `-m` value is trimmed and must be
+nonblank. Repeated values join with a blank line into one append-only message
+recorded with its command kind and time.
 
-`new epic --file <path> [json]` requires `{"title":"..."}`. Its file contains
-`# Title` chunks separated by a line that is exactly `---`. File order creates
-no dependencies.
+`--result` must name an existing regular file inside the project and outside
+`.ergo`. Ergo records its project-relative path, SHA-256, mtime, and git commit
+when available. Results append as attempt history.
+
+A lifecycle receipt names the task ID and title, resulting state, cleared claim,
+appended message, attached result, and oldest ready task when each fact applies.
+An event-free success is explicit.
+
+## Focused mutations
 
 `title` trims surrounding whitespace and rejects an empty value. `body` requires
-piped stdin and treats it literally; an empty pipe clears the body. Both accept
-leaves and containers. `body` is the only existing-task body writer.
+piped stdin and replaces the body literally; an empty pipe clears it. Both work
+on leaves and epics. Same-value writes append no event and report no change.
 
-Lifecycle commands reject piped stdin, including an empty pipe. Each `-m` value
-is trimmed and must be nonblank. Repeated values join with a blank line into one
-append-only lifecycle message. The message records its command kind and time.
+Move accepts leaves only. Its destination follows the same promotion rules as
+`new task --epic`. Moving to the current parent or root is an explicit no-op.
+Epics cannot move or nest. Placement changes reject ancestry dependency
+conflicts.
 
-`--result` must be an existing regular file inside the project and outside
-`.ergo/`. New results use the path as their stored identity. Ergo records the
-attachment-time SHA-256, mtime, and git commit when available. Results append as
-attempt history. Distinct summaries from legacy logs remain readable.
+`sequence A B` creates the edge where B depends on A. Longer sequences connect
+each adjacent pair. `unsequence` removes the same edges. Existing or absent
+edges are no-ops. Every chain validates before writing, so failure leaves no
+partial change.
 
-## Placement and dependencies
+Self-dependencies, ancestry edges, and cycles fail. A dependency on an epic
+completes when all its children are done or canceled. A child inherits external
+dependencies assigned to its epic.
 
-- A move source must be a leaf. Containers never move or nest.
-- A destination must exist at root.
-- An existing container is valid.
-- A clean, unclaimed root todo task with no results becomes a container on its first child.
-- A self-move or container-child dependency conflict fails.
-- Moving to the current parent succeeds without an event.
+## Read output
 
-`sequence A B` creates the edge where B depends on A. Longer sequences create
-an edge between each adjacent pair. `unsequence` removes the same edges.
-Existing or absent edges are no-ops. Every chain validates before writing, so a
-failure leaves no partial change.
+Ergo has one readable output mode.
 
-Self-dependencies and cycles fail. A task and its container cannot depend on one
-another. A dependency on a container completes when every child is done or
-canceled.
-
-## Output and exit codes
-
-Ergo has one readable output mode:
-
-- `list` prints a compact tree with state and claim labels.
+- `list` prints a compact tree with state icons, terse `@agent` ownership, and
+  actionable blocker names or counts.
 - `show` prints YAML front matter followed by Markdown content and relationships.
-- `claim` prints the same task document followed by task-specific next commands.
-- `new task` prints the generated ID.
-- `new epic --file` prints its container, child IDs and titles, and dependency count.
-- focused writes print the affected ID and resulting postcondition.
-- `init` and `where` print the active `.ergo` path.
-- `compact` prints one completion line; prune prints a preview or applied summary.
+- `claim` prints the leaf task document followed by exact lifecycle commands.
+- focused writes print tangible resulting values or explicit no-op facts.
+- `init` reports whether it initialized, repaired, or found a graph and prints
+  its resolved absolute `.ergo` path.
+- `compact` reports its resolved event-log path, before and after event counts,
+  and the number removed.
+- prune prints a preview or applied summary.
 
-Default list omits done and canceled work. `--all` includes it. `--ready` shows
-only ready work and conflicts with `--all`. `--epic <id>` selects one valid
-container and its children.
+Default list omits done and canceled work. `--all` includes it. `--ready` selects
+ready leaves and conflicts with `--all`. `--epic <id>` selects one epic and its
+children.
 
-Success exits 0. Failure exits nonzero and writes an actionable message to
-stderr. Missing-graph errors name `ergo init` and `ergo --dir <path>`.
+Success exits zero. Failure exits nonzero and writes an actionable message to
+stderr. Unsupported commands or flags and reserved creation JSON produce
+one-line current-command guidance and write no graph events.
 
-Inline JSON is creation input. The append-only event log is JSONL.
+## Storage and locking
 
-## Legacy plans
+The active repository contains:
 
-Ergo reads `.ergo/plans.jsonl` and legacy `.ergo/events.jsonl`. Opening a graph
-never rewrites or migrates it. Every historical event type remains replayable.
+```text
+.ergo/
+├── backlog.jsonl
+└── lock
+```
 
-Replay and compact preserve unresolved legacy error, claimed-blocked work,
-lifecycle body updates, and result summaries. An explicit claim or lifecycle
-command normalizes only its target task. Older binaries may append legacy events;
-the next invocation replays them without an event-version conversion.
+The JSONL file is an append-only event log. New repositories use
+`.ergo/backlog.jsonl`. Existing repositories with `.ergo/plans.jsonl` or
+`.ergo/events.jsonl` continue to use that file in place. If more than one exists,
+selection order is `backlog.jsonl`, `plans.jsonl`, then `events.jsonl`. Opening a
+backlog does not rename or rewrite its event log.
 
-## Prune, compact, and locking
+Replay constructs current tasks, epics, dependencies, messages, results,
+metadata, and tombstones. It accepts every stored event shape supported by the
+repository fixtures. A stored `error` state remains readable; current commands
+do not create it. Claim or a lifecycle command normalizes only its target task.
 
 Prune is logical deletion. Without `--yes`, it is a dry-run. With `--yes`, it
-tombstones done and canceled leaves, then containers left empty. Pruned IDs
-cannot be inspected, mutated, or used as dependency targets and no longer block
-dependents.
+tombstones done and canceled leaves, then epics left empty. Pruned IDs cannot be
+read, changed, or used as dependency targets and no longer block dependents.
 
-Compact is physical maintenance. It rewrites the log to current live state and
-can remove pruned history. It preserves unresolved legacy state and does not
-guess a replacement.
+Compact rewrites the event log to a lossless representation of current state and
+can remove pruned history. It does not change the current backlog.
 
 Reads and writes acquire `.ergo/lock`. A mutation validates and appends its full
 event batch while holding the lock. List and show return coherent snapshots.

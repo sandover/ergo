@@ -22,13 +22,17 @@ func RunTitle(id, title string, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	_, err = applyTaskMutation(dir, opts, id, taskMutation{
+	outcome, err := applyTaskMutation(dir, opts, id, taskMutation{
 		Kind: "title", Title: title, TitleSet: true,
 	})
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s title: %s\n", id, title)
+	if len(outcome.ChangedFields) == 0 {
+		fmt.Printf("%s - %s (title unchanged)\n", id, title)
+		return nil
+	}
+	fmt.Printf("%s - %s\n", id, title)
 	return nil
 }
 
@@ -44,12 +48,16 @@ func RunBody(id string, opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	_, err = applyTaskMutation(dir, opts, id, taskMutation{
+	outcome, err := applyTaskMutation(dir, opts, id, taskMutation{
 		Kind: "body", Body: string(body), BodySet: true,
 	})
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s body updated\n", id)
+	if len(outcome.ChangedFields) == 0 {
+		fmt.Printf("%s body unchanged\n", id)
+		return nil
+	}
+	fmt.Printf("%s body: %d bytes\n", id, len(body))
 	return nil
 }

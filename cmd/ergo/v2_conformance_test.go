@@ -1,6 +1,6 @@
-// Purpose: Prove v3 behavior against representative v2 logs and malformed calls.
+// Purpose: Prove current behavior against earlier event logs and malformed calls.
 // Exports: none.
-// Role: Black-box regressions for legacy replay, malformed calls, and cutover hints.
+// Role: Black-box regressions for compatible replay and actionable errors.
 // Invariants: fixtures stay isolated and both supported event filenames work.
 // Invariants: no removed or guessed command can silently succeed.
 package main
@@ -48,6 +48,9 @@ func TestV2LegacyEventsFileLifecycleNormalization(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".ergo", "plans.jsonl")); !os.IsNotExist(err) {
 		t.Fatalf("v2 rewrote legacy events.jsonl into plans.jsonl: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(dir, ".ergo", "backlog.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("existing events.jsonl gained backlog.jsonl: %v", err)
+	}
 }
 
 func TestV2BodyAndSummarizedResultRenderWithoutMigration(t *testing.T) {
@@ -90,6 +93,9 @@ func TestV2BodyAndSummarizedResultRenderWithoutMigration(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".ergo", "plans.jsonl")); !os.IsNotExist(err) {
 		t.Fatalf("legacy log was migrated on read: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".ergo", "backlog.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("existing events.jsonl gained backlog.jsonl: %v", err)
 	}
 }
 

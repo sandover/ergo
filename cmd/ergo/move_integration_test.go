@@ -31,7 +31,7 @@ func TestMovePromotesDestinationAndReturnsToRoot(t *testing.T) {
 
 	before := countEventLines(t, dir)
 	stdout, stderr, code = runErgo(t, dir, "", "move", source, destination)
-	if code != 0 || stdout != source+" moved to "+destination+"\n" || countEventLines(t, dir) != before {
+	if code != 0 || stdout != source+" placement unchanged\n" || countEventLines(t, dir) != before {
 		t.Fatalf("same-parent no-op failed: stdout=%s stderr=%s", stdout, stderr)
 	}
 	_, stderr, code = runErgo(t, dir, "", "move", source, "--root")
@@ -62,7 +62,7 @@ func TestMoveRejectsInvalidPlacement(t *testing.T) {
 			t.Fatalf("setup move failed: %s", stderr)
 		}
 		_, stderr, code := runErgo(t, dir, "", "move", container, other)
-		if code == 0 || !strings.Contains(stderr, "cannot move container") {
+		if code == 0 || !strings.Contains(stderr, "cannot move epic") {
 			t.Fatalf("container move: code=%d stderr=%q", code, stderr)
 		}
 		_, stderr, code = runErgo(t, dir, "", "move", other, child)
@@ -74,7 +74,7 @@ func TestMoveRejectsInvalidPlacement(t *testing.T) {
 		dir := setupErgo(t)
 		source := createLifecycleTask(t, dir)
 		destination := createLifecycleTask(t, dir)
-		checks := [][]string{{source, source, "itself"}, {source, "ABSENT", "unknown container"}}
+		checks := [][]string{{source, source, "itself"}, {source, "ABSENT", "unknown epic"}}
 		for _, check := range checks {
 			_, stderr, code := runErgo(t, dir, "", "move", check[0], check[1])
 			if code == 0 || !strings.Contains(stderr, check[2]) {

@@ -15,16 +15,20 @@ ERGO="${ERGO:-../../ergo}"
 $ERGO init
 
 new_task() {
-	$ERGO new task "$1"
+	if [ "$#" -eq 2 ]; then
+		$ERGO new task "$1" --epic "$2"
+	else
+		$ERGO new task "$1"
+	fi
 }
 
 # ============================================
 # PHASE 1: Research & Design
 # ============================================
-DESIGN_EPIC=$(new_task '{"title":"Research & Design"}')
+DESIGN_EPIC=$(new_task "Research & Design")
 
 # Research tasks - some done, one in progress
-REQ_TASK=$(new_task '{"title":"Define product requirements","epic":"'"$DESIGN_EPIC"'"}')
+REQ_TASK=$(new_task "Define product requirements" "$DESIGN_EPIC")
 mkdir -p docs
 cat > docs/prd.md << 'EOF'
 # Product Requirements Document
@@ -47,7 +51,7 @@ Teams need a lightweight task tracker that works well with AI coding agents.
 EOF
 $ERGO done "$REQ_TASK" --result docs/prd.md
 
-COMP_TASK=$(new_task '{"title":"Competitor analysis","epic":"'"$DESIGN_EPIC"'"}')
+COMP_TASK=$(new_task "Competitor analysis" "$DESIGN_EPIC")
 mkdir -p docs
 cat > docs/competitor-analysis.md << 'EOF'
 # Competitor Analysis
@@ -64,70 +68,70 @@ cat > docs/competitor-analysis.md << 'EOF'
 EOF
 $ERGO done "$COMP_TASK" --result docs/competitor-analysis.md
 
-INTERVIEW_TASK=$(new_task '{"title":"User interviews (3 customers)","epic":"'"$DESIGN_EPIC"'"}')
+INTERVIEW_TASK=$(new_task "User interviews (3 customers)" "$DESIGN_EPIC")
 $ERGO claim "$INTERVIEW_TASK" --agent human@agent-host
 
-DESIGN_TASK=$(new_task '{"title":"Write technical design doc","epic":"'"$DESIGN_EPIC"'"}')
+DESIGN_TASK=$(new_task "Write technical design doc" "$DESIGN_EPIC")
 $ERGO sequence "$REQ_TASK" "$DESIGN_TASK"  # Design doc needs requirements first
 
 # ============================================
 # PHASE 2: Implementation (blocked by Design)
 # ============================================
-IMPL_EPIC=$(new_task '{"title":"Implementation"}')
+IMPL_EPIC=$(new_task "Implementation")
 $ERGO sequence "$DESIGN_EPIC" "$IMPL_EPIC"
 
 # Backend tasks
-SCAFFOLD_TASK=$(new_task '{"title":"Set up project scaffolding","epic":"'"$IMPL_EPIC"'"}')
+SCAFFOLD_TASK=$(new_task "Set up project scaffolding" "$IMPL_EPIC")
 
-MODEL_TASK=$(new_task '{"title":"Implement core data model","epic":"'"$IMPL_EPIC"'"}')
+MODEL_TASK=$(new_task "Implement core data model" "$IMPL_EPIC")
 $ERGO sequence "$SCAFFOLD_TASK" "$MODEL_TASK"
 
-API_TASK=$(new_task '{"title":"Build REST API endpoints","epic":"'"$IMPL_EPIC"'"}')
+API_TASK=$(new_task "Build REST API endpoints" "$IMPL_EPIC")
 $ERGO sequence "$MODEL_TASK" "$API_TASK"
 
-UI_TASK=$(new_task '{"title":"Build web frontend","epic":"'"$IMPL_EPIC"'"}')
+UI_TASK=$(new_task "Build web frontend" "$IMPL_EPIC")
 $ERGO sequence "$API_TASK" "$UI_TASK"
 
-TEST_TASK=$(new_task '{"title":"Write integration tests","epic":"'"$IMPL_EPIC"'"}')
+TEST_TASK=$(new_task "Write integration tests" "$IMPL_EPIC")
 $ERGO sequence "$API_TASK" "$TEST_TASK"
 
-SEC_TASK=$(new_task '{"title":"Security review","epic":"'"$IMPL_EPIC"'"}')
+SEC_TASK=$(new_task "Security review" "$IMPL_EPIC")
 $ERGO sequence "$API_TASK" "$SEC_TASK"
 
 # ============================================
 # PHASE 3: Launch (blocked by Implementation)
 # ============================================
-LAUNCH_EPIC=$(new_task '{"title":"Launch"}')
+LAUNCH_EPIC=$(new_task "Launch")
 $ERGO sequence "$IMPL_EPIC" "$LAUNCH_EPIC"
 
-STAGING_TASK=$(new_task '{"title":"Deploy to staging","epic":"'"$LAUNCH_EPIC"'"}')
+STAGING_TASK=$(new_task "Deploy to staging" "$LAUNCH_EPIC")
 $ERGO sequence "$UI_TASK" "$STAGING_TASK"    # Need frontend complete
 $ERGO sequence "$TEST_TASK" "$STAGING_TASK"  # Need tests passing
 
-QA_TASK=$(new_task '{"title":"QA sign-off","epic":"'"$LAUNCH_EPIC"'"}')
+QA_TASK=$(new_task "QA sign-off" "$LAUNCH_EPIC")
 $ERGO sequence "$STAGING_TASK" "$QA_TASK"
 
-NOTES_TASK=$(new_task '{"title":"Write release notes","epic":"'"$LAUNCH_EPIC"'"}')
+NOTES_TASK=$(new_task "Write release notes" "$LAUNCH_EPIC")
 $ERGO sequence "$UI_TASK" "$NOTES_TASK"  # Need to know what's shipping
 
-PROD_TASK=$(new_task '{"title":"Production deploy","epic":"'"$LAUNCH_EPIC"'"}')
+PROD_TASK=$(new_task "Production deploy" "$LAUNCH_EPIC")
 $ERGO sequence "$QA_TASK" "$PROD_TASK"
 $ERGO sequence "$NOTES_TASK" "$PROD_TASK"
 
-SOCIAL_TASK=$(new_task '{"title":"Announce on social media","epic":"'"$LAUNCH_EPIC"'"}')
+SOCIAL_TASK=$(new_task "Announce on social media" "$LAUNCH_EPIC")
 $ERGO sequence "$PROD_TASK" "$SOCIAL_TASK"
 
 # ============================================
 # Standalone tasks (no epic)
 # ============================================
-README_TASK=$(new_task '{"title":"Update README with new features"}')
+README_TASK=$(new_task "Update README with new features")
 $ERGO sequence "$PROD_TASK" "$README_TASK"  # Doc the release after it ships
 
-TYPO_TASK=$(new_task '{"title":"Fix typo in CLI help"}')
+TYPO_TASK=$(new_task "Fix typo in CLI help")
 $ERGO done "$TYPO_TASK"
 
 # A canceled task
-DB_TASK=$(new_task '{"title":"Evaluate alternative database (decided against)"}')
+DB_TASK=$(new_task "Evaluate alternative database (decided against)")
 $ERGO cancel "$DB_TASK"
 
 echo ""

@@ -13,12 +13,13 @@ The active repository contains:
 
 ```text
 .ergo/
-├── plans.jsonl
+├── backlog.jsonl
 └── lock
 ```
 
-If a repository already has `.ergo/events.jsonl`, Ergo continues to use it.
-Opening a repository does not rename or rewrite the log.
+New repositories use `backlog.jsonl`. Existing `plans.jsonl` and `events.jsonl`
+files remain supported in place. Selection follows that filename order. Opening
+a repository does not rename or rewrite the log.
 
 ## Event storage and replay
 
@@ -32,9 +33,9 @@ file. It writes one lossless representation of the live graph and removes
 pruned history. It preserves unresolved legacy error and claimed-blocked state
 exactly.
 
-Containers are derived. A root task becomes a container when another task's
-parent ID points to it. Historical `new_epic` events remain replayable so empty
-legacy containers stay visible.
+An epic is represented internally as a derived container. A root task gains
+that internal role when another task's parent ID points to it. Stored
+`new_epic` events remain replayable so existing empty epics stay visible.
 
 ## Locking
 
@@ -69,21 +70,22 @@ attachment, title, or placement. Validation finishes before append. Same-value
 content and same-state lifecycle calls suppress redundant events. Result append
 and legacy claim cleanup still produce events when the state itself is unchanged.
 
-## Tasks and containers
+## Tasks and epics
 
-Task is the only stored entity. A leaf task carries lifecycle state. A container
-has children and no direct lifecycle, claim, or result behavior. Completion is
-derived when all children are done or canceled.
+Task is the only stored entity. A leaf task carries lifecycle state. A public
+epic is the derived internal container: it has children and no direct lifecycle,
+claim, or result behavior. Completion is derived when all children are done or
+canceled.
 
-Placement validation keeps containers at one root level. A clean root todo task
-may be promoted by receiving its first child. Containers cannot move or nest.
-Moves also reject dependency edges between the prospective container and child.
+Placement validation keeps epics at one root level. A clean root todo task may
+be promoted by receiving its first child. Epics cannot move or nest. Moves also
+reject dependency edges between the prospective epic and child.
 
 ## Dependencies and readiness
 
 The graph stores directed `depends` edges. It rejects self edges, ancestry edges,
-and cycles. A container dependency completes when every child is done or
-canceled. A child also inherits dependencies assigned to its container.
+and cycles. An epic dependency completes when every child is done or canceled.
+A child also inherits dependencies assigned to its epic.
 
 Readiness is derived for todo leaf tasks whose direct and inherited dependencies
 are complete. Explicit blocked is separate from todo work waiting on dependencies.
@@ -111,15 +113,16 @@ lock mechanics. Placement and lifecycle validation stay inside the locked path.
 ## Public surfaces
 
 Agents depend on one readable output contract. List is a compact tree; show and
-claim use YAML front matter plus Markdown; focused writes return concise
-confirmations. Output changes require integration tests, manual updates, and a
-changelog note. Inline JSON is creation input, and the event log remains JSONL;
-neither creates a second output API.
+claim use YAML front matter plus Markdown; focused writes return tangible
+receipts. Titles are positional command operands, optional bodies use stdin, and
+the event log remains JSONL. Output changes require integration tests, manual
+updates, and a changelog note.
 
 The documentation sources have distinct roles:
 
-- `internal/ergo/help.txt`: complete compact command and flag reference.
-- `internal/ergo/quickstart.txt`: complete example-led manual.
+- `internal/ergo/help.txt`: root front door and command inventory.
+- Cobra command metadata: exact command-local usage, flags, and examples.
+- `internal/ergo/quickstart.txt`: complete cross-command manual.
 - `docs/spec.md`: stable behavioral contract.
 - `docs/architecture.md`: implementation constraints.
 

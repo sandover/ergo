@@ -1,19 +1,19 @@
 # ergo
 
-**A fast, minimal planning CLI for coding agents.**
+**A fast, minimal, dependency-aware backlog for coding agents.**
 
 [![License](https://img.shields.io/github/license/sandover/ergo)](LICENSE)
 [![CI](https://github.com/sandover/ergo/actions/workflows/ci.yml/badge.svg)](https://github.com/sandover/ergo/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo)](https://goreportcard.com/report/github.com/sandover/ergo)
 [![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo.svg)](https://pkg.go.dev/github.com/sandover/ergo)
 
-Ergo stores task graphs in the repository as compact, git-friendly JSONL. Plans
-survive agent sessions, remain visible to humans, and work across agent harnesses.
+Ergo keeps an implementation backlog in the repository. Agents create tasks,
+order them with dependencies, claim ready work, and record outcomes through
+direct commands. Humans see the same backlog. A repository lock keeps concurrent
+claims and mutations safe.
 
-Coding agents often blur a product specification and an implementation backlog.
-Ergo gives the backlog a small, durable home. Agents create tasks, add dependency
-order, claim ready work, and finish through direct commands. A file lock makes
-concurrent claims and mutations safe.
+Ergo is deliberately small: tasks, epics, dependencies, lifecycle state, and
+results. Its append-only event log is plain, git-friendly JSONL.
 
 Inspired by [beads (bd)](https://github.com/steveyegge/beads), with a smaller
 command and storage model.
@@ -34,14 +34,35 @@ go install github.com/sandover/ergo/cmd/ergo@latest
 
 Add a short repository instruction for your coding agent:
 
-> Use Ergo for feature planning. Run `ergo --help` and `ergo quickstart` to learn it.
+> Use Ergo to manage the implementation backlog. Run `ergo --help` and
+> `ergo quickstart` to learn it.
 
-The repository also ships a deeper planning skill at
-[`skills/ergo-feature-planning/SKILL.md`](skills/ergo-feature-planning/SKILL.md).
+The repository also ships an
+[Ergo feature-planning skill](skills/ergo-feature-planning/SKILL.md) for shaping
+and executing larger backlogs.
 
-## Plan work
+## Start
 
-Create a container and child tasks from markdown:
+```sh
+ergo init
+ergo new task "Add login"
+# => ABCDEF
+
+ergo list --ready
+ergo claim ABCDEF --agent model@host
+ergo done ABCDEF -m "Implemented and verified"
+```
+
+Use a concise title. Pipe longer context into the initial body:
+
+```sh
+printf '%s\n' 'Use bcrypt with cost 12.' |
+  ergo new task "Add password hashing"
+```
+
+## Create an epic
+
+An epic is a root task with children. Create one from a Markdown file:
 
 ```sh
 cat > tasks.md <<'EOF'
@@ -52,104 +73,77 @@ Use bcrypt with cost 12.
 Use 1-hour access and 24-hour refresh tokens.
 EOF
 
-ergo new epic --file tasks.md '{"title":"User login"}'
+ergo new epic "User login" --file tasks.md
 ```
 
-File order does not create dependencies. Add order explicitly:
+Each `# Title` chunk becomes a child task. File order does not create
+dependencies. Add order explicitly:
 
 ```sh
 ergo sequence TASK_HASHING TASK_TOKENS
 ```
 
-Create work incrementally when that is clearer:
+Optional piped stdin becomes free-form context on the epic.
+
+You can also build an epic incrementally:
 
 ```sh
-ergo new task '{"title":"User login"}'
-# => OFKSTE
-
-printf '%s\n' 'Use bcrypt with cost 12.' |
-  ergo new task '{"title":"Password hashing","epic":"OFKSTE"}'
+EPIC_ID=$(ergo new task "User login")
+ergo new task "Password hashing" --epic "$EPIC_ID"
 ```
 
-## Execute work
+The first child promotes a clean root todo task to an epic.
 
-```sh
-# Inspect actionable work.
-ergo list --ready
-
-# Claim the oldest ready task.
-ergo claim --agent sonnet@hostname
-
-# Or resume a specific task by ID.
-ergo claim ABCDEF --agent sonnet@hostname
-
-# Leave the claim through one direct intent.
-ergo done ABCDEF -m "Implemented and verified" --result src/auth.go
-ergo block ABCDEF -m "Waiting for the staging credential"
-ergo cancel ABCDEF -m "Superseded by another task"
-ergo release ABCDEF -m "Partial work is ready to continue"
-```
-
-After claiming, do the work, then run one of the task's printed exit commands.
-A claim exists exactly while state is `doing`. Done, block, cancel, and release
-clear it.
-
-Use release for unfinished work that remains valid. Use block when an identified
-impediment must be resolved before another attempt.
-
-## Human views
+## Work with the backlog
 
 ```sh
 ergo list
+ergo list --ready
+ergo list --epic ABCDEF
 ergo show ABCDEF
-ergo prune
 ```
 
 ![Example output of ergo list](docs/img/ergo-list-screenshot.jpg)
 
-The primary list symbols are:
+Claim a known task or the oldest ready task:
 
-- `○` ready todo work
-- `◐` doing work and its agent identity
-- `·` explicit blocked work or todo work waiting on dependencies
-- `✓` done
-- `✗` canceled
-- `⚠` unresolved legacy error
-- `⧗` dependency summary
+```sh
+ergo claim ABCDEF --agent model@host
+ergo claim --agent model@host
+```
 
-Prune previews closed work by default. `ergo prune --yes` records tombstones.
-`ergo compact` later removes pruned history and collapses the live log.
+Finish the attempt with the command that states the outcome:
 
-## Edit tasks
+```sh
+ergo done ABCDEF -m "Implemented and verified" --result docs/verification.md
+ergo block ABCDEF -m "Waiting for the staging credential"
+ergo cancel ABCDEF -m "Requirement withdrawn"
+ergo release ABCDEF -m "Ready for another agent"
+```
+
+Lifecycle messages append. Results refer to existing project-relative files.
+Lifecycle commands clear the claim and never replace the task body.
+
+Use focused commands to edit existing work:
 
 ```sh
 ergo title ABCDEF "Clarify authentication failure"
 printf '%s\n' '## Goal' '- Clarify the failure' | ergo body ABCDEF
-ergo move ABCDEF OFKSTE
+ergo move ABCDEF GHIJKL
 ergo move ABCDEF --root
 ```
-
-Lifecycle commands append messages with `-m` and can attach an existing result:
-
-```sh
-ergo done ABCDEF -m "Implemented and verified" --result docs/verification.md
-```
-
-Lifecycle commands reject piped stdin. `body` is the only command that changes
-an existing task body.
 
 ## Storage
 
 ```text
 .ergo/
-├── plans.jsonl    # append-only event log
+├── backlog.jsonl  # append-only event log
 └── lock           # write and coherent-read serialization
 ```
 
-Plain JSONL is inspectable, diffable, and recoverable. Each command replays the
-log into memory. Mutations validate and append their complete event batch under
-the lock. Oldest-ready claim selects and writes under that same lock, so
-concurrent agents cannot claim the same task.
+Each command replays the event log into memory. Mutations validate and append
+their complete event batch under the lock. Ready-task selection and claim happen
+under that same lock, so concurrent agents cannot claim the same task.
 
-Run `ergo --help` for the compact reference and `ergo quickstart` for every
-command, flag, input rule, output form, and legacy behavior.
+Run `ergo --help` for the front door, `ergo <command> --help` for one command,
+and `ergo quickstart` for the complete guide.

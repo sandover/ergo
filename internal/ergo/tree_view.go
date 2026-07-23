@@ -538,12 +538,10 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 	icon := stateIcon(task, node.isReady)
 	title := task.Title
 
-	// Literal status keeps the compact view understandable without an icon legend.
-	annotations := []string{"[" + taskStatusLabel(task, node.isReady) + "]"}
+	annotations := []string{}
 
-	// Claimed by (always show - this is actionable info)
 	if task.ClaimedBy != "" {
-		annotations = append(annotations, "claimed:"+task.ClaimedBy)
+		annotations = append(annotations, "@"+task.ClaimedBy)
 	}
 
 	// Blocking info - only show blockers that aren't already shown by parent
@@ -619,7 +617,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 
 func taskStatusLabel(task *Task, ready bool) string {
 	if task.IsEpic {
-		return "container"
+		return "epic"
 	}
 	if task.State == stateTodo {
 		if ready {

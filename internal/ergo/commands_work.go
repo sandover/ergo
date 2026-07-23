@@ -146,7 +146,7 @@ func buildSequenceEdges(order []string) []sequenceEdge {
 
 func RunSequence(args []string, opts GlobalOptions) error {
 	if len(args) > 0 && args[0] == "rm" {
-		return errors.New("sequence rm was removed in Ergo 3; use ergo unsequence <A> <B> [<C>...]")
+		return errors.New("sequence rm is not accepted; use ergo unsequence <A> <B> [<C>...]")
 	}
 	return runSequenceChange("sequence", "link", args, opts)
 }
@@ -290,7 +290,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	if epicID != "" {
 		epic := graph.Tasks[epicID]
 		if epic == nil || !isContainer(epic, graph) {
-			return fmt.Errorf("no such container: %s", epicID)
+			return fmt.Errorf("no such epic: %s", epicID)
 		}
 	}
 
@@ -629,11 +629,14 @@ func RunCompact(opts GlobalOptions) error {
 	}
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
+	before := 0
+	after := 0
 	if err := withLock(lockPath, opts, func() error {
 		events, err := readEvents(eventsPath)
 		if err != nil {
 			return err
 		}
+		before = len(events)
 		graph, err := replayEvents(events)
 		if err != nil {
 			return err
@@ -642,11 +645,16 @@ func RunCompact(opts GlobalOptions) error {
 		if err != nil {
 			return err
 		}
+		after = len(compacted)
 		return replaceEventsAtomically(eventsPath, compacted)
 	}); err != nil {
 		return err
 	}
-	fmt.Println("Ergo log compacted.")
+	resolved, err := filepath.Abs(eventsPath)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Compacted %s: %d -> %d events (%d removed)\n", resolved, before, after, before-after)
 	return nil
 }
 
@@ -795,7 +803,7 @@ func printPruneStats(stats pruneStats, useColor bool) {
 	if stats.containers > 0 {
 		fmt.Print("  ")
 		fmt.Print(iconEpic)
-		fmt.Printf("  %d empty containers\n", stats.containers)
+		fmt.Printf("  %d empty epics\n", stats.containers)
 	}
 }
 

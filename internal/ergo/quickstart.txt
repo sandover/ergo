@@ -2,44 +2,37 @@
 
 {{HEADER}}1. WORKFLOW{{RESET}}
 
-Initialize a repository and create work:
+Initialize the repository, create a task, and use its returned ID:
 
   {{CMD}}ergo init{{RESET}}
-  {{CMD}}ergo new task '{"title":"Add password login"}'  # returns task ID ABCDEF{{RESET}}
-
-Find and claim ready work:
-
-  {{CMD}}ergo list --ready                        # shows available work{{RESET}}
+  {{CMD}}ergo new task "Add password login"{{RESET}}
+  {{CMD}}ergo list --ready{{RESET}}
   {{CMD}}ergo claim ABCDEF --agent model@host{{RESET}}
-
-Read the claimed task, do the work, and choose the command that states the
-outcome:
-
   {{CMD}}ergo done ABCDEF -m "Implemented and verified"{{RESET}}
-  {{CMD}}ergo block ABCDEF -m "Waiting for an API key"{{RESET}}
-  {{CMD}}ergo cancel ABCDEF -m "No longer needed"{{RESET}}
-  {{CMD}}ergo release ABCDEF -m "Ready for another attempt"{{RESET}}
 
-{{HEADER}}2. MODEL{{RESET}}
+Run `ergo <command> --help` for the exact operands, flags, stdin behavior, and
+examples for one command.
 
-A leaf holds work. Its state is:
+{{HEADER}}2. BACKLOG MODEL{{RESET}}
+
+Each task has a title, optional body, lifecycle state, dependencies, messages,
+results, and timestamps. A task is ready when it is todo and every dependency
+is complete.
+
+The lifecycle states are:
 
   todo       open and unclaimed
-  doing      open and claimed by one agent
-  blocked    open; an identified impediment requires action
+  doing      claimed by one agent
+  blocked    an identified impediment requires action
   done       objective satisfied
   canceled   objective no longer wanted
 
-Readiness is derived:
-
-  todo + every dependency complete = ready
-
 A todo task with unmet dependencies is waiting, not blocked. A claim exists
-exactly while state is doing.
+only while a task is doing.
 
-A container is a root task with children. It completes when every child is done
-or canceled. It has no state, claim, message, or result. Use `epic` to place a
-new task in a container or filter one from the list.
+An epic is a root task with children. It has no lifecycle state, claim, message,
+or result of its own. It completes when every child is done or canceled. Epics
+cannot be nested.
 
 {{HEADER}}3. INITIALIZE AND FIND WORK{{RESET}}
 
@@ -47,41 +40,41 @@ new task in a container or filter one from the list.
   {{CMD}}ergo init path/to/repo{{RESET}}
   {{CMD}}ergo where{{RESET}}
 
-Init creates `.ergo/plans.jsonl` and `.ergo/lock`. Discovery walks upward from
-the current directory or `--dir <path>`.
+Ergo discovers `.ergo` by walking upward from the current directory or from
+`--dir <path>`.
 
   {{CMD}}ergo list{{RESET}}                 active work; omits done and canceled
-  {{CMD}}ergo list --ready{{RESET}}         claimable leaves
+  {{CMD}}ergo list --ready{{RESET}}         tasks available to claim
   {{CMD}}ergo list --all{{RESET}}           include closed work
-  {{CMD}}ergo list --epic OFKSTE{{RESET}}   one container and its children
-  {{CMD}}ergo show ABCDEF{{RESET}}          inspect one leaf or container
+  {{CMD}}ergo list --epic ABCDEF{{RESET}}   one epic and its children
+  {{CMD}}ergo show ABCDEF{{RESET}}          inspect one task or epic
 
 `--ready` and `--all` conflict.
 
 {{HEADER}}4. CREATE AND ORGANIZE{{RESET}}
 
-Create leaves with short, concrete titles:
+Create an unclaimed todo task with a positional title:
 
-  {{CMD}}ergo new task '{"title":"Add login"}'{{RESET}}
-  {{CMD}}ergo new task '{"title":"Session tokens","epic":"OFKSTE"}'{{RESET}}
-  {{CMD}}ergo new task '{"title":"Fix CVE","claim":"model@host"}'{{RESET}}
+  {{CMD}}ergo new task "Add login"{{RESET}}
+  {{CMD}}ergo new task "Session tokens" --epic ABCDEF{{RESET}}
 
-The inline JSON fields are `title`, `epic`, `state`, `claim`, and `result`.
-Title is required and unknown fields fail. State is todo, doing, blocked, done,
-or canceled. Claim implies doing; doing without `claim` uses global `--agent`.
+Piped stdin becomes the literal initial body. No pipe or an empty pipe creates
+an empty body.
 
-Pipe multiline Markdown into the initial body. Do not put it in JSON or a shell
-argument:
+  {{CMD}}printf '%s\n' 'Implement password login.' | ergo new task "Add login"{{RESET}}
 
-  {{CMD}}printf '%s\n' '## Goal' '- Implement signup' | ergo new task '{"title":"Signup"}'{{RESET}}
+Successful task creation prints only the task ID. This makes the result safe to
+use directly:
 
-An empty pipe and no pipe both create an empty body.
+  {{CMD}}ergo show "$(ergo new task "Investigate timeout")"{{RESET}}
 
-Create a container and children from a file:
+Create an epic and its children from a Markdown file:
 
-  {{CMD}}ergo new epic --file tasks.md '{"title":"Authentication"}'{{RESET}}
+  {{CMD}}ergo new epic "Authentication" --file tasks.md{{RESET}}
 
-`tasks.md` contains chunks separated by a line that is exactly `---`:
+`tasks.md` contains one or more chunks separated by a line that is exactly
+`---`. Each chunk starts with `# Title`; its remaining text is the child body.
+File order does not add dependencies.
 
   # Schema
   Create tables and indexes.
@@ -89,102 +82,83 @@ Create a container and children from a file:
   # Endpoints
   Add signup and login handlers.
 
-Each chunk begins with `# Title`; the rest is its body. File order creates no
-dependencies.
+Optional piped stdin becomes free-form context on the epic. Successful epic
+creation names the epic and every child so they can be used immediately.
 
-Change one field at a time:
+Use focused commands to change existing work:
 
   {{CMD}}ergo title ABCDEF "Clarify authentication failure"{{RESET}}
-  {{CMD}}printf '%s\n' '## Goal' '- Clarify the failure' | ergo body ABCDEF{{RESET}}
+  {{CMD}}printf '%s\n' 'New body' | ergo body ABCDEF{{RESET}}
   {{CMD}}printf '' | ergo body ABCDEF{{RESET}}
-  {{CMD}}ergo move ABCDEF OFKSTE{{RESET}}
+  {{CMD}}ergo move ABCDEF GHIJKL{{RESET}}
   {{CMD}}ergo move ABCDEF --root{{RESET}}
 
-Title rejects blank text. Body requires piped stdin and treats it literally; an
-empty pipe clears it. Both accept leaves and containers. Body is the only
-existing-task body writer.
-
-Move accepts leaves only. Its destination must be a root container or a clean,
-unclaimed root todo task with no results; that task becomes a container on its
-first child. Containers cannot move or nest. Moving to the current parent does
-nothing and succeeds.
+`body` requires piped stdin and replaces the entire body; an empty pipe clears
+it. Move accepts leaves only. Its destination must be an epic or a clean,
+unclaimed root todo task with no results; the latter becomes an epic when it
+receives its first child.
 
 {{HEADER}}5. CLAIM AND RESUME{{RESET}}
 
-Use a stable identity such as `model@hostname`:
+Use a stable identity such as `model@host`:
 
-  {{CMD}}ergo claim --agent sonnet@agent-host{{RESET}}          oldest ready task
-  {{CMD}}ergo claim ABCDEF --agent sonnet@agent-host{{RESET}}   chosen task
+  {{CMD}}ergo claim ABCDEF --agent model@host{{RESET}}   claim a known task
+  {{CMD}}ergo claim --agent model@host{{RESET}}          claim the oldest ready task
 
-Automatic claim selects only a ready todo leaf. A specific claim accepts todo,
-blocked, done, or canceled, even when dependencies are incomplete. Use it when
-deliberately resuming that ID.
-
-Repeating a claim as its owner succeeds. Another identity gets a conflict.
-Containers cannot be claimed.
+Automatic claim selects a ready todo task. A specific claim can resume todo,
+blocked, done, or canceled work under the same ID, even if its dependencies are
+incomplete. Repeating a claim as its owner succeeds; another identity gets a
+conflict.
 
 {{HEADER}}6. COMPLETE, BLOCK, CANCEL, OR RELEASE{{RESET}}
 
   {{CMD}}ergo done ABCDEF{{RESET}}       objective satisfied
   {{CMD}}ergo block ABCDEF{{RESET}}      impediment requires action
   {{CMD}}ergo cancel ABCDEF{{RESET}}     objective no longer wanted
-  {{CMD}}ergo release ABCDEF{{RESET}}    unfinished work ready for another attempt
+  {{CMD}}ergo release ABCDEF{{RESET}}    unfinished work returns to todo
 
-Done, block, and cancel accept any readable leaf state. Release returns
-unfinished work to unclaimed todo. It rejects done and canceled; use a specific
-claim to resume closed work. Every lifecycle command clears the claim.
+Done, block, and cancel accept any readable task state. Release accepts
+unfinished work and rejects done or canceled work. Every lifecycle command
+clears the claim.
 
-Append a concise lifecycle message with `-m`:
+Use `-m` for durable outcome or attempt context:
 
   {{CMD}}ergo block ABCDEF -m "Waiting for an API key"{{RESET}}
   {{CMD}}ergo done ABCDEF -m "Implemented" -m "Verified with task ci"{{RESET}}
 
-Repeated `-m` values form paragraphs in one message. Messages append; they never
-replace the task body. Lifecycle commands reject piped stdin, including an empty
-pipe. Use `ergo body` when the body itself must change.
+Repeated `-m` values form paragraphs in one appended message. Lifecycle
+commands do not read stdin and never replace the task body.
 
-Attach an existing project file with `--result`:
+Use `--result` to attach an existing project-relative file outside `.ergo`:
 
   {{CMD}}ergo done ABCDEF --result docs/verification.md{{RESET}}
   {{CMD}}ergo release ABCDEF -m "Useful partial work" --result .scratch/attempt.md{{RESET}}
 
-The path must be relative, inside the project, outside `.ergo/`, and already
-exist. Results append as attempt history. Repeat the current lifecycle command
-to attach late evidence.
+Results append as attempt history. Repeat the current lifecycle command to
+attach evidence produced after the state change.
 
 {{HEADER}}7. DEPENDENCIES{{RESET}}
 
   {{CMD}}ergo sequence TASK_A TASK_B{{RESET}}
   {{CMD}}ergo sequence TASK_A TASK_B TASK_C{{RESET}}
   {{CMD}}ergo unsequence TASK_A TASK_B{{RESET}}
-  {{CMD}}ergo unsequence TASK_A TASK_B TASK_C{{RESET}}
 
-Sequence means A, then B, then C: each later task depends on the preceding task.
-Unsequence removes the same adjacent edges. Existing or absent edges succeed
-without a change. A failed chain writes no partial edges.
+Sequence means A before B before C: each later task depends on the preceding
+task. Unsequence removes those adjacent edges. Existing or absent edges are
+no-ops. A failed chain writes no partial edges.
 
-Self-dependencies, cycles, and dependencies between a container and its child
-fail. A dependency on a container completes when all children are done or
-canceled.
+Self-dependencies, cycles, and edges between an epic and its child fail. A
+dependency on an epic completes when all its children are done or canceled.
+Children also inherit dependencies assigned to their epic.
 
-{{HEADER}}8. GLOBAL FLAGS{{RESET}}
-
-Global flags may precede a command:
-
-  {{CMD}}ergo --agent model@host ...{{RESET}}  caller identity
-  {{CMD}}ergo --dir path/to/repo ...{{RESET}}  discovery start
-  {{CMD}}ergo --help{{RESET}}                  compact manual
-  {{CMD}}ergo --version{{RESET}}               build version
-
-{{HEADER}}9. MAINTENANCE{{RESET}}
+{{HEADER}}8. MAINTENANCE AND CONCURRENCY{{RESET}}
 
   {{CMD}}ergo prune{{RESET}}        preview removable closed work
-  {{CMD}}ergo prune --yes{{RESET}}  remove it from live state
-  {{CMD}}ergo compact{{RESET}}      rewrite the log to live state
-  {{CMD}}ergo version{{RESET}}      print the build version
-  {{CMD}}ergo quickstart{{RESET}}   print this guide
+  {{CMD}}ergo prune --yes{{RESET}}  remove it from the current backlog
+  {{CMD}}ergo compact{{RESET}}      remove superseded event history
 
-Prune targets done and canceled leaves, then containers left empty. Compact
-physically removes pruned history. Reads and writes use `.ergo/lock`; automatic
-claim selects and writes under the same lock, so concurrent agents cannot claim
-the same task.
+Prune targets done and canceled leaves, then epics left empty. Compact preserves
+the current backlog while shortening its event log.
+
+Reads and writes use the repository lock. Claim selection and mutation happen
+under the same lock, so concurrent agents cannot claim the same task.

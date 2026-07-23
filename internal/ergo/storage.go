@@ -20,8 +20,9 @@ import (
 
 const (
 	dataDirName       = ".ergo"
+	backlogFileName   = "backlog.jsonl"
 	plansFileName     = "plans.jsonl"
-	oldEventsFileName = "events.jsonl" // Legacy name, kept for backwards compatibility
+	oldEventsFileName = "events.jsonl"
 )
 
 func resolveErgoDir(start string) (string, error) {
@@ -72,27 +73,23 @@ func ergoDir(opts GlobalOptions) (string, error) {
 	return resolveErgoDir(start)
 }
 
-// getEventsPath returns the path to the events/plans file.
-// For backwards compatibility:
-// - If plans.jsonl exists, use it
-// - Otherwise if events.jsonl exists, use it
-// - For new files, default to plans.jsonl
+// getEventsPath selects the repository event log without renaming existing data.
+// New repositories use backlog.jsonl. Existing earlier filenames remain in place.
 func getEventsPath(dir string) string {
+	backlogPath := filepath.Join(dir, backlogFileName)
 	plansPath := filepath.Join(dir, plansFileName)
 	oldPath := filepath.Join(dir, oldEventsFileName)
 
-	// If plans.jsonl exists, use it
+	if _, err := os.Stat(backlogPath); err == nil {
+		return backlogPath
+	}
 	if _, err := os.Stat(plansPath); err == nil {
 		return plansPath
 	}
-
-	// If events.jsonl exists, use it (backwards compatibility)
 	if _, err := os.Stat(oldPath); err == nil {
 		return oldPath
 	}
-
-	// Default to plans.jsonl for new files
-	return plansPath
+	return backlogPath
 }
 
 func loadGraph(dir string) (*Graph, error) {
@@ -292,10 +289,10 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 		if epicID != "" {
 			epic, ok := graph.Tasks[epicID]
 			if !ok {
-				return fmt.Errorf("unknown container id %s", epicID)
+				return fmt.Errorf("unknown epic id %s", epicID)
 			}
 			if epic.EpicID != "" {
-				return fmt.Errorf("task %s is not a container", epicID)
+				return fmt.Errorf("task %s is not an epic", epicID)
 			}
 			// Reject first-child assignment to a dirty leaf: once promoted to a
 			// container, leaf-only semantics (state/claim/results) no longer apply.
@@ -304,7 +301,7 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 					return fmt.Errorf("cannot add child to task %s: task is claimed by %q", epicID, epic.ClaimedBy)
 				}
 				if epic.State != stateTodo {
-					return fmt.Errorf("cannot add child to task %s: state is %q (must be todo to promote to container)", epicID, epic.State)
+					return fmt.Errorf("cannot add child to task %s: state is %q (must be todo to promote to epic)", epicID, epic.State)
 				}
 				if len(epic.Results) > 0 {
 					return fmt.Errorf("cannot add child to task %s: task has results attached", epicID)
@@ -537,7 +534,7 @@ func buildResultEvent(repoDir string, graph *Graph, taskID, summary, relPath str
 		return Event{}, fmt.Errorf("unknown task id %s", taskID)
 	}
 	if isContainer(task, graph) {
-		return Event{}, errors.New("cannot attach result to container")
+		return Event{}, errors.New("cannot attach result to epic")
 	}
 	if err := validateResultSummary(summary); err != nil {
 		return Event{}, err

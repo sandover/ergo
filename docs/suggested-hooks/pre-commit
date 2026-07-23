@@ -11,7 +11,7 @@ repo_root="$(git rev-parse --show-toplevel)"
 
 echo >&2
 echo "# checklist (commit)" >&2
-echo "# - If you changed ergo plans/tasks: stage the log: git add .ergo/plans.jsonl (or events.jsonl if using legacy name)" >&2
+echo "# - If you changed Ergo tasks: stage its event log under .ergo/" >&2
 echo "# - Before pushing: run task ci (or let pre-push run it)" >&2
 echo >&2
 
@@ -41,10 +41,11 @@ if (( staged_go_file_count > 0 )); then
   git add -- "${staged_go_files[@]}"
 fi
 
-# Warn (do not fail) if ergo tasks/log changed but plans/events file is not staged.
-# Check for plans.jsonl first (new), then events.jsonl (legacy)
+# Warn (do not fail) if the selected Ergo event log changed but is not staged.
 ergo_log_file=""
-if [[ -f "$repo_root/.ergo/plans.jsonl" ]]; then
+if [[ -f "$repo_root/.ergo/backlog.jsonl" ]]; then
+  ergo_log_file="backlog.jsonl"
+elif [[ -f "$repo_root/.ergo/plans.jsonl" ]]; then
   ergo_log_file="plans.jsonl"
 elif [[ -f "$repo_root/.ergo/events.jsonl" ]]; then
   ergo_log_file="events.jsonl"

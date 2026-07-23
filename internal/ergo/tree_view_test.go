@@ -275,8 +275,8 @@ func TestRenderTreeUsesLiteralAgentStatuses(t *testing.T) {
 	var buf bytes.Buffer
 	renderTreeView(&buf, roots, graph, "/repo", false)
 	output := buf.String()
-	if !strings.Contains(output, "[ready]") || !strings.Contains(output, "[doing]") || !strings.Contains(output, "claimed:agent@host") {
-		t.Fatalf("list output lacks literal status or claim context: %s", output)
+	if strings.Contains(output, "[ready]") || strings.Contains(output, "[doing]") || !strings.Contains(output, "@agent@host") {
+		t.Fatalf("list output has noisy labels or lacks terse claim context: %s", output)
 	}
 }
 

@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Ergo now presents work as a dependency-aware backlog and makes the common
+commands easier to invoke without prior context.
+
+### Changed
+
+- Create a task with `ergo new task "<title>" [--epic <id>]`; optional stdin is
+  its body.
+- Create an epic with `ergo new epic "<title>" --file <path>`; optional stdin is
+  free-form epic context.
+- Successful mutations report tangible resulting facts and newly ready work.
+- List output keeps state icons, ownership, and blockers without bracketed
+  status labels.
+- Root help, command help, quickstart, README, specification, and shipped skill
+  now form one consistent documentation system.
+- New repositories store events in `.ergo/backlog.jsonl`. Existing
+  `plans.jsonl` and `events.jsonl` repositories continue in place.
+
+### Removed
+
+- Removed the `plan` command. Use `new epic`.
+- Removed JSON creation input. Use positional titles, `--epic`, stdin bodies,
+  and lifecycle commands.
+
+### Upgrade
+
+| Before | Now |
+| --- | --- |
+| `ergo new task '{"title":"Add login"}'` | `ergo new task "Add login"` |
+| `ergo new task '{"title":"Child","epic":"ABCDEF"}'` | `ergo new task "Child" --epic ABCDEF` |
+| `ergo plan ...` | `ergo new epic "<title>" --file tasks.md` |
+
 ## [3.0.0] - 2026-07-22
 
 Ergo 3 simplifies how agents read and update work.

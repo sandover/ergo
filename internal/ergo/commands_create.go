@@ -2,17 +2,7 @@
 // Exports: RunInit, RunNewTask, RunNewEpic.
 // Role: Command layer for creation workflows and repo initialization.
 // Invariants: Writes are append-only under lock; create is safe under concurrent writers.
-// Notes: New tasks start in todo state; containers cannot nest.
-//
-// Task creation uses one forward input style:
-// - optional inline JSON argument for metadata (`new task '{...}'`)
-// - optional piped stdin for the body (`printf ... | ergo new task '{...}'`)
-// - `new epic --file` for markdown-driven bulk creation
-//
-//	printf '%s\n' '## Goal' '- Do X' | ergo new task '{"title":"Do X"}'
-//	ergo new epic --file tasks.md '{"title":"Auth system"}'
-//
-// See cli_input.go for the user-facing parser contract.
+// Notes: Titles are positional, bodies are optional stdin, and new tasks are todo.
 package ergo
 
 import (
@@ -33,54 +23,50 @@ func RunInit(args []string, opts GlobalOptions) error {
 		return errors.New("usage: ergo init [dir]")
 	}
 	target := filepath.Join(dir, dataDirName)
+	_, dirErr := os.Stat(target)
+	eventsPath := getEventsPath(target)
+	_, eventsErr := os.Stat(eventsPath)
+	_, lockErr := os.Stat(filepath.Join(target, "lock"))
 	if err := os.MkdirAll(target, 0755); err != nil {
 		return err
 	}
-	plansPath := filepath.Join(target, plansFileName)
 	lockPath := filepath.Join(target, "lock")
-	if err := ensureFileExists(plansPath, 0644); err != nil {
+	if err := ensureFileExists(eventsPath, 0644); err != nil {
 		return err
 	}
 	if err := ensureFileExists(lockPath, 0644); err != nil {
 		return err
 	}
-	fmt.Println(target)
+	resolved, err := filepath.Abs(target)
+	if err != nil {
+		return err
+	}
+	switch {
+	case os.IsNotExist(dirErr):
+		fmt.Printf("Initialized Ergo at %s\n", resolved)
+	case os.IsNotExist(eventsErr) || os.IsNotExist(lockErr):
+		fmt.Printf("Repaired Ergo at %s\n", resolved)
+	default:
+		fmt.Printf("Ergo already initialized at %s\n", resolved)
+	}
 	return nil
 }
 
-func RunNewTask(args []string, opts GlobalOptions) error {
-	const usage = "usage: ergo new task [json]"
-
-	input, verr, err := parseInlineTaskArgs(args, usage)
-	if err != nil {
-		return err
+func RunNewTask(title, epicID string, opts GlobalOptions) error {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return errors.New(NewTaskUsage)
 	}
-	if verr != nil {
-		return verr.GoError()
-	}
-	if verr := input.ValidateForNew(); verr != nil {
-		return verr.GoError()
-	}
-
 	body, _, err := readOptionalBodyFromStdin()
 	if err != nil {
 		return err
-	}
-
-	title := strings.TrimSpace(*input.Title)
-	epicID := ""
-	if input.Epic != nil {
-		epicID = *input.Epic
 	}
 
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
 	}
-	updates := input.ToUpdates()
-	delete(updates, "title")
-	delete(updates, "epic")
-	created, err := createTaskWithUpdates(dir, opts, epicID, title, body, updates, opts.AgentID)
+	created, err := createTaskWithUpdates(dir, opts, epicID, title, body, nil, "")
 	if err != nil {
 		return err
 	}
@@ -89,39 +75,33 @@ func RunNewTask(args []string, opts GlobalOptions) error {
 	return nil
 }
 
-func RunNewEpic(filePath string, args []string, opts GlobalOptions) error {
-	const usage = "usage: ergo new epic --file <path> [json]"
+func RunNewEpic(title, filePath string, opts GlobalOptions) error {
 	if strings.TrimSpace(filePath) == "" {
-		return errors.New(usage)
+		return errors.New(NewEpicUsage)
 	}
-
-	input, verr, err := parsePlanCommandArgs(args, usage)
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return errors.New(NewEpicUsage)
+	}
+	tasks, err := ParseEpicFile(filePath)
 	if err != nil {
 		return err
 	}
-	if verr != nil {
-		return verr.GoError()
-	}
-	if verr := input.Validate(); verr != nil {
-		return verr.GoError()
-	}
-
-	tasks, err := ParsePlanFile(filePath)
+	body, _, err := readOptionalBodyFromStdin()
 	if err != nil {
 		return err
 	}
-	title := strings.TrimSpace(*input.Title)
 
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
 	}
-	return runBulkCreate(dir, opts, title, "", tasks)
+	return runBulkCreate(dir, opts, title, body, tasks)
 }
 
-// runBulkCreate creates a container task with child tasks and dependency edges.
-// It backs the `new epic --file` command.
-func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, containerBody string, tasks []PlanTaskInput) error {
+// runBulkCreate creates an epic, its child tasks, and dependency edges.
+// It backs the `new epic` command.
+func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody string, tasks []EpicTaskInput) error {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)
 
@@ -142,23 +122,23 @@ func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, contai
 		}
 
 		now := time.Now().UTC()
-		containerID, err := newShortID(workingIDs)
+		epicID, err := newShortID(workingIDs)
 		if err != nil {
 			return err
 		}
-		containerUUID, err := newUUID()
+		epicUUID, err := newUUID()
 		if err != nil {
 			return err
 		}
-		workingIDs[containerID] = &Task{ID: containerID}
+		workingIDs[epicID] = &Task{ID: epicID}
 		createdAt := formatTime(now)
-		containerEvent, err := newEvent("new_task", now, NewTaskEvent{
-			ID:        containerID,
-			UUID:      containerUUID,
+		epicEvent, err := newEvent("new_task", now, NewTaskEvent{
+			ID:        epicID,
+			UUID:      epicUUID,
 			EpicID:    "",
 			State:     stateTodo,
-			Title:     containerTitle,
-			Body:      containerBody,
+			Title:     epicTitle,
+			Body:      epicBody,
 			CreatedAt: createdAt,
 		})
 		if err != nil {
@@ -166,14 +146,14 @@ func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, contai
 		}
 
 		out = bulkCreateOutput{
-			ID:       containerID,
-			Title:    containerTitle,
+			ID:       epicID,
+			Title:    epicTitle,
 			Children: make([]bulkCreateChildOutput, 0, len(tasks)),
 			Edges:    make([]sequenceEdge, 0),
 		}
 
 		newEvents := make([]Event, 0, 1+len(tasks))
-		newEvents = append(newEvents, containerEvent)
+		newEvents = append(newEvents, epicEvent)
 
 		titleToID := make(map[string]string, len(tasks))
 		for _, taskInput := range tasks {
@@ -188,13 +168,13 @@ func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, contai
 			if err != nil {
 				return err
 			}
-			workingIDs[taskID] = &Task{ID: taskID, EpicID: containerID}
+			workingIDs[taskID] = &Task{ID: taskID, EpicID: epicID}
 
 			taskNow := time.Now().UTC()
 			taskEvent, err := newEvent("new_task", taskNow, NewTaskEvent{
 				ID:        taskID,
 				UUID:      taskUUID,
-				EpicID:    containerID,
+				EpicID:    epicID,
 				State:     stateTodo,
 				Title:     taskTitle,
 				Body:      taskBody,
@@ -210,7 +190,7 @@ func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, contai
 			})
 
 			titleToID[taskTitle] = taskID
-			graph.Tasks[taskID] = &Task{ID: taskID, EpicID: containerID}
+			graph.Tasks[taskID] = &Task{ID: taskID, EpicID: epicID}
 			if graph.Deps[taskID] == nil {
 				graph.Deps[taskID] = map[string]struct{}{}
 			}
@@ -261,7 +241,7 @@ func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, contai
 		return err
 	}
 
-	fmt.Printf("%s - %s\n", out.ID, out.Title)
+	fmt.Printf("Epic %s - %s\n", out.ID, out.Title)
 	for _, child := range out.Children {
 		fmt.Printf("  %s - %s\n", child.ID, child.Title)
 	}

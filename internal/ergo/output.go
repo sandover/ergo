@@ -12,7 +12,6 @@ import (
 )
 
 type createOutput struct {
-	Container bool
 	ID        string
 	UUID      string
 	EpicID    string
@@ -28,7 +27,7 @@ type bulkCreateChildOutput struct {
 	Title string
 }
 
-// bulkCreateOutput is the result of creating a container and its children.
+// bulkCreateOutput is the result of creating an epic and its child tasks.
 type bulkCreateOutput struct {
 	ID       string
 	Title    string

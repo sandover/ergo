@@ -26,7 +26,7 @@ func TestLifecycleCommandsFromEveryState(t *testing.T) {
 				if code != 0 {
 					t.Fatalf("%s failed: %s", verb, stderr)
 				}
-				if stdout != id+" "+target+"\n" {
+				if !strings.Contains(stdout, id+" - Lifecycle task\n") || !strings.Contains(stdout, "State: "+target+"\n") {
 					t.Fatalf("unexpected output: %q", stdout)
 				}
 				shown := showTaskFields(t, dir, id)
@@ -48,7 +48,7 @@ func TestReleaseLifecycleStates(t *testing.T) {
 			if code != 0 {
 				t.Fatalf("release failed: %s", stderr)
 			}
-			if stdout != id+" todo\n" {
+			if !strings.Contains(stdout, id+" - Lifecycle task\n") || !strings.Contains(stdout, "State: todo\n") {
 				t.Fatalf("release output = %q", stdout)
 			}
 		})
@@ -63,6 +63,34 @@ func TestReleaseLifecycleStates(t *testing.T) {
 				t.Fatalf("expected release rejection, code=%d stderr=%q", code, stderr)
 			}
 		})
+	}
+}
+
+func TestLifecycleReceiptNamesClaimChangesAndNewlyReadyWork(t *testing.T) {
+	dir := setupErgo(t)
+	first := createLifecycleTask(t, dir)
+	stdout, stderr, code := runNewTask(t, dir, "Second task")
+	if code != 0 {
+		t.Fatalf("create second task: %s", stderr)
+	}
+	second := strings.TrimSpace(stdout)
+	if _, stderr, code = runErgo(t, dir, "", "sequence", first, second); code != 0 {
+		t.Fatalf("sequence: %s", stderr)
+	}
+	if _, stderr, code = runErgo(t, dir, "", "claim", first, "--agent", "model@host"); code != 0 {
+		t.Fatalf("claim: %s", stderr)
+	}
+	stdout, stderr, code = runErgo(t, dir, "", "done", first, "-m", "Verified")
+	if code != 0 {
+		t.Fatalf("done: %s", stderr)
+	}
+	for _, fact := range []string{
+		first + " - Lifecycle task", "State: done", "Claim: cleared",
+		"Message: appended", "Ready: " + second + " - Second task",
+	} {
+		if !strings.Contains(stdout, fact) {
+			t.Fatalf("receipt lacks %q: %s", fact, stdout)
+		}
 	}
 }
 
@@ -110,7 +138,8 @@ func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("done failed: %s", stderr)
 	}
-	if stdout != id+" done\n" {
+	if !strings.Contains(stdout, id+" - Lifecycle task\n") || !strings.Contains(stdout, "State: done\n") ||
+		!strings.Contains(stdout, "Message: appended\n") || !strings.Contains(stdout, "Result: result.txt\n") {
 		t.Fatalf("done output = %q", stdout)
 	}
 	shown := showTaskOutput(t, dir, id)
@@ -131,7 +160,8 @@ func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 	}
 	beforeLate := countEventLines(t, dir)
 	stdout, stderr, code = runErgo(t, dir, "", "done", id, "--result", "late.txt", "-m", "Late evidence")
-	if code != 0 || stdout != id+" done\n" {
+	if code != 0 || !strings.Contains(stdout, "State: done\n") ||
+		!strings.Contains(stdout, "Message: appended\n") || !strings.Contains(stdout, "Result: late.txt\n") {
 		t.Fatalf("late result failed: stdout=%s stderr=%s", stdout, stderr)
 	}
 	if got := countEventLines(t, dir); got != beforeLate+2 {
@@ -235,7 +265,7 @@ func TestClaimDoneTaskReusesOriginalID(t *testing.T) {
 
 func createLifecycleTask(t *testing.T, dir string) string {
 	t.Helper()
-	stdout, stderr, code := runNewTask(t, dir, `{"title":"Lifecycle task"}`)
+	stdout, stderr, code := runNewTask(t, dir, "Lifecycle task")
 	if code != 0 {
 		t.Fatalf("new task failed: %s", stderr)
 	}

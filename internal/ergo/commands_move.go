@@ -15,17 +15,21 @@ func RunMove(id, destinationID string, toRoot bool, opts GlobalOptions) error {
 		return errors.New("move destination and --root are mutually exclusive")
 	}
 	if !toRoot && destinationID == "" {
-		return errors.New("usage: ergo move <id> <container-id> | ergo move <id> --root")
+		return errors.New("usage: ergo move <id> <epic-id> | ergo move <id> --root")
 	}
 	dir, err := ergoDir(opts)
 	if err != nil {
 		return err
 	}
-	_, err = applyTaskMutation(dir, opts, id, taskMutation{
+	outcome, err := applyTaskMutation(dir, opts, id, taskMutation{
 		Kind: "move", EpicID: destinationID, EpicSet: true, ValidateMove: true,
 	})
 	if err != nil {
 		return err
+	}
+	if len(outcome.ChangedFields) == 0 {
+		fmt.Printf("%s placement unchanged\n", id)
+		return nil
 	}
 	if toRoot {
 		fmt.Printf("%s moved to root\n", id)
@@ -37,7 +41,7 @@ func RunMove(id, destinationID string, toRoot bool, opts GlobalOptions) error {
 
 func validateMovePlacement(graph *Graph, task *Task, destinationID string) error {
 	if isContainer(task, graph) {
-		return fmt.Errorf("cannot move container %s", task.ID)
+		return fmt.Errorf("cannot move epic %s", task.ID)
 	}
 	if destinationID == "" {
 		return nil
@@ -47,10 +51,10 @@ func validateMovePlacement(graph *Graph, task *Task, destinationID string) error
 	}
 	destination := graph.Tasks[destinationID]
 	if destination == nil {
-		return fmt.Errorf("unknown container id %s", destinationID)
+		return fmt.Errorf("unknown epic id %s", destinationID)
 	}
 	if destination.EpicID != "" {
-		return fmt.Errorf("cannot nest under task %s: containers must remain at root", destinationID)
+		return fmt.Errorf("cannot nest under task %s: epics must remain at root", destinationID)
 	}
 	if !isContainer(destination, graph) {
 		switch {
@@ -64,12 +68,12 @@ func validateMovePlacement(graph *Graph, task *Task, destinationID string) error
 	}
 	if graph.Deps[task.ID] != nil {
 		if _, ok := graph.Deps[task.ID][destinationID]; ok {
-			return errors.New("task cannot depend on its destination container")
+			return errors.New("task cannot depend on its destination epic")
 		}
 	}
 	if graph.Deps[destinationID] != nil {
 		if _, ok := graph.Deps[destinationID][task.ID]; ok {
-			return errors.New("destination container cannot depend on its child")
+			return errors.New("destination epic cannot depend on its child")
 		}
 	}
 	return nil

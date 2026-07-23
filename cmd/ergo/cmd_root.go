@@ -24,10 +24,10 @@ var (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "ergo",
-	Short: "A task graph for coding agents.",
-	Long: `ergo gives your AI agents a better place to plan.
-Tasks and dependencies persist across sessions, stay visible to humans,
-and are safe for concurrent agents. Data lives in the repo as plain text.`,
+	Short: "A dependency-aware backlog for coding agents.",
+	Long: `Ergo manages a repository-local backlog shared by agents and humans.
+Tasks and dependencies persist across sessions and remain safe under
+concurrent work.`,
 	SilenceUsage:  true, // Don't print usage on every error
 	SilenceErrors: true, // We handle errors in main
 }
@@ -42,6 +42,11 @@ func init() {
 
 	// Override default help to use our custom text
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		if cmd != rootCmd {
+			defaultHelp := (&cobra.Command{}).HelpFunc()
+			defaultHelp(cmd, args)
+			return
+		}
 		isTTY := term.IsTerminal(int(os.Stdout.Fd()))
 		fmt.Println(ergo.UsageText(isTTY))
 	})
@@ -60,10 +65,28 @@ func removedArgumentError(args []string) error {
 	for _, arg := range args {
 		switch {
 		case arg == "--json" || strings.HasPrefix(arg, "--json="):
-			return errors.New("--json was removed in Ergo 3; rerun without it")
+			return errors.New("--json is not accepted; Ergo prints readable text")
 		case arg == "--summary" || strings.HasPrefix(arg, "--summary="):
-			return errors.New("--summary was removed in Ergo 3; use -m <message> instead")
+			return errors.New("--summary is not accepted; use -m <message>")
 		}
 	}
+	if rootInvocation(args) == "plan" {
+		return errors.New(`plan is not accepted; use ergo new epic "<title>" --file <path>`)
+	}
 	return nil
+}
+
+func rootInvocation(args []string) string {
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
+		if arg == "--dir" || arg == "--agent" {
+			index++
+			continue
+		}
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		return arg
+	}
+	return ""
 }
