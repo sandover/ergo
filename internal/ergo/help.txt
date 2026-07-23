@@ -17,7 +17,7 @@ state of its own and completes when all its children are done or canceled.
 {{HEADER}}COMMANDS{{RESET}}
   init [dir]                                 create .ergo/; print its path
   new task [json]                            create a leaf; stdin is its body
-  plan --file <path> [json]                  create a container and children
+  new epic --file <path> [json]              create a container and children
   list [--epic <id>] [--ready | --all]       list work
   show <id>                                  show a leaf or container
   claim [<id>] --agent <identity>            claim oldest ready or chosen work
@@ -57,8 +57,9 @@ implies doing. Keep multiline Markdown out of JSON: pipe it into `new task`.
 `body` is the only command that changes an existing body. It requires a pipe;
 an empty pipe clears the body. Lifecycle commands reject piped stdin.
 
-`plan` requires `{"title":"Container title"}`. Its file contains `# Title`
-chunks separated by a line that is exactly `---`. File order adds no dependency.
+`new epic --file` requires `{"title":"Container title"}`. Its file contains
+`# Title` chunks separated by a line that is exactly `---`. File order adds no
+dependency.
 
 {{HEADER}}LIFECYCLE{{RESET}}
 Leaves are todo, doing, blocked, done, or canceled. Doing work has a claim; every

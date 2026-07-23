@@ -39,7 +39,7 @@ func TestTaskDocumentRendersCompleteAgentContext(t *testing.T) {
 		t.Fatalf("ID is not fixed at the start of front matter: %s", output)
 	}
 	for _, want := range []string{
-		"state: \"doing\"", "container_id: \"PARENT\"", "claimed_by: \"agent@host\"",
+		"state: \"doing\"", "parent: \"PARENT\"", "claimed_by: \"agent@host\"",
 		"Line one\n\n- literal Markdown", "depends on `BEFORE`: Prepare schema",
 		"blocks `AFTER1`: Run rollout", "## Messages", "Retry with the new token.",
 		"[docs/new.md](file:///repo/docs/new.md)", "[docs/legacy.md](file:///repo/docs/legacy.md): Legacy caption",

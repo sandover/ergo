@@ -440,7 +440,7 @@ func printTaskDocument(w io.Writer, task *Task, meta *TaskMeta, graph *Graph, re
 		{key: "state", value: task.State},
 	}
 	if task.EpicID != "" {
-		fields = append(fields, frontMatterField{key: "container_id", value: task.EpicID})
+		fields = append(fields, frontMatterField{key: "parent", value: task.EpicID})
 	}
 	if task.ClaimedBy != "" {
 		fields = append(fields, frontMatterField{key: "claimed_by", value: task.ClaimedBy})
@@ -468,7 +468,7 @@ func printTaskDocument(w io.Writer, task *Task, meta *TaskMeta, graph *Graph, re
 // printContainerDocument renders a container and the complete details of each child.
 func printContainerDocument(w io.Writer, epic *Task, children []*Task, graph *Graph, repoDir string) {
 	writeShowFrontMatter(w, []frontMatterField{
-		{key: "container", value: "true", raw: true},
+		{key: "epic", value: "true", raw: true},
 		{key: "id", value: epic.ID},
 		{key: "title", value: epic.Title},
 		{key: "created_at", value: formatTime(epic.CreatedAt)},
@@ -646,7 +646,7 @@ func RunCompact(opts GlobalOptions) error {
 	}); err != nil {
 		return err
 	}
-	fmt.Println("Compacted ergo plan.")
+	fmt.Println("Ergo log compacted.")
 	return nil
 }
 

@@ -44,7 +44,7 @@ printf '%s\n' '## Goal' '- Add session validation.' |
 ```
 
 The first child promotes a clean root todo task to a container. For a prepared
-markdown backlog, use `ergo plan --file tasks.md '{"title":"Authentication"}'`.
+markdown backlog, use `ergo new epic --file tasks.md '{"title":"Authentication"}'`.
 
 Add only real ordering constraints. `ergo sequence TASK_A TASK_B` means B waits
 for A. Prefer independent tasks and maximize safe parallelism.

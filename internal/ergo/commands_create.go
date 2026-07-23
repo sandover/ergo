@@ -1,5 +1,5 @@
 // Purpose: Implement init and create commands for tasks.
-// Exports: RunInit, RunNewTask.
+// Exports: RunInit, RunNewTask, RunNewEpic.
 // Role: Command layer for creation workflows and repo initialization.
 // Invariants: Writes are append-only under lock; create is safe under concurrent writers.
 // Notes: New tasks start in todo state; containers cannot nest.
@@ -7,10 +7,10 @@
 // Task creation uses one forward input style:
 // - optional inline JSON argument for metadata (`new task '{...}'`)
 // - optional piped stdin for the body (`printf ... | ergo new task '{...}'`)
-// - `plan --file` for markdown-driven bulk creation
+// - `new epic --file` for markdown-driven bulk creation
 //
 //	printf '%s\n' '## Goal' '- Do X' | ergo new task '{"title":"Do X"}'
-//	ergo plan --file tasks.md '{"title":"Auth system"}'
+//	ergo new epic --file tasks.md '{"title":"Auth system"}'
 //
 // See cli_input.go for the user-facing parser contract.
 package ergo
@@ -89,8 +89,8 @@ func RunNewTask(args []string, opts GlobalOptions) error {
 	return nil
 }
 
-func RunPlan(filePath string, args []string, opts GlobalOptions) error {
-	const usage = "usage: ergo plan --file <path> [json]"
+func RunNewEpic(filePath string, args []string, opts GlobalOptions) error {
+	const usage = "usage: ergo new epic --file <path> [json]"
 	if strings.TrimSpace(filePath) == "" {
 		return errors.New(usage)
 	}
@@ -120,7 +120,7 @@ func RunPlan(filePath string, args []string, opts GlobalOptions) error {
 }
 
 // runBulkCreate creates a container task with child tasks and dependency edges.
-// It backs the current `plan --file` command.
+// It backs the `new epic --file` command.
 func runBulkCreate(dir string, opts GlobalOptions, containerTitle string, containerBody string, tasks []PlanTaskInput) error {
 	lockPath := filepath.Join(dir, "lock")
 	eventsPath := getEventsPath(dir)

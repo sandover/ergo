@@ -58,7 +58,7 @@ Other commands are:
 ```text
 init [dir]
 new task [json]
-plan --file <path> [json]
+new epic --file <path> [json]
 show <id>
 list [--epic <id>] [--ready | --all]
 where
@@ -116,7 +116,7 @@ follows, then a `## Next` section with exact lifecycle commands.
 Unknown fields fail. New tasks cannot use legacy error. Piped stdin is the
 literal initial body. An empty pipe creates an empty body.
 
-`plan --file <path> [json]` requires `{"title":"..."}`. Its file contains
+`new epic --file <path> [json]` requires `{"title":"..."}`. Its file contains
 `# Title` chunks separated by a line that is exactly `---`. File order creates
 no dependencies.
 
@@ -159,7 +159,7 @@ Ergo has one readable output mode:
 - `show` prints YAML front matter followed by Markdown content and relationships.
 - `claim` prints the same task document followed by task-specific next commands.
 - `new task` prints the generated ID.
-- `plan` prints its container, child IDs and titles, and dependency count.
+- `new epic --file` prints its container, child IDs and titles, and dependency count.
 - focused writes print the affected ID and resulting postcondition.
 - `init` and `where` print the active `.ergo` path.
 - `compact` prints one completion line; prune prints a preview or applied summary.

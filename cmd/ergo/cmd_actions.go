@@ -18,8 +18,7 @@ func init() {
 	// ergo new
 	rootCmd.AddCommand(newCmd)
 	newCmd.AddCommand(newTaskCmd)
-	// ergo plan
-	rootCmd.AddCommand(planCmd)
+	newCmd.AddCommand(newEpicCmd)
 	// ergo list
 	rootCmd.AddCommand(listCmd)
 	// ergo show
@@ -81,6 +80,17 @@ var newTaskCmd = &cobra.Command{
 		return ergo.RunNewTask(args, globalOpts)
 	},
 }
+
+var newEpicCmd = &cobra.Command{
+	Use:   "epic --file <path> [json]",
+	Short: "Create a container and children from a markdown file",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return ergo.RunNewEpic(epicPlanFile, args, globalOpts)
+	},
+}
+
+var epicPlanFile string
 
 // -- list --
 var listCmd = &cobra.Command{
@@ -224,21 +234,8 @@ func init() {
 	moveCmd.Flags().Bool("root", false, "Move the task out of its container")
 }
 
-var (
-	planFile string
-)
-
-var planCmd = &cobra.Command{
-	Use:   "plan [json]",
-	Short: "Create a container and children from a markdown file",
-	Args:  cobra.MaximumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunPlan(planFile, args, globalOpts)
-	},
-}
-
 func init() {
-	planCmd.Flags().StringVar(&planFile, "file", "", "Markdown file with # Title chunks separated by ---")
+	newEpicCmd.Flags().StringVar(&epicPlanFile, "file", "", "Markdown file with # Title chunks separated by ---")
 }
 
 // -- sequence --

@@ -52,7 +52,7 @@ Use bcrypt with cost 12.
 Use 1-hour access and 24-hour refresh tokens.
 EOF
 
-ergo plan --file tasks.md '{"title":"User login"}'
+ergo new epic --file tasks.md '{"title":"User login"}'
 ```
 
 File order does not create dependencies. Add order explicitly:

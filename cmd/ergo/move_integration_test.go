@@ -21,11 +21,11 @@ func TestMovePromotesDestinationAndReturnsToRoot(t *testing.T) {
 	if stdout != source+" moved to "+destination+"\n" {
 		t.Fatalf("unexpected move output: %s", stdout)
 	}
-	if showTaskFields(t, dir, source)["container_id"] != destination {
+	if showTaskFields(t, dir, source)["parent"] != destination {
 		t.Fatal("source was not moved into destination")
 	}
 	shownContainer := showTaskFields(t, dir, destination)
-	if shownContainer["container"] != "true" {
+	if shownContainer["epic"] != "true" {
 		t.Fatalf("clean todo destination was not promoted: %v", shownContainer)
 	}
 
@@ -38,7 +38,7 @@ func TestMovePromotesDestinationAndReturnsToRoot(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("move root failed: %s", stderr)
 	}
-	if _, nested := showTaskFields(t, dir, source)["container_id"]; nested {
+	if _, nested := showTaskFields(t, dir, source)["parent"]; nested {
 		t.Fatal("source did not return to root")
 	}
 }

@@ -276,7 +276,7 @@ func writePlanFile(t *testing.T, dir string, content string) string {
 func runPlan(t *testing.T, dir string, planContent string, inlineJSON string, extraArgs ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
 	planPath := writePlanFile(t, dir, planContent)
-	args := []string{"plan", "--file", planPath}
+	args := []string{"new", "epic", "--file", planPath}
 	if inlineJSON != "" {
 		args = append(args, inlineJSON)
 	}
@@ -297,18 +297,34 @@ func TestNewTask_HappyPath(t *testing.T) {
 	}
 }
 
-func TestRemovedNewEpicCommandFails(t *testing.T) {
+func TestNewEpicCommandRequiresFile(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, stderr, code := runErgo(t, dir, "", "new", "epic")
 	if code == 0 {
-		t.Fatalf("expected removed new epic command to fail, got stdout=%q stderr=%q", stdout, stderr)
+		t.Fatalf("expected missing-file usage failure, got stdout=%q stderr=%q", stdout, stderr)
 	}
-	if !strings.Contains(stderr, `unknown command "epic" for "ergo new"`) {
-		t.Fatalf("expected removed-command error, got stderr=%q", stderr)
+	if !strings.Contains(stderr, "usage: ergo new epic --file <path> [json]") {
+		t.Fatalf("expected missing-file usage, got stderr=%q", stderr)
 	}
 	if strings.Contains(stdout, "COMMANDS") {
-		t.Fatalf("expected no parent help on removed command, got stdout=%q", stdout)
+		t.Fatalf("expected no parent help on missing-file failure, got stdout=%q", stdout)
+	}
+}
+
+func TestRemovedPlanCommandFailsWithoutWritingState(t *testing.T) {
+	dir := setupErgo(t)
+	before := countEventLines(t, dir)
+
+	stdout, stderr, code := runErgo(t, dir, "", "plan")
+	if code == 0 {
+		t.Fatalf("expected removed plan command to fail, got stdout=%q stderr=%q", stdout, stderr)
+	}
+	if !strings.Contains(stderr, `unknown command "plan" for "ergo"`) {
+		t.Fatalf("expected removed-command error, got stderr=%q", stderr)
+	}
+	if after := countEventLines(t, dir); after != before {
+		t.Fatalf("removed command wrote state: before=%d after=%d", before, after)
 	}
 }
 
@@ -448,7 +464,7 @@ func TestShowEpicHumanDocumentFirstLayout(t *testing.T) {
 	if !strings.HasPrefix(stdout, "---\n") {
 		t.Fatalf("expected front matter document start: %s", stdout)
 	}
-	if !strings.Contains(stdout, "\ncontainer: true\n") || !strings.Contains(stdout, "\nid: \""+epicID+"\"\n") {
+	if !strings.Contains(stdout, "\nepic: true\n") || !strings.Contains(stdout, "\nid: \""+epicID+"\"\n") {
 		t.Fatalf("expected container front matter keys in output: %s", stdout)
 	}
 	if !strings.Contains(stdout, "# Plan Epic") {
@@ -1277,7 +1293,7 @@ func TestCompact_ConfirmsCompletion(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("compact failed: exit %d", code)
 	}
-	if stdout != "Compacted ergo plan.\n" {
+	if stdout != "Ergo log compacted.\n" {
 		t.Errorf("unexpected compact output: %q", stdout)
 	}
 }
@@ -2065,7 +2081,7 @@ func TestListEpicReadyEmptyState(t *testing.T) {
 	}
 }
 
-func TestPlan_ReadableOutput_HappyPath(t *testing.T) {
+func TestNewEpic_ReadableOutput_HappyPath(t *testing.T) {
 	dir := setupErgo(t)
 	planInput := `# Add auth middleware
 Middleware body
@@ -2082,7 +2098,7 @@ Test body
 
 	stdout, stderr, code := runPlan(t, dir, planInput, `{"title":"Add user auth"}`)
 	if code != 0 {
-		t.Fatalf("plan failed: exit %d, stderr=%s, stdout=%s", code, stderr, stdout)
+		t.Fatalf("new epic failed: exit %d, stderr=%s, stdout=%s", code, stderr, stdout)
 	}
 	ids := outputIDs(stdout)
 	if len(ids) != 5 {
@@ -2096,7 +2112,7 @@ Test body
 		t.Fatalf("failed to read event log: %v", err)
 	}
 	if strings.Contains(string(eventLog), `"type":"new_epic"`) {
-		t.Fatalf("expected plan to write unified new_task events, got log: %s", eventLog)
+		t.Fatalf("expected new epic to write unified new_task events, got log: %s", eventLog)
 	}
 
 	for _, expected := range []string{"Add auth middleware", "Add login endpoint", "Add signup endpoint", "Write integration tests"} {
@@ -2115,7 +2131,7 @@ Test body
 	}
 }
 
-func TestPlan_FailuresReturnErrorsAndDoNotWritePartialState(t *testing.T) {
+func TestNewEpic_FailuresReturnErrorsAndDoNotWritePartialState(t *testing.T) {
 	tests := []struct {
 		name           string
 		planContent    string

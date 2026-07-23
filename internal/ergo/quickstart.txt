@@ -38,8 +38,8 @@ A todo task with unmet dependencies is waiting, not blocked. A claim exists
 exactly while state is doing.
 
 A container is a root task with children. It completes when every child is done
-or canceled. It has no state, claim, message, or result. The creation field and
-list filter use the compatibility name `epic` for a container.
+or canceled. It has no state, claim, message, or result. Use `epic` to place a
+new task in a container or filter one from the list.
 
 {{HEADER}}3. INITIALIZE AND FIND WORK{{RESET}}
 
@@ -79,7 +79,7 @@ An empty pipe and no pipe both create an empty body.
 
 Create a container and children from a file:
 
-  {{CMD}}ergo plan --file tasks.md '{"title":"Authentication"}'{{RESET}}
+  {{CMD}}ergo new epic --file tasks.md '{"title":"Authentication"}'{{RESET}}
 
 `tasks.md` contains chunks separated by a line that is exactly `---`:
 

@@ -18,7 +18,7 @@ func TestManualSurfaceCoverage(t *testing.T) {
 		"quickstart": ergo.QuickstartText(false),
 	}
 	commands := []string{
-		"init", "new task", "plan", "list", "show", "claim", "done", "block",
+		"init", "new task", "new epic", "list", "show", "claim", "done", "block",
 		"cancel", "release", "title", "body", "move", "sequence", "unsequence",
 		"where", "prune", "compact", "quickstart", "version",
 	}
