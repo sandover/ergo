@@ -665,19 +665,6 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 	}
 }
 
-func taskStatusLabel(task *Task, ready bool) string {
-	if task.IsEpic {
-		return "epic"
-	}
-	if task.State == stateTodo {
-		if ready {
-			return "ready"
-		}
-		return "waiting"
-	}
-	return task.State
-}
-
 // abbreviate truncates a string to maxLen, adding "…" if truncated.
 func abbreviate(s string, maxLen int) string {
 	if len(s) <= maxLen {

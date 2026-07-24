@@ -2,7 +2,7 @@
 // Exports: ValidationError and suggestion helpers.
 // Role: Supports the forward CLI parsers plus internal validation utilities.
 // Invariants: Validation errors remain precise; field suggestions remain stable.
-// Notes: The old JSON-on-stdin mutation parser was removed during the 1.0 CLI cutover.
+// Notes: Field suggestions use conservative edit-distance matching.
 package ergo
 
 import (
@@ -31,24 +31,6 @@ func (e *ValidationError) GoError() error {
 	}
 
 	return fmt.Errorf("%s", strings.Join(parts, "; "))
-}
-
-func extractUnknownField(err error) (string, bool) {
-	msg := err.Error()
-	const prefix = "json: unknown field "
-	if !strings.HasPrefix(msg, prefix) {
-		return "", false
-	}
-	rest := strings.TrimPrefix(msg, prefix)
-	if len(rest) < 2 || rest[0] != '"' {
-		return "", false
-	}
-	rest = rest[1:]
-	end := strings.Index(rest, "\"")
-	if end == -1 {
-		return "", false
-	}
-	return rest[:end], true
 }
 
 func suggestFieldNameFrom(unknown string, candidates []string) (string, bool) {
