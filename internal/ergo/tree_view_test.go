@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestDerivedEpicState verifies the pure function that computes epic state from children.
@@ -357,6 +358,32 @@ func TestFilterNodesByReady(t *testing.T) {
 		}
 	})
 
+}
+
+func TestReadyListOrderMatchesAutomaticClaim(t *testing.T) {
+	older := time.Unix(100, 0).UTC()
+	newer := time.Unix(200, 0).UTC()
+	graph := &Graph{
+		Tasks: map[string]*Task{
+			"EPIC01": {ID: "EPIC01", IsEpic: true},
+			"ZZZZZZ": {ID: "ZZZZZZ", EpicID: "EPIC01", State: stateTodo, CreatedAt: older},
+			"AAAAAA": {ID: "AAAAAA", EpicID: "EPIC01", State: stateTodo, CreatedAt: newer},
+		},
+		Deps:  map[string]map[string]struct{}{},
+		RDeps: map[string]map[string]struct{}{},
+	}
+
+	roots := buildListRoots(graph, false, true, "")
+	if len(roots) != 1 || len(roots[0].children) != 2 {
+		t.Fatalf("unexpected ready tree: %#v", roots)
+	}
+	claimOrder := readyTasks(graph)
+	if len(claimOrder) != 2 {
+		t.Fatalf("readyTasks returned %d tasks", len(claimOrder))
+	}
+	if listed, claimed := roots[0].children[0].task.ID, claimOrder[0].ID; listed != claimed {
+		t.Fatalf("first listed task %s does not match automatic claim %s", listed, claimed)
+	}
 }
 
 // TestFormatTreeLineTruncation verifies that long lines are truncated to prevent wrapping.

@@ -1898,7 +1898,7 @@ func TestListNoTasksEmptyState(t *testing.T) {
 	}
 }
 
-func TestListReadyBlockedByDepsCountsAsBlocked(t *testing.T) {
+func TestListReadyDistinguishesWaitingFromBlocked(t *testing.T) {
 	dir := setupErgo(t)
 
 	stdout, _, _ := runNewTask(t, dir, "Blocker")
@@ -1919,8 +1919,11 @@ func TestListReadyBlockedByDepsCountsAsBlocked(t *testing.T) {
 	if !strings.Contains(stdout, "1 in progress") {
 		t.Errorf("expected in progress count for blocker, got: %s", stdout)
 	}
-	if !strings.Contains(stdout, "1 blocked") {
-		t.Errorf("expected blocked count for unmet deps, got: %s", stdout)
+	if !strings.Contains(stdout, "1 waiting") {
+		t.Errorf("expected waiting count for unmet deps, got: %s", stdout)
+	}
+	if strings.Contains(stdout, "blocked") {
+		t.Errorf("dependency wait was counted as blocked: %s", stdout)
 	}
 }
 

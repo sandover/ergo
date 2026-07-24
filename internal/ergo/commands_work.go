@@ -320,7 +320,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 			if len(epicChildrenReady) == 0 {
 				fmt.Fprintln(os.Stdout, "No ready tasks in this epic.")
 				stats := computeStatsForTasks(epicChildren, graph)
-				printSummary(stats, []summaryBucket{summaryInProgress, summaryBlocked, summaryError}, false)
+				printSummary(stats, []summaryBucket{summaryInProgress, summaryBlocked, summaryWaiting, summaryError}, false)
 				return nil
 			}
 			stats := computeStatsForTasks(epicChildrenReady, graph)
@@ -333,7 +333,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 			}
 			// Epic-focused view includes done/canceled by default.
 			stats := computeStatsForTasks(epicChildren, graph)
-			printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryError, summaryDone, summaryCanceled}, true)
+			printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryWaiting, summaryError, summaryDone, summaryCanceled}, true)
 			return nil
 		}
 	}
@@ -347,7 +347,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 		if len(readyTasks) == 0 {
 			fmt.Fprintln(os.Stdout, "No ready tasks.")
 			stats := computeStatsForTasks(activeTasks, graph)
-			printSummary(stats, []summaryBucket{summaryInProgress, summaryBlocked, summaryError}, false)
+			printSummary(stats, []summaryBucket{summaryInProgress, summaryBlocked, summaryWaiting, summaryError}, false)
 			return nil
 		}
 		renderTreeView(os.Stdout, roots, graph, repoDir, useColor)
@@ -361,7 +361,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 		}
 		renderTreeView(os.Stdout, roots, graph, repoDir, useColor)
 		stats := computeStatsForTasks(allTasks, graph)
-		printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryError, summaryDone, summaryCanceled}, true)
+		printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryWaiting, summaryError, summaryDone, summaryCanceled}, true)
 		return nil
 	default:
 		if len(allTasks) == 0 {
@@ -380,7 +380,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 		}
 		renderTreeView(os.Stdout, roots, graph, repoDir, useColor)
 		stats := computeStatsForTasks(activeTasks, graph)
-		printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryError}, true)
+		printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryWaiting, summaryError}, true)
 		return nil
 	}
 }

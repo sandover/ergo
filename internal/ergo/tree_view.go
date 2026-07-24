@@ -94,7 +94,51 @@ func buildListRoots(graph *Graph, showAll bool, readyOnly bool, epicID string) [
 		}
 	}
 
+	if readyOnly {
+		sortReadyNodesByClaimOrder(roots)
+	}
+
 	return roots
+}
+
+// sortReadyNodesByClaimOrder makes the first visible leaf the task that an
+// automatic claim would select. Each subtree is keyed by its oldest ready leaf.
+func sortReadyNodesByClaimOrder(nodes []*treeNode) {
+	for _, node := range nodes {
+		sortReadyNodesByClaimOrder(node.children)
+	}
+	sort.SliceStable(nodes, func(i, j int) bool {
+		left := oldestTaskInTree(nodes[i])
+		right := oldestTaskInTree(nodes[j])
+		if left == nil || right == nil {
+			return right != nil
+		}
+		if left.CreatedAt.Equal(right.CreatedAt) {
+			return left.ID < right.ID
+		}
+		return left.CreatedAt.Before(right.CreatedAt)
+	})
+}
+
+func oldestTaskInTree(node *treeNode) *Task {
+	if node == nil || node.task == nil {
+		return nil
+	}
+	if !node.task.IsEpic {
+		return node.task
+	}
+	var oldest *Task
+	for _, child := range node.children {
+		candidate := oldestTaskInTree(child)
+		if candidate == nil {
+			continue
+		}
+		if oldest == nil || candidate.CreatedAt.Before(oldest.CreatedAt) ||
+			(candidate.CreatedAt.Equal(oldest.CreatedAt) && candidate.ID < oldest.ID) {
+			oldest = candidate
+		}
+	}
+	return oldest
 }
 
 // renderTreeView outputs tasks in a hierarchical tree format.
@@ -274,6 +318,7 @@ type taskStats struct {
 	ready      int
 	inProgress int
 	blocked    int
+	waiting    int
 	errors     int
 	done       int
 	canceled   int
@@ -286,6 +331,7 @@ const (
 	summaryReady summaryBucket = iota
 	summaryInProgress
 	summaryBlocked
+	summaryWaiting
 	summaryError
 	summaryDone
 	summaryCanceled
@@ -313,7 +359,7 @@ func computeStatsForTasks(tasks []*Task, graph *Graph) taskStats {
 			if isReady(task, graph) {
 				stats.ready++
 			} else {
-				stats.blocked++
+				stats.waiting++
 			}
 		default:
 			stats.blocked++
@@ -343,6 +389,10 @@ func renderSummary(w io.Writer, stats taskStats, useColor bool, buckets []summar
 		case summaryBlocked:
 			count = stats.blocked
 			label = "blocked"
+			color = colorDim
+		case summaryWaiting:
+			count = stats.waiting
+			label = "waiting"
 			color = colorDim
 		case summaryError:
 			count = stats.errors
