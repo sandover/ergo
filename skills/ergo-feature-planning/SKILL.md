@@ -20,8 +20,8 @@ work.
 2. Run `ergo --help` and `ergo quickstart` before shaping or executing work.
 3. Run `ergo where`. If no backlog exists, confirm the repository root and run
    `ergo init`.
-4. If a command fails, read its error and run `ergo <command> --help`. Do not
-   guess alternate syntax.
+4. If a command fails, read its error. Use `ergo <command> --help` to check
+   syntax and options. Do not guess alternate syntax.
 
 ## Resolve decisions first
 

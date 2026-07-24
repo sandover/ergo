@@ -39,11 +39,10 @@ completes when its children finish.
   version                                     print the build version
 
 {{HEADER}}GLOBAL FLAGS{{RESET}}
-  --agent <identity>  identity used when claiming work; prefer model@host
   --dir <path>        start discovery at this path or .ergo directory
   -h, --help          print help
   -V, --version       print the build version
 
 {{HEADER}}LEARN MORE{{RESET}}
-  ergo <command> --help   exact usage, inputs, flags, and examples
+  ergo <command> --help   command syntax and options
   ergo quickstart         complete model, workflow, and maintenance guide

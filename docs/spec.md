@@ -1,8 +1,8 @@
 # Ergo public CLI contract
 
 This document defines Ergo's stable command, behavior, output, and storage
-contract. `ergo --help`, command help, and `ergo quickstart` are the user
-manuals.
+contract. `ergo --help` and `ergo quickstart` are the user manual. Generated
+command help provides syntax and options only.
 
 ## Backlog model
 
@@ -56,8 +56,8 @@ quickstart
 version
 ```
 
-Global flags are `--agent <identity>`, `--dir <path>`, `--help`, and
-`--version`.
+Global flags are `--dir <path>`, `--help`, and `--version`. `--agent` belongs
+to `claim`.
 
 ## Creation
 

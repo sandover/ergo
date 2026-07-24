@@ -10,8 +10,7 @@ Initialize the repository, create a task, and use its returned ID:
   {{CMD}}ergo claim ABCDEF --agent model@host{{RESET}}
   {{CMD}}ergo done ABCDEF -m "Implemented and verified"{{RESET}}
 
-Run `ergo <command> --help` for the exact operands, flags, stdin behavior, and
-examples for one command.
+Run `ergo <command> --help` for command syntax and options.
 
 {{HEADER}}2. BACKLOG MODEL{{RESET}}
 

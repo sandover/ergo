@@ -35,7 +35,6 @@ concurrent work.`,
 func init() {
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&globalOpts.StartDir, "dir", "", "Run in a specific directory")
-	rootCmd.PersistentFlags().StringVar(&globalOpts.AgentID, "agent", "", "Agent ID for claims (suggested: model@host)")
 
 	// Set the version to enable --version flag
 	rootCmd.Version = version
@@ -43,8 +42,7 @@ func init() {
 	// Override default help to use our custom text
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if cmd != rootCmd {
-			defaultHelp := (&cobra.Command{}).HelpFunc()
-			defaultHelp(cmd, args)
+			fmt.Fprint(cmd.OutOrStdout(), cmd.UsageString())
 			return
 		}
 		isTTY := term.IsTerminal(int(os.Stdout.Fd()))
@@ -79,7 +77,7 @@ func removedArgumentError(args []string) error {
 func rootInvocation(args []string) string {
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
-		if arg == "--dir" || arg == "--agent" {
+		if arg == "--dir" {
 			index++
 			continue
 		}

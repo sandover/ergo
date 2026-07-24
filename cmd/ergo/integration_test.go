@@ -1654,6 +1654,14 @@ func TestClaim_WithAgentFlag(t *testing.T) {
 	}
 }
 
+func TestAgentFlagIsRejectedByOtherCommands(t *testing.T) {
+	dir := setupErgo(t)
+	stdout, stderr, code := runErgo(t, dir, "", "list", "--agent", "model@host")
+	if code == 0 || stdout != "" || !strings.Contains(stderr, "unknown flag: --agent") {
+		t.Fatalf("list --agent: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
 func TestClaimIncludesTaskAndNextCommands(t *testing.T) {
 	dir := setupErgo(t)
 

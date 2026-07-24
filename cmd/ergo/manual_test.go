@@ -1,7 +1,7 @@
-// Purpose: Verify the three-layer help system as one complete agent manual.
+// Purpose: Verify the two-layer manual and generated command syntax help.
 // Exports: none.
-// Role: Protect root orientation, command invocation, and cross-command guidance.
-// Invariants: each fact has one primary layer; coverage is a union, not duplication.
+// Role: Protect root orientation, quickstart coverage, and terse command usage.
+// Invariants: root help and quickstart are complete; command help adds no prose.
 // Invariants: tests protect meaning and inventory without freezing prose snapshots.
 package main
 
@@ -69,7 +69,7 @@ func TestRegisteredCommandInventoryIsExact(t *testing.T) {
 	}
 }
 
-func TestEveryPublicCommandHasSpecificHelp(t *testing.T) {
+func TestEveryPublicCommandHasSyntaxOnlyHelp(t *testing.T) {
 	rootHelp := ergo.UsageText(false)
 	for _, path := range publicCommandPaths {
 		command := findCommand(t, path)
@@ -82,17 +82,17 @@ func TestEveryPublicCommandHasSpecificHelp(t *testing.T) {
 				t.Errorf("%s help lacks %q", path, required)
 			}
 		}
-		if path != "new" && !strings.Contains(help, "Examples:") {
-			t.Errorf("%s help lacks an example", path)
+		if !strings.HasPrefix(help, "Usage:") {
+			t.Errorf("%s help starts with prose: %q", path, help)
+		}
+		if strings.Contains(help, "Examples:") || command.Long != "" || command.Example != "" {
+			t.Errorf("%s contains subcommand documentation", path)
 		}
 	}
 }
 
-func TestDocumentationCoverageIsAUnion(t *testing.T) {
+func TestRootAndQuickstartCoverThePublicContract(t *testing.T) {
 	combined := ergo.UsageText(false) + "\n" + ergo.QuickstartText(false)
-	for _, path := range publicCommandPaths {
-		combined += "\n" + renderCommandHelp(t, findCommand(t, path))
-	}
 	normalized := strings.Join(strings.Fields(combined), " ")
 	for _, flag := range []string{
 		"--agent", "--dir", "--help", "--version", "--file", "--epic",
@@ -103,7 +103,7 @@ func TestDocumentationCoverageIsAUnion(t *testing.T) {
 		}
 	}
 	for _, boundary := range []string{
-		"prints only the task ID", "Optional piped stdin", "does not read stdin",
+		"prints only the task ID", "Optional piped stdin", "do not read stdin",
 		"Every lifecycle command clears the claim", "failed chain writes no partial",
 		"concurrent agents cannot claim the same task",
 	} {
@@ -116,17 +116,20 @@ func TestDocumentationCoverageIsAUnion(t *testing.T) {
 func TestReaderJourneyHasNoDeadEnd(t *testing.T) {
 	root := ergo.UsageText(false)
 	if !strings.Contains(root, `new task "<title>"`) ||
-		!strings.Contains(root, "ergo <command> --help") {
-		t.Fatal("root help does not orient a fresh reader toward command help")
+		!strings.Contains(root, "ergo quickstart") {
+		t.Fatal("root help does not orient a fresh reader toward the manual")
 	}
 	taskHelp := renderCommandHelp(t, newTaskCmd)
-	for _, fact := range []string{"positional title", "stdin", "--epic", "only the task ID"} {
-		if !strings.Contains(taskHelp, fact) {
-			t.Errorf("new task help lacks %q", fact)
-		}
+	if !strings.Contains(taskHelp, `ergo new task "<title>"`) ||
+		!strings.Contains(taskHelp, "--epic") ||
+		strings.Contains(taskHelp, "stdin") {
+		t.Errorf("new task help is not syntax-only: %s", taskHelp)
 	}
 	quickstart := ergo.QuickstartText(false)
-	for _, fact := range []string{"BACKLOG MODEL", "waiting, not blocked", "CLAIM AND RESUME", "DEPENDENCIES"} {
+	for _, fact := range []string{
+		"BACKLOG MODEL", "waiting, not blocked", "CLAIM AND RESUME",
+		"DEPENDENCIES", "Piped stdin becomes", "prints only the task ID",
+	} {
 		if !strings.Contains(quickstart, fact) {
 			t.Errorf("quickstart lacks cross-command fact %q", fact)
 		}
@@ -137,6 +140,23 @@ func TestReaderJourneyHasNoDeadEnd(t *testing.T) {
 	}
 	if !strings.Contains(renderCommandHelp(t, findCommand(t, "done")), "-m, --message") {
 		t.Fatal("done help does not let the reader continue after the error")
+	}
+}
+
+func TestAgentFlagBelongsOnlyToClaim(t *testing.T) {
+	if rootCmd.PersistentFlags().Lookup("agent") != nil {
+		t.Fatal("--agent remains a global flag")
+	}
+	if claimCmd.Flags().Lookup("agent") == nil {
+		t.Fatal("claim lacks --agent")
+	}
+	for _, path := range publicCommandPaths {
+		if path == "claim" {
+			continue
+		}
+		if strings.Contains(renderCommandHelp(t, findCommand(t, path)), "--agent") {
+			t.Errorf("%s help exposes --agent", path)
+		}
 	}
 }
 

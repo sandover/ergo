@@ -145,5 +145,5 @@ Each command replays the event log into memory. Mutations validate and append
 their complete event batch under the lock. Ready-task selection and claim happen
 under that same lock, so concurrent agents cannot claim the same task.
 
-Run `ergo --help` for the front door, `ergo <command> --help` for one command,
-and `ergo quickstart` for the complete guide.
+Run `ergo --help` for the front door and `ergo quickstart` for the complete
+guide. Each command also supports `--help` for syntax and options.

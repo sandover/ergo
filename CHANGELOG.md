@@ -19,8 +19,9 @@ commands easier to invoke without prior context.
 - Successful mutations report tangible resulting facts and newly ready work.
 - List output keeps state icons, ownership, and blockers without bracketed
   status labels.
-- Root help, command help, quickstart, README, specification, and shipped skill
-  now form one consistent documentation system.
+- Root help and quickstart now form the complete manual. Command help contains
+  generated syntax and options only.
+- `--agent` belongs to `claim`; it is no longer shown or accepted globally.
 - New repositories store events in `.ergo/backlog.jsonl`. Existing
   `plans.jsonl` and `events.jsonl` repositories continue in place.
 
