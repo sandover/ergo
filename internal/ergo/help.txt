@@ -17,8 +17,8 @@ completes when its children finish.
 
 {{HEADER}}COMMANDS{{RESET}}
   init [dir]                                  initialize an Ergo backlog
-  new task "<title>" [--epic <id>]            create a task
-  new epic "<title>" --file <path>            create an epic and its tasks
+  new task "<title>" [--epic <id>]            create a task; optional stdin sets its body
+  new epic "<title>" --file <path>            create an epic and tasks; optional stdin sets epic body
   list [--epic <id>] [--ready | --all]        list work
   show <id>                                   show a task or epic
   claim [<id>] --agent <identity>             claim chosen or ready work

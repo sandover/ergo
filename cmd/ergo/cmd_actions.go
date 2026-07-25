@@ -79,8 +79,9 @@ var newCmd = &cobra.Command{
 }
 
 var newTaskCmd = &cobra.Command{
-	Use:   `task "<title>"`,
-	Short: "Create a task",
+	Use:         `task "<title>"`,
+	Short:       "Create a task",
+	Annotations: map[string]string{commandInputHelp: "Optional piped stdin becomes the initial task body; no pipe creates an empty body."},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
 			return errors.New(ergo.NewTaskUsage)
@@ -104,8 +105,9 @@ var newTaskCmd = &cobra.Command{
 }
 
 var newEpicCmd = &cobra.Command{
-	Use:   `epic "<title>" --file <path>`,
-	Short: "Create an epic and its tasks from Markdown",
+	Use:         `epic "<title>" --file <path>`,
+	Short:       "Create an epic and its tasks from Markdown",
+	Annotations: map[string]string{commandInputHelp: "Optional piped stdin becomes the epic body; --file supplies the child tasks."},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
 			return errors.New(ergo.NewEpicUsage)
@@ -164,8 +166,8 @@ var listCmd = &cobra.Command{
 
 func init() {
 	listCmd.Flags().String("epic", "", "Filter by epic ID")
-	listCmd.Flags().Bool("ready", false, "Show only ready tasks")
-	listCmd.Flags().Bool("all", false, "Show all tasks (including canceled/done)")
+	listCmd.Flags().Bool("ready", false, "Show only ready tasks (conflicts with --all)")
+	listCmd.Flags().Bool("all", false, "Show all tasks, including canceled/done (conflicts with --ready)")
 }
 
 // -- show --
@@ -252,8 +254,9 @@ var titleCmd = &cobra.Command{
 }
 
 var bodyCmd = &cobra.Command{
-	Use:   "body <id>",
-	Short: "Replace a task body from stdin",
+	Use:         "body <id>",
+	Short:       "Replace a task body from stdin",
+	Annotations: map[string]string{commandInputHelp: "Piped stdin is required and replaces the body; an empty pipe clears it."},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
 			return fmt.Errorf("usage: printf '%%s\\n' '<body>' | ergo body <id>")
@@ -266,7 +269,7 @@ var bodyCmd = &cobra.Command{
 }
 
 var moveCmd = &cobra.Command{
-	Use:   "move <id> <epic-id> | move <id> --root",
+	Use:   "move <id> <epic-id> | ergo move <id> --root",
 	Short: "Move a task into an epic or to root",
 	Args: func(cmd *cobra.Command, args []string) error {
 		toRoot, _ := cmd.Flags().GetBool("root")

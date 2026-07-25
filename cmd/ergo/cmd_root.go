@@ -21,6 +21,8 @@ var (
 	globalOpts ergo.GlobalOptions
 )
 
+const commandInputHelp = "ergo_command_input"
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "ergo",
@@ -43,6 +45,9 @@ func init() {
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if cmd != rootCmd {
 			fmt.Fprint(cmd.OutOrStdout(), cmd.UsageString())
+			if input := cmd.Annotations[commandInputHelp]; input != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "\nInput:\n  %s\n", input)
+			}
 			return
 		}
 		isTTY := term.IsTerminal(int(os.Stdout.Fd()))

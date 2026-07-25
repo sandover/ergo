@@ -1,7 +1,7 @@
-// Purpose: Verify the two-layer manual and generated command syntax help.
+// Purpose: Verify the two-layer manual and generated command syntax/input help.
 // Exports: none.
 // Role: Protect root orientation, quickstart coverage, and terse command usage.
-// Invariants: root help and quickstart are complete; command help adds no prose.
+// Invariants: root help and quickstart are complete; command help adds no manual prose.
 // Invariants: tests protect meaning and inventory without freezing prose snapshots.
 package main
 
@@ -31,6 +31,7 @@ func TestRootHelpIsTheFrontDoor(t *testing.T) {
 		"dependency-aware backlog", "Tasks are stateful", "ready when",
 		"task with children is an epic", "WORKFLOW", "GLOBAL FLAGS",
 		"ergo <command> --help", "ergo quickstart",
+		"optional stdin sets its body", "optional stdin sets epic body",
 	} {
 		if !strings.Contains(normalized, fact) {
 			t.Errorf("root help lacks %q", fact)
@@ -69,7 +70,7 @@ func TestRegisteredCommandInventoryIsExact(t *testing.T) {
 	}
 }
 
-func TestEveryPublicCommandHasSyntaxOnlyHelp(t *testing.T) {
+func TestEveryPublicCommandHasSyntaxAndInputOnlyHelp(t *testing.T) {
 	rootHelp := ergo.UsageText(false)
 	for _, path := range publicCommandPaths {
 		command := findCommand(t, path)
@@ -122,8 +123,8 @@ func TestReaderJourneyHasNoDeadEnd(t *testing.T) {
 	taskHelp := renderCommandHelp(t, newTaskCmd)
 	if !strings.Contains(taskHelp, `ergo new task "<title>"`) ||
 		!strings.Contains(taskHelp, "--epic") ||
-		strings.Contains(taskHelp, "stdin") {
-		t.Errorf("new task help is not syntax-only: %s", taskHelp)
+		!strings.Contains(taskHelp, "Optional piped stdin becomes the initial task body") {
+		t.Errorf("new task help lacks its input contract: %s", taskHelp)
 	}
 	quickstart := ergo.QuickstartText(false)
 	for _, fact := range []string{
@@ -140,6 +141,39 @@ func TestReaderJourneyHasNoDeadEnd(t *testing.T) {
 	}
 	if !strings.Contains(renderCommandHelp(t, findCommand(t, "done")), "-m, --message") {
 		t.Fatal("done help does not let the reader continue after the error")
+	}
+}
+
+func TestCommandsWithStdinInputsRevealThemInHelp(t *testing.T) {
+	expected := map[string]string{
+		"new task": "Optional piped stdin becomes the initial task body; no pipe creates an empty body.",
+		"new epic": "Optional piped stdin becomes the epic body; --file supplies the child tasks.",
+		"body":     "Piped stdin is required and replaces the body; an empty pipe clears it.",
+	}
+	for path, input := range expected {
+		help := renderCommandHelp(t, findCommand(t, path))
+		if !strings.Contains(help, "\nInput:\n  "+input+"\n") {
+			t.Errorf("%s help lacks exact stdin contract:\n%s", path, help)
+		}
+	}
+}
+
+func TestCommandHelpRevealsOptionConstraints(t *testing.T) {
+	checks := map[string][]string{
+		"new epic": {`ergo new epic "<title>" --file <path>`},
+		"list":     {"--ready", "conflicts with --all", "--all", "conflicts with --ready"},
+		"claim":    {"--agent", "required"},
+		"done":     {"-m, --message", "repeatable", "--result"},
+		"move":     {"ergo move <id> <epic-id> | ergo move <id> --root"},
+		"prune":    {"--yes", "default is dry-run"},
+	}
+	for path, facts := range checks {
+		help := renderCommandHelp(t, findCommand(t, path))
+		for _, fact := range facts {
+			if !strings.Contains(help, fact) {
+				t.Errorf("%s help lacks option constraint %q:\n%s", path, fact, help)
+			}
+		}
 	}
 }
 
