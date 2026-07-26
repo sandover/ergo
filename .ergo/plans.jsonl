@@ -419,3 +419,8 @@
 {"type":"state","ts":"2026-07-26T17:51:56.633606Z","data":{"id":"7KCEI3","state":"done","ts":"2026-07-26T17:51:56.633606Z"}}
 {"type":"claim","ts":"2026-07-26T17:52:15.814542Z","data":{"id":"H2VGIS","agent_id":"codex@bbook","ts":"2026-07-26T17:52:15.814542Z"}}
 {"type":"state","ts":"2026-07-26T17:52:15.814542Z","data":{"id":"H2VGIS","state":"doing","ts":"2026-07-26T17:52:15.814542Z"}}
+{"type":"message","ts":"2026-07-26T17:53:06.382652Z","data":{"task_id":"H2VGIS","kind":"block","text":"Publication is locally validated at 28fdad4. Environment requires explicit user approval to upload repository contents, including tracked .ergo/plans.jsonl release-backlog history, to https://github.com/sandover/ergo.git.","ts":"2026-07-26T17:53:06.382652Z"}}
+{"type":"unclaim","ts":"2026-07-26T17:53:06.382652Z","data":{"id":"H2VGIS","ts":"2026-07-26T17:53:06.382652Z"}}
+{"type":"state","ts":"2026-07-26T17:53:06.382652Z","data":{"id":"H2VGIS","state":"blocked","ts":"2026-07-26T17:53:06.382652Z"}}
+{"type":"claim","ts":"2026-07-26T18:04:07.669579Z","data":{"id":"H2VGIS","agent_id":"codex@bbook","ts":"2026-07-26T18:04:07.669579Z"}}
+{"type":"state","ts":"2026-07-26T18:04:07.669579Z","data":{"id":"H2VGIS","state":"doing","ts":"2026-07-26T18:04:07.669579Z"}}
