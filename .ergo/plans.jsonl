@@ -412,3 +412,5 @@
 {"type":"message","ts":"2026-07-26T17:46:20.475569Z","data":{"task_id":"OO66N3","kind":"done","text":"Prepared humane 4.0.0 notes from recent release structure; covered every v3 migration path, aligned Homebrew metadata, built exact 4.0.0 candidate, and passed help/creation/lifecycle/removed-form smokes.","ts":"2026-07-26T17:46:20.475569Z"}}
 {"type":"unclaim","ts":"2026-07-26T17:46:20.475569Z","data":{"id":"OO66N3","ts":"2026-07-26T17:46:20.475569Z"}}
 {"type":"state","ts":"2026-07-26T17:46:20.475569Z","data":{"id":"OO66N3","state":"done","ts":"2026-07-26T17:46:20.475569Z"}}
+{"type":"claim","ts":"2026-07-26T17:47:04.154878Z","data":{"id":"7KCEI3","agent_id":"codex@bbook","ts":"2026-07-26T17:47:04.154878Z"}}
+{"type":"state","ts":"2026-07-26T17:47:04.154878Z","data":{"id":"7KCEI3","state":"doing","ts":"2026-07-26T17:47:04.154878Z"}}
