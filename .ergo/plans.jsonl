@@ -414,3 +414,6 @@
 {"type":"state","ts":"2026-07-26T17:46:20.475569Z","data":{"id":"OO66N3","state":"done","ts":"2026-07-26T17:46:20.475569Z"}}
 {"type":"claim","ts":"2026-07-26T17:47:04.154878Z","data":{"id":"7KCEI3","agent_id":"codex@bbook","ts":"2026-07-26T17:47:04.154878Z"}}
 {"type":"state","ts":"2026-07-26T17:47:04.154878Z","data":{"id":"7KCEI3","state":"doing","ts":"2026-07-26T17:47:04.154878Z"}}
+{"type":"message","ts":"2026-07-26T17:51:56.633606Z","data":{"task_id":"7KCEI3","kind":"done","text":"Validated commit 8694700: task ci, task build, goreleaser check, and six-target snapshot passed; all checksums and archive contents verified; exact 4.0.0 candidate passed complete CLI smoke matrix; real v1.2.0, v2.0.1, and v3.0.0 logs survived 4.0.0 replay and compaction, including legacy error and claimed-blocked ownership.","ts":"2026-07-26T17:51:56.633606Z"}}
+{"type":"unclaim","ts":"2026-07-26T17:51:56.633606Z","data":{"id":"7KCEI3","ts":"2026-07-26T17:51:56.633606Z"}}
+{"type":"state","ts":"2026-07-26T17:51:56.633606Z","data":{"id":"7KCEI3","state":"done","ts":"2026-07-26T17:51:56.633606Z"}}
