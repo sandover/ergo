@@ -37,7 +37,7 @@ checksum:
 homebrew_casks:
   - name: ergo
     homepage: https://github.com/sandover/ergo
-    description: Minimal multi-agent DAG task planner built on an append-only JSONL event log
+    description: Local, dependency-aware backlog for coding agents
     license: MIT
     binaries:
       - ergo

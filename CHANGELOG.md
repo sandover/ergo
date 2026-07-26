@@ -7,20 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Ergo now presents work as a dependency-aware backlog and makes the common
-commands easier to invoke without prior context.
+## [4.0.0] - 2026-07-26
+
+Ergo 4 presents work as a dependency-aware backlog and makes its common
+workflows direct enough to use without prior CLI context.
 
 ### Changed
 
 - Create a task with `ergo new task "<title>" [--epic <id>]`; optional stdin is
   its body.
-- Create an epic with `ergo new epic "<title>" --file <path>`; optional stdin is
-  free-form epic context.
-- Successful mutations report tangible resulting facts and newly ready work.
+- Create an epic and its child tasks atomically with
+  `ergo new epic "<title>" --file <path>`; optional stdin is free-form epic
+  context.
+- User-facing language consistently says backlog, task, dependency, and epic.
+- Successful mutations report tangible resulting facts, including work that
+  became ready.
 - List output keeps state icons, ownership, and blockers without bracketed
   status labels.
-- Root help and quickstart now form the complete manual. Command help contains
-  generated syntax and options only.
+- Root help and quickstart now form one complete, nonredundant manual. Generated
+  command help stays focused on syntax and options, including stdin
+  requirements.
 - `--agent` belongs to `claim`; it is no longer shown or accepted globally.
 - New repositories store events in `.ergo/backlog.jsonl`. Existing
   `plans.jsonl` and `events.jsonl` repositories continue in place.
@@ -28,16 +34,24 @@ commands easier to invoke without prior context.
 ### Removed
 
 - Removed the `plan` command. Use `new epic`.
-- Removed JSON creation input. Use positional titles, `--epic`, stdin bodies,
-  and lifecycle commands.
+- Removed JSON creation input, including creation-time lifecycle state, claims,
+  and results. Use positional titles, `--epic`, stdin bodies, `claim`, and
+  lifecycle commands.
 
-### Upgrade
+### Upgrade from 3.x
 
-| Before | Now |
+| 3.x | 4.0 |
 | --- | --- |
 | `ergo new task '{"title":"Add login"}'` | `ergo new task "Add login"` |
 | `ergo new task '{"title":"Child","epic":"ABCDEF"}'` | `ergo new task "Child" --epic ABCDEF` |
-| `ergo plan ...` | `ergo new epic "<title>" --file tasks.md` |
+| `ergo plan --file tasks.md '{"title":"Authentication"}'` | `ergo new epic "Authentication" --file tasks.md` |
+| `ergo new task '{"title":"Fix CVE","claim":"model@host"}'` | `ID=$(ergo new task "Fix CVE")`<br>`ergo claim "$ID" --agent model@host` |
+| Creation JSON with `state` or `result` | Create the task, then use `done`, `block`, `cancel`, or `release`, with `--result` when needed |
+| `ergo --agent model@host claim ABCDEF` | `ergo claim ABCDEF --agent model@host` |
+
+Existing event logs open without migration, including historical error and
+claimed-blocked records. New writes continue in the repository's existing log
+file; only newly initialized repositories use `backlog.jsonl`.
 
 ## [3.0.0] - 2026-07-22
 
@@ -541,7 +555,9 @@ read that log.
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/sandover/ergo/compare/v3.0.0...v4.0.0
+[3.0.0]: https://github.com/sandover/ergo/compare/v2.0.1...v3.0.0
 [2.0.1]: https://github.com/sandover/ergo/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/sandover/ergo/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/sandover/ergo/compare/v1.1.0...v1.2.0
