@@ -424,3 +424,6 @@
 {"type":"state","ts":"2026-07-26T17:53:06.382652Z","data":{"id":"H2VGIS","state":"blocked","ts":"2026-07-26T17:53:06.382652Z"}}
 {"type":"claim","ts":"2026-07-26T18:04:07.669579Z","data":{"id":"H2VGIS","agent_id":"codex@bbook","ts":"2026-07-26T18:04:07.669579Z"}}
 {"type":"state","ts":"2026-07-26T18:04:07.669579Z","data":{"id":"H2VGIS","state":"doing","ts":"2026-07-26T18:04:07.669579Z"}}
+{"type":"message","ts":"2026-07-26T18:09:34.171819Z","data":{"task_id":"H2VGIS","kind":"done","text":"Published immutable v4.0.0 at f0c401f. Main CI run 30213947525 and release run 30213993737 passed. GitHub Release is final with polished notes, six archives, and checksums; downloaded checksums, archive contents, released binary workflows, and legacy compaction verified. Homebrew cask 4.0.0 installed and /opt/homebrew/bin/ergo is active. WinGet publisher is not configured, so WinGet delivery is unavailable for this release.","ts":"2026-07-26T18:09:34.171819Z"}}
+{"type":"unclaim","ts":"2026-07-26T18:09:34.171819Z","data":{"id":"H2VGIS","ts":"2026-07-26T18:09:34.171819Z"}}
+{"type":"state","ts":"2026-07-26T18:09:34.171819Z","data":{"id":"H2VGIS","state":"done","ts":"2026-07-26T18:09:34.171819Z"}}
