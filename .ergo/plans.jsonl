@@ -562,3 +562,6 @@
 {"type":"message","ts":"2026-07-28T23:08:37.528555Z","data":{"task_id":"LK54EP","kind":"done","text":"Made tasks and forward dependencies canonical, derived graph indexes once, and migrated all graph consumers to explicit query methods with focused passing tests.","ts":"2026-07-28T23:08:37.528555Z"}}
 {"type":"unclaim","ts":"2026-07-28T23:08:37.528555Z","data":{"id":"LK54EP","ts":"2026-07-28T23:08:37.528555Z"}}
 {"type":"state","ts":"2026-07-28T23:08:37.528555Z","data":{"id":"LK54EP","state":"done","ts":"2026-07-28T23:08:37.528555Z"}}
+{"type":"message","ts":"2026-07-28T23:08:55.18615Z","data":{"task_id":"43MFQC","kind":"done","text":"Hardened result containment and regular-file checks, same-descriptor evidence capture, and bounded Git provenance across normal, packed, detached, and worktree repositories.","ts":"2026-07-28T23:08:55.18615Z"}}
+{"type":"unclaim","ts":"2026-07-28T23:08:55.18615Z","data":{"id":"43MFQC","ts":"2026-07-28T23:08:55.18615Z"}}
+{"type":"state","ts":"2026-07-28T23:08:55.18615Z","data":{"id":"43MFQC","state":"done","ts":"2026-07-28T23:08:55.18615Z"}}

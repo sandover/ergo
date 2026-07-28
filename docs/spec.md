@@ -106,8 +106,11 @@ nonblank. Repeated values join with a blank line into one append-only message
 recorded with its command kind and time.
 
 `--result` must name an existing regular file inside the project and outside
-`.ergo`. Ergo records its project-relative path, SHA-256, mtime, and git commit
-when available. Results append as attempt history.
+`.ergo`. Ergo resolves the project and target through symlinks before checking
+containment. An in-project symlink to an in-project regular file is accepted,
+and the cleaned caller-supplied project-relative path is retained. Ergo records
+that path, the opened file's SHA-256 and mtime, and the git commit when
+available. Results append as attempt history.
 
 A lifecycle receipt names the task ID and title, resulting state, cleared claim,
 appended message, attached result, and oldest ready task when each fact applies.

@@ -4,6 +4,7 @@ package ergo
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -64,6 +65,7 @@ func TestValidateResultPath(t *testing.T) {
 		wantErr bool
 	}{
 		{"valid relative path", "docs/report.md", false},
+		{"cleaned relative path", "docs/../docs/report.md", false},
 		{"absolute path rejected", "/docs/report.md", true},
 		{"parent traversal rejected", "../outside/file.txt", true},
 		{"hidden traversal rejected", "docs/../../../etc/passwd", true},
@@ -79,6 +81,76 @@ func TestValidateResultPath(t *testing.T) {
 				t.Errorf("validateResultPath(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestValidateResultPathAcceptsInProjectSymlinkAndPreservesPath(t *testing.T) {
+	repoDir := t.TempDir()
+	target := filepath.Join(repoDir, "artifacts", "report.md")
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("evidence"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(repoDir, "latest.md")
+	if err := os.Symlink(filepath.Join("artifacts", "report.md"), link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	got, err := validateResultPath(repoDir, "latest.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "latest.md" {
+		t.Fatalf("validated path = %q, want caller path latest.md", got)
+	}
+	evidence, err := captureResultEvidence(repoDir, got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if evidence.Sha256AtAttach != "ee8250fb76e094b34b471f13a73dbbe51d1ae142e9df59d7c0d31ec20f0a0a8e" {
+		t.Fatalf("unexpected symlink-target hash: %s", evidence.Sha256AtAttach)
+	}
+}
+
+func TestValidateResultPathRejectsSymlinkEscape(t *testing.T) {
+	repoDir := t.TempDir()
+	outsideDir := t.TempDir()
+	outside := filepath.Join(outsideDir, "secret.txt")
+	if err := os.WriteFile(outside, []byte("outside"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(repoDir, "escaped.txt")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if _, err := validateResultPath(repoDir, "escaped.txt"); err == nil ||
+		!strings.Contains(err.Error(), "must resolve within project") {
+		t.Fatalf("symlink escape error = %v", err)
+	}
+}
+
+func TestValidateResultPathResolvesSymlinkedProjectRoot(t *testing.T) {
+	parent := t.TempDir()
+	realRepo := filepath.Join(parent, "real")
+	if err := os.Mkdir(realRepo, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(realRepo, "result.txt"), []byte("result"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	repoLink := filepath.Join(parent, "linked")
+	if err := os.Symlink(realRepo, repoLink); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	got, err := validateResultPath(repoLink, "result.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "result.txt" {
+		t.Fatalf("validated path = %q, want result.txt", got)
 	}
 }
 
@@ -110,15 +182,70 @@ func TestCaptureResultEvidence(t *testing.T) {
 	// GitCommitAtAttach is optional (may be empty if not a git repo)
 }
 
-func TestGetGitHead(t *testing.T) {
-	// Test with non-git directory
-	tmpDir := t.TempDir()
-	result := getGitHead(tmpDir)
-	if result != "" {
+func TestGetGitHeadNonGitDirectory(t *testing.T) {
+	if result := getGitHead(t.TempDir()); result != "" {
 		t.Errorf("expected empty string for non-git dir, got %q", result)
 	}
+}
 
-	// We don't test with a real git repo since that would require git setup
+func TestGetGitHeadRepositoryForms(t *testing.T) {
+	repoDir, commit := initResultTestRepository(t)
+
+	t.Run("ordinary ref", func(t *testing.T) {
+		if got := getGitHead(repoDir); got != commit {
+			t.Fatalf("HEAD = %q, want %q", got, commit)
+		}
+	})
+
+	t.Run("packed ref", func(t *testing.T) {
+		runGitForResultTest(t, repoDir, "pack-refs", "--all")
+		if got := getGitHead(repoDir); got != commit {
+			t.Fatalf("packed HEAD = %q, want %q", got, commit)
+		}
+	})
+
+	t.Run("detached head", func(t *testing.T) {
+		runGitForResultTest(t, repoDir, "checkout", "--detach", commit)
+		if got := getGitHead(repoDir); got != commit {
+			t.Fatalf("detached HEAD = %q, want %q", got, commit)
+		}
+	})
+
+	t.Run("worktree", func(t *testing.T) {
+		worktree := filepath.Join(t.TempDir(), "checkout")
+		runGitForResultTest(t, repoDir, "worktree", "add", "--detach", worktree, commit)
+		t.Cleanup(func() {
+			_ = exec.Command("git", "-C", repoDir, "worktree", "remove", "--force", worktree).Run()
+		})
+		if got := getGitHead(worktree); got != commit {
+			t.Fatalf("worktree HEAD = %q, want %q", got, commit)
+		}
+	})
+}
+
+func initResultTestRepository(t *testing.T) (string, string) {
+	t.Helper()
+	repoDir := t.TempDir()
+	runGitForResultTest(t, repoDir, "init")
+	runGitForResultTest(t, repoDir, "config", "user.name", "Ergo Test")
+	runGitForResultTest(t, repoDir, "config", "user.email", "ergo@example.invalid")
+	if err := os.WriteFile(filepath.Join(repoDir, "evidence.txt"), []byte("evidence"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGitForResultTest(t, repoDir, "add", "evidence.txt")
+	runGitForResultTest(t, repoDir, "commit", "-m", "fixture")
+	commit := strings.TrimSpace(runGitForResultTest(t, repoDir, "rev-parse", "HEAD"))
+	return repoDir, commit
+}
+
+func runGitForResultTest(t *testing.T, repoDir string, args ...string) string {
+	t.Helper()
+	commandArgs := append([]string{"-C", repoDir}, args...)
+	output, err := exec.Command("git", commandArgs...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
+	}
+	return string(output)
 }
 
 func TestDeriveFileURL(t *testing.T) {

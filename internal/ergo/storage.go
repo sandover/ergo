@@ -8,11 +8,14 @@ package ergo
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -472,61 +475,95 @@ type ResultEvidence struct {
 	GitCommitAtAttach string
 }
 
-// validateResultPath ensures path is relative, within project root, and exists.
-// Returns the cleaned relative path.
+// validateResultPath ensures the path resolves to a regular file inside the
+// project. It returns the cleaned caller path rather than the resolved target,
+// so an accepted in-project symlink remains meaningful in task output.
 func validateResultPath(repoDir, relPath string) (string, error) {
+	cleanPath, _, err := resolveResultPath(repoDir, relPath)
+	return cleanPath, err
+}
+
+func resolveResultPath(repoDir, relPath string) (string, string, error) {
 	// filepath.IsAbs does not consider drive-relative or root-relative paths
 	// absolute on Windows. IsLocal rejects those forms as well as traversal.
 	if !filepath.IsLocal(relPath) {
-		return "", fmt.Errorf("result path must be relative: %s", relPath)
+		return "", "", fmt.Errorf("result path must be relative: %s", relPath)
 	}
 	relPath = filepath.Clean(relPath)
 
-	// No .. traversal outside project
-	if strings.HasPrefix(relPath, "..") || strings.Contains(relPath, string(filepath.Separator)+"..") {
-		return "", fmt.Errorf("result path must be within project: %s", relPath)
-	}
-
-	// Must not point into .ergo/
 	if strings.HasPrefix(relPath, dataDirName+string(filepath.Separator)) || relPath == dataDirName {
-		return "", fmt.Errorf("result path cannot be inside .ergo/: %s", relPath)
+		return "", "", fmt.Errorf("result path cannot be inside .ergo/: %s", relPath)
 	}
 
-	// File must exist
-	fullPath := filepath.Join(repoDir, relPath)
-	info, err := os.Stat(fullPath)
+	resolvedRepo, err := filepath.EvalSymlinks(repoDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("result file does not exist: %s", relPath)
-		}
-		return "", fmt.Errorf("cannot access result file: %w", err)
+		return "", "", fmt.Errorf("cannot resolve project path: %w", err)
 	}
-	if info.IsDir() {
-		return "", fmt.Errorf("result path must be a file, not directory: %s", relPath)
+	resolvedRepo, err = filepath.Abs(resolvedRepo)
+	if err != nil {
+		return "", "", fmt.Errorf("cannot resolve project path: %w", err)
 	}
 
-	return relPath, nil
+	fullPath := filepath.Join(resolvedRepo, relPath)
+	resolvedTarget, err := filepath.EvalSymlinks(fullPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", "", fmt.Errorf("result file does not exist: %s", relPath)
+		}
+		return "", "", fmt.Errorf("cannot resolve result file: %w", err)
+	}
+	resolvedTarget, err = filepath.Abs(resolvedTarget)
+	if err != nil {
+		return "", "", fmt.Errorf("cannot resolve result file: %w", err)
+	}
+
+	resolvedRelative, err := filepath.Rel(resolvedRepo, resolvedTarget)
+	if err != nil || !filepath.IsLocal(resolvedRelative) {
+		return "", "", fmt.Errorf("result path must resolve within project: %s", relPath)
+	}
+	if resolvedRelative == dataDirName ||
+		strings.HasPrefix(resolvedRelative, dataDirName+string(filepath.Separator)) {
+		return "", "", fmt.Errorf("result path cannot resolve inside .ergo/: %s", relPath)
+	}
+
+	info, err := os.Stat(resolvedTarget)
+	if err != nil {
+		return "", "", fmt.Errorf("cannot access result file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", "", fmt.Errorf("result path must resolve to a regular file: %s", relPath)
+	}
+
+	return relPath, resolvedTarget, nil
 }
 
 // captureResultEvidence computes evidence metadata for a result file.
 func captureResultEvidence(repoDir, relPath string) (ResultEvidence, error) {
-	fullPath := filepath.Join(repoDir, relPath)
-
-	// Read file and compute SHA256
-	content, err := os.ReadFile(fullPath)
+	_, resolvedTarget, err := resolveResultPath(repoDir, relPath)
 	if err != nil {
+		return ResultEvidence{}, err
+	}
+
+	file, err := os.Open(resolvedTarget)
+	if err != nil {
+		return ResultEvidence{}, fmt.Errorf("cannot open result file: %w", err)
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
 		return ResultEvidence{}, fmt.Errorf("cannot read result file: %w", err)
 	}
-	hash := sha256.Sum256(content)
-
-	// Get mtime
-	info, err := os.Stat(fullPath)
+	info, err := file.Stat()
 	if err != nil {
-		return ResultEvidence{}, fmt.Errorf("cannot stat result file: %w", err)
+		return ResultEvidence{}, fmt.Errorf("cannot inspect result file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return ResultEvidence{}, fmt.Errorf("result path must resolve to a regular file: %s", relPath)
 	}
 
 	evidence := ResultEvidence{
-		Sha256AtAttach: fmt.Sprintf("%x", hash),
+		Sha256AtAttach: fmt.Sprintf("%x", hasher.Sum(nil)),
 		MtimeAtAttach:  formatTime(info.ModTime().UTC()),
 	}
 
@@ -540,33 +577,13 @@ func captureResultEvidence(repoDir, relPath string) (ResultEvidence, error) {
 
 // getGitHead returns the current HEAD commit SHA, or empty if not a git repo.
 func getGitHead(repoDir string) string {
-	// Check if .git exists
-	gitDir := filepath.Join(repoDir, ".git")
-	if _, err := os.Stat(gitDir); err != nil {
-		return ""
-	}
-
-	// Read HEAD
-	headPath := filepath.Join(gitDir, "HEAD")
-	headContent, err := os.ReadFile(headPath)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, "git", "-C", repoDir, "rev-parse", "--verify", "HEAD").Output()
 	if err != nil {
 		return ""
 	}
-
-	head := strings.TrimSpace(string(headContent))
-
-	// If it's a ref (e.g., "ref: refs/heads/main"), resolve it
-	if strings.HasPrefix(head, "ref: ") {
-		refPath := filepath.Join(gitDir, strings.TrimPrefix(head, "ref: "))
-		refContent, err := os.ReadFile(refPath)
-		if err != nil {
-			return ""
-		}
-		return strings.TrimSpace(string(refContent))
-	}
-
-	// Detached HEAD: already a commit SHA
-	return head
+	return strings.TrimSpace(string(output))
 }
 
 func buildResultEvent(repoDir string, graph *Graph, taskID, summary, relPath string, now time.Time) (Event, error) {
