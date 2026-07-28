@@ -1,5 +1,5 @@
-This repository inherits global agent policy from `/Users/brandonharvey/AGENTS.md`.
-Keep this file limited to ergo-specific deltas.
+This repository adds Ergo-specific instructions to the shared global policy in
+`~/.config/AGENTS.md`.
 
 # Project goals
 - Ergo manages a dependency-aware backlog. User-facing language says backlog,
