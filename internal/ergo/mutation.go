@@ -42,7 +42,7 @@ type mutationOutcome struct {
 	ChangedFields []string
 }
 
-func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskMutation) (mutationOutcome, error) {
+func applyTaskMutation(dir string, opts RepositoryOptions, id string, mutation taskMutation, agentID string) (mutationOutcome, error) {
 	var repository Repository
 	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
 		return mutationOutcome{}, err
@@ -52,17 +52,17 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 
 	update, err := repository.Update(func(graph *Graph) ([]Event, error) {
 		if _, ok := graph.Tombstones[id]; ok {
-			return nil, prunedErr(id)
+			return nil, classified(ErrorNotFound, prunedErr(id))
 		}
 		task := graph.Tasks[id]
 		if task == nil {
-			return nil, fmt.Errorf("unknown task id %s", id)
+			return nil, classified(ErrorNotFound, fmt.Errorf("unknown task id %s", id))
 		}
 		if len(mutation.AllowedStates) > 0 && !containsString(mutation.AllowedStates, task.State) {
-			return nil, fmt.Errorf("%s cannot apply to state=%s", mutation.Kind, task.State)
+			return nil, classified(ErrorConflict, fmt.Errorf("%s cannot apply to state=%s", mutation.Kind, task.State))
 		}
 		if mutation.ClaimConflict && task.ClaimedBy != "" && task.ClaimedBy != mutation.Claim {
-			return nil, fmt.Errorf("task %s is already claimed by %s", id, task.ClaimedBy)
+			return nil, classified(ErrorConflict, fmt.Errorf("task %s is already claimed by %s", id, task.ClaimedBy))
 		}
 		if mutation.EpicSet && mutation.ValidateMove {
 			if err := validateMovePlacement(graph, task, mutation.EpicID); err != nil {
@@ -71,21 +71,21 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 		}
 		if graph.IsEpic(task.ID) {
 			if mutation.ClaimSet {
-				return nil, errors.New("epics cannot be claimed")
+				return nil, classified(ErrorConflict, errors.New("epics cannot be claimed"))
 			}
 			if mutation.StateSet {
-				return nil, errors.New("epics do not have state")
+				return nil, classified(ErrorConflict, errors.New("epics do not have state"))
 			}
 			if mutation.ResultSet {
-				return nil, errors.New("epics cannot have results")
+				return nil, classified(ErrorConflict, errors.New("epics cannot have results"))
 			}
 			if mutation.MessageSet {
-				return nil, errors.New("epics cannot have lifecycle messages")
+				return nil, classified(ErrorConflict, errors.New("epics cannot have lifecycle messages"))
 			}
 		}
 
 		now := time.Now().UTC()
-		events, fields, err := buildMutationEvents(id, task, mutation, opts.AgentID, now)
+		events, fields, err := buildMutationEvents(id, task, mutation, agentID, now)
 		if err != nil {
 			return nil, err
 		}

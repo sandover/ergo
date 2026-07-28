@@ -330,22 +330,22 @@ func createTaskWithUpdates(dir string, opts GlobalOptions, epicID string, title,
 		if epicID != "" {
 			epic, ok := graph.Tasks[epicID]
 			if !ok {
-				return nil, fmt.Errorf("unknown epic id %s", epicID)
+				return nil, classified(ErrorNotFound, fmt.Errorf("unknown epic id %s", epicID))
 			}
 			if epic.EpicID != "" {
-				return nil, fmt.Errorf("task %s is not an epic", epicID)
+				return nil, classified(ErrorConflict, fmt.Errorf("task %s is not an epic", epicID))
 			}
 			// Reject first-child assignment to a dirty leaf: once promoted to a
 			// container, leaf-only semantics (state/claim/results) no longer apply.
 			if !graph.IsEpic(epic.ID) {
 				if epic.ClaimedBy != "" {
-					return nil, fmt.Errorf("cannot add child to task %s: task is claimed by %q", epicID, epic.ClaimedBy)
+					return nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: task is claimed by %q", epicID, epic.ClaimedBy))
 				}
 				if epic.State != stateTodo {
-					return nil, fmt.Errorf("cannot add child to task %s: state is %q (must be todo to promote to epic)", epicID, epic.State)
+					return nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: state is %q (must be todo to promote to epic)", epicID, epic.State))
 				}
 				if len(epic.Results) > 0 {
-					return nil, fmt.Errorf("cannot add child to task %s: task has results attached", epicID)
+					return nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: task has results attached", epicID))
 				}
 			}
 		}

@@ -93,7 +93,7 @@ func TestContainerRejectsMessageWithoutAppending(t *testing.T) {
 
 	_, err = applyTaskMutation(ergoDir, GlobalOptions{StartDir: repoDir}, "PARENT", taskMutation{
 		MessageKind: "done", MessageText: "Nope", MessageSet: true,
-	})
+	}, "")
 	if err == nil {
 		t.Fatal("expected container message error")
 	}

@@ -22,78 +22,24 @@ type ListOptions struct {
 	ShowAll   bool
 }
 
-func RunClaim(id string, opts GlobalOptions) error {
-	if id == "" {
-		return errors.New("usage: ergo claim <id>")
-	}
-	agentID := opts.AgentID
-	if agentID == "" {
-		return errors.New("claim requires --agent")
-	}
-	dir, err := ergoDir(opts)
+func RunClaim(id, agentID string, opts GlobalOptions) error {
+	outcome, err := NewApplication(opts).Claim(ClaimRequest{ID: id, AgentID: agentID})
 	if err != nil {
 		return err
 	}
-	mutation := taskMutation{
-		Kind:          "claim",
-		State:         stateDoing,
-		StateSet:      true,
-		Claim:         agentID,
-		ClaimSet:      true,
-		ClaimConflict: true,
-		AllowedStates: []string{stateTodo, stateDoing, stateBlocked, stateDone, stateCanceled, stateError},
-	}
-	outcome, err := applyTaskMutation(dir, opts, id, mutation)
-	if err != nil {
-		return err
-	}
-	return writeClaimSuccess(outcome.Graph, id, filepath.Dir(dir))
+	return writeClaimSuccess(outcome.Graph, outcome.Task.ID, outcome.ProjectDir)
 }
 
-func RunClaimOldestReady(opts GlobalOptions) error {
-	dir, err := ergoDir(opts)
+func RunClaimOldestReady(agentID string, opts GlobalOptions) error {
+	outcome, err := NewApplication(opts).Claim(ClaimRequest{AgentID: agentID})
 	if err != nil {
 		return err
 	}
-
-	var repository Repository
-	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
-		return err
+	if outcome.NoReady {
+		fmt.Println("No ready ergo tasks.")
+		return nil
 	}
-
-	var chosenID string
-	agentID := opts.AgentID
-	if agentID == "" {
-		return errors.New("claim requires --agent")
-	}
-
-	update, err := repository.Update(func(graph *Graph) ([]Event, error) {
-		ready := readyTasks(graph)
-		if len(ready) == 0 {
-			return nil, errors.New("no ready tasks")
-		}
-
-		chosenID = ready[0].ID
-		now := time.Now().UTC()
-		mutation := taskMutation{Kind: "claim", State: stateDoing, StateSet: true, Claim: agentID, ClaimSet: true}
-		events, _, err := buildMutationEvents(chosenID, ready[0], mutation, agentID, now)
-		if err != nil {
-			return nil, err
-		}
-		return events, nil
-	})
-	if err != nil {
-		if err.Error() == "no ready tasks" {
-			fmt.Println("No ready ergo tasks.")
-			return nil
-		}
-		return err
-	}
-
-	if chosenID == "" || update.Graph == nil {
-		return errors.New("internal error: missing chosen task")
-	}
-	return writeClaimSuccess(update.Graph, chosenID, filepath.Dir(dir))
+	return writeClaimSuccess(outcome.Graph, outcome.Task.ID, outcome.ProjectDir)
 }
 
 func writeClaimSuccess(graph *Graph, id, repoDir string) error {
@@ -575,41 +521,15 @@ func printTaskResultsMarkdown(w io.Writer, results []Result, repoDir string, hea
 }
 
 func RunShow(id string, opts GlobalOptions) error {
-	if id == "" {
-		return errors.New("usage: ergo show <id>")
-	}
-	dir, err := ergoDir(opts)
+	outcome, err := NewApplication(opts).Show(ShowRequest{ID: id})
 	if err != nil {
 		return err
 	}
-	repoDir := filepath.Dir(dir)
-	var repository Repository
-	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
-		return err
-	}
-	graph, err := repository.View()
-	if err != nil {
-		return err
-	}
-	if _, ok := graph.Tombstones[id]; ok {
-		return prunedErr(id)
-	}
-	task, ok := graph.Tasks[id]
-	if !ok {
-		return fmt.Errorf("unknown task id %s", id)
-	}
-
-	// Collect child tasks if this is a container
-	var childTasks []*Task
-	if graph.IsEpic(task.ID) {
-		childTasks = collectEpicChildren(id, graph)
-	}
-
-	if graph.IsEpic(task.ID) {
-		printContainerDocument(os.Stdout, task, childTasks, graph, repoDir)
+	if outcome.Graph.IsEpic(outcome.Task.ID) {
+		printContainerDocument(os.Stdout, outcome.Task, outcome.Children, outcome.Graph, outcome.ProjectDir)
 		return nil
 	}
-	printTaskDocument(os.Stdout, task, graph, repoDir)
+	printTaskDocument(os.Stdout, outcome.Task, outcome.Graph, outcome.ProjectDir)
 	return nil
 }
 

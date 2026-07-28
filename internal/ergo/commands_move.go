@@ -23,7 +23,7 @@ func RunMove(id, destinationID string, toRoot bool, opts GlobalOptions) error {
 	}
 	outcome, err := applyTaskMutation(dir, opts, id, taskMutation{
 		Kind: "move", EpicID: destinationID, EpicSet: true, ValidateMove: true,
-	})
+	}, "")
 	if err != nil {
 		return err
 	}

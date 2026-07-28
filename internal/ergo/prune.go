@@ -50,7 +50,7 @@ func runPrune(dir string, opts GlobalOptions, apply bool) (PrunePlan, error) {
 		if len(plan.PrunedIDs) == 0 {
 			return nil, nil
 		}
-		events, err := buildTombstoneEvents(plan.PrunedIDs, opts.AgentID)
+		events, err := buildTombstoneEvents(plan.PrunedIDs, "")
 		if err != nil {
 			return nil, err
 		}

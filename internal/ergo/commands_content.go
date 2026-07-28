@@ -24,7 +24,7 @@ func RunTitle(id, title string, opts GlobalOptions) error {
 	}
 	outcome, err := applyTaskMutation(dir, opts, id, taskMutation{
 		Kind: "title", Title: title, TitleSet: true,
-	})
+	}, "")
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func RunBody(id string, opts GlobalOptions) error {
 	}
 	outcome, err := applyTaskMutation(dir, opts, id, taskMutation{
 		Kind: "body", Body: string(body), BodySet: true,
-	})
+	}, "")
 	if err != nil {
 		return err
 	}

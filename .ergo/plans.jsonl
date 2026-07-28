@@ -595,3 +595,8 @@
 {"type":"message","ts":"2026-07-28T23:37:20.38637Z","data":{"task_id":"N32CGA","kind":"done","text":"Canonical replay, pure transaction application, graph queries, deterministic compaction, repository-owned commands, and hardened result evidence passed focused integration tests plus formatting, lint, and the full race-enabled suite.","ts":"2026-07-28T23:37:20.38637Z"}}
 {"type":"unclaim","ts":"2026-07-28T23:37:20.38637Z","data":{"id":"N32CGA","ts":"2026-07-28T23:37:20.38637Z"}}
 {"type":"state","ts":"2026-07-28T23:37:20.38637Z","data":{"id":"N32CGA","state":"done","ts":"2026-07-28T23:37:20.38637Z"}}
+{"type":"claim","ts":"2026-07-28T23:37:20.422537Z","data":{"id":"EE376O","agent_id":"codex@local","ts":"2026-07-28T23:37:20.422537Z"}}
+{"type":"state","ts":"2026-07-28T23:37:20.422537Z","data":{"id":"EE376O","state":"doing","ts":"2026-07-28T23:37:20.422537Z"}}
+{"type":"message","ts":"2026-07-28T23:45:40.076868Z","data":{"task_id":"EE376O","kind":"done","text":"Added repository-scoped typed application operations for create, show, lifecycle, and claim; request-scoped agent identity; structural error classification and CLI hint routing. Focused gates and go test ./... pass.","ts":"2026-07-28T23:45:40.076868Z"}}
+{"type":"unclaim","ts":"2026-07-28T23:45:40.076868Z","data":{"id":"EE376O","ts":"2026-07-28T23:45:40.076868Z"}}
+{"type":"state","ts":"2026-07-28T23:45:40.076868Z","data":{"id":"EE376O","state":"done","ts":"2026-07-28T23:45:40.076868Z"}}

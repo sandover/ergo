@@ -36,20 +36,13 @@ func RunInit(args []string, opts GlobalOptions) error {
 }
 
 func RunNewTask(title, epicID string, opts GlobalOptions) error {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		return errors.New(NewTaskUsage)
-	}
 	body, _, err := readOptionalBodyFromStdin()
 	if err != nil {
 		return err
 	}
-
-	dir, err := ergoDir(opts)
-	if err != nil {
-		return err
-	}
-	created, err := createTaskWithUpdates(dir, opts, epicID, title, body, nil, "")
+	created, err := NewApplication(opts).CreateTask(CreateTaskRequest{
+		Title: title, EpicID: epicID, Body: body,
+	})
 	if err != nil {
 		return err
 	}

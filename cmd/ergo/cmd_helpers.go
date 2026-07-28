@@ -8,6 +8,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"syscall"
@@ -21,7 +22,9 @@ func printVersion() {
 
 func exitErr(err error, opts *ergo.GlobalOptions) {
 	fmt.Fprintln(os.Stderr, "error:", err)
-	if strings.Contains(err.Error(), `unknown command "set"`) {
+	if handled := writeApplicationErrorHint(os.Stderr, err, os.Args[1:]); handled {
+		// Classified application errors never fall through to text matching.
+	} else if strings.Contains(err.Error(), `unknown command "set"`) {
 		fmt.Fprintln(os.Stderr, "hint: use claim, done, block, cancel, release, title, body, or move")
 	} else if strings.Contains(err.Error(), `unknown command "reopen"`) {
 		fmt.Fprintln(os.Stderr, "hint: use claim <id> --agent <identity> to resume closed work")
@@ -37,6 +40,24 @@ func exitErr(err error, opts *ergo.GlobalOptions) {
 		fmt.Fprintln(os.Stderr, "hint: another ergo process is still running; try again in a moment")
 	}
 	os.Exit(1)
+}
+
+func writeApplicationErrorHint(w io.Writer, err error, args []string) bool {
+	kind, ok := ergo.ApplicationErrorKind(err)
+	if !ok {
+		return false
+	}
+	switch kind {
+	case ergo.ErrorUsage:
+		fmt.Fprintf(w, "hint: run `%s --help`\n", helpInvocation(args))
+	case ergo.ErrorNotFound:
+		if errors.Is(err, ergo.ErrNoErgoDir) {
+			fmt.Fprintln(w, "hint: run `ergo init` or target an existing graph with `ergo --dir <path>`")
+		}
+	case ergo.ErrorBusy:
+		fmt.Fprintln(w, "hint: another ergo process is still running; try again in a moment")
+	}
+	return true
 }
 
 func helpInvocation(args []string) string {

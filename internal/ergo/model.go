@@ -70,10 +70,14 @@ func validateDepSelf(from, to string) error {
 	return nil
 }
 
-type GlobalOptions struct {
+// RepositoryOptions configures repository discovery and locking.
+type RepositoryOptions struct {
 	StartDir string
-	AgentID  string
 }
+
+// GlobalOptions remains as a compatibility alias while command adapters move
+// to the Application surface. It contains repository configuration only.
+type GlobalOptions = RepositoryOptions
 
 type Task struct {
 	ID        string

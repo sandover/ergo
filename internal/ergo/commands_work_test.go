@@ -44,7 +44,7 @@ func TestCollectEpicChildrenSortsByDependencyOrder(t *testing.T) {
 }
 
 func TestRunClaimRequiresAgent(t *testing.T) {
-	err := RunClaim("T1", GlobalOptions{})
+	err := RunClaim("T1", "", GlobalOptions{})
 	if err == nil || !strings.Contains(err.Error(), "claim requires --agent") {
 		t.Fatalf("claim error = %v", err)
 	}
@@ -55,7 +55,7 @@ func TestRunClaimOldestReadyRequiresAgent(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(repoDir, ".ergo"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	err := RunClaimOldestReady(GlobalOptions{StartDir: repoDir})
+	err := RunClaimOldestReady("", GlobalOptions{StartDir: repoDir})
 	if err == nil || !strings.Contains(err.Error(), "claim requires --agent") {
 		t.Fatalf("claim error = %v", err)
 	}

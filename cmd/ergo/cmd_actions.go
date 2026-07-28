@@ -198,15 +198,10 @@ var claimCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		agentID, _ := cmd.Flags().GetString("agent")
 
-		opts := globalOpts
-		if agentID != "" {
-			opts.AgentID = agentID
-		}
-
 		if len(args) == 0 {
-			return ergo.RunClaimOldestReady(opts)
+			return ergo.RunClaimOldestReady(agentID, globalOpts)
 		}
-		return ergo.RunClaim(args[0], opts)
+		return ergo.RunClaim(args[0], agentID, globalOpts)
 	},
 }
 

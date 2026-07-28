@@ -18,62 +18,33 @@ type LifecycleOptions struct {
 }
 
 func RunLifecycle(kind, id string, lifecycle LifecycleOptions, opts GlobalOptions) error {
-	targetState, err := lifecycleTargetState(kind)
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(id) == "" {
-		return fmt.Errorf("usage: ergo %s <id> [-m <message>] [--result <path>]", kind)
-	}
-	if lifecycle.ResultSet && strings.TrimSpace(lifecycle.ResultPath) == "" {
-		return errors.New("--result cannot be empty")
-	}
-	message, messageSet, err := normalizeLifecycleMessages(lifecycle.Messages)
-	if err != nil {
-		return err
-	}
 	if stdinIsPiped() {
 		return fmt.Errorf("%s does not read stdin; use ergo body %s to replace the body or -m <message> to add a lifecycle note", kind, id)
 	}
-	dir, err := ergoDir(opts)
+	outcome, err := NewApplication(opts).Lifecycle(LifecycleRequest{
+		Kind: kind, ID: id, ResultPath: lifecycle.ResultPath,
+		ResultSet: lifecycle.ResultSet, Messages: lifecycle.Messages,
+	})
 	if err != nil {
 		return err
 	}
-	mutation := taskMutation{
-		Kind:        kind,
-		State:       targetState,
-		StateSet:    true,
-		ResultPath:  strings.TrimSpace(lifecycle.ResultPath),
-		ResultSet:   lifecycle.ResultSet,
-		MessageKind: kind,
-		MessageText: message,
-		MessageSet:  messageSet,
-	}
-	if kind == "release" {
-		mutation.AllowedStates = []string{stateTodo, stateDoing, stateBlocked, stateError}
-	}
-	outcome, err := applyTaskMutation(dir, opts, id, mutation)
-	if err != nil {
-		return err
-	}
-	task := outcome.Graph.Tasks[id]
+	task := outcome.Task
 	fmt.Printf("%s - %s\n", task.ID, task.Title)
 	fmt.Printf("State: %s\n", task.State)
 	if containsString(outcome.ChangedFields, "claim") {
 		fmt.Println("Claim: cleared")
 	}
-	if messageSet {
+	if outcome.MessageSet {
 		fmt.Println("Message: appended")
 	}
 	if lifecycle.ResultSet {
-		fmt.Printf("Result: %s\n", strings.TrimSpace(lifecycle.ResultPath))
+		fmt.Printf("Result: %s\n", outcome.ResultPath)
 	}
 	if len(outcome.ChangedFields) == 0 {
 		fmt.Println("No changes.")
 	}
-	ready := readyTasks(outcome.Graph)
-	if len(ready) > 0 {
-		fmt.Printf("Ready: %s - %s\n", ready[0].ID, ready[0].Title)
+	if outcome.Ready != nil {
+		fmt.Printf("Ready: %s - %s\n", outcome.Ready.ID, outcome.Ready.Title)
 	}
 	return nil
 }

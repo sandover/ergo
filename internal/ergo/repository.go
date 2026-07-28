@@ -204,12 +204,24 @@ func (r *Repository) ProjectDir() string { return filepath.Dir(r.dir) }
 func (r *Repository) load() (*Graph, error) {
 	read, err := inspectEventLog(r.eventsPath)
 	if err != nil {
+		var pathError *os.PathError
+		if !errors.As(err, &pathError) {
+			return nil, &corruptionError{err: err}
+		}
 		return nil, err
 	}
 	if read.snapshot != nil {
-		return replayEventsOnto(read.snapshot, read.events)
+		graph, err := replayEventsOnto(read.snapshot, read.events)
+		if err != nil {
+			return nil, &corruptionError{err: err}
+		}
+		return graph, nil
 	}
-	return replayEvents(read.events)
+	graph, err := replayEvents(read.events)
+	if err != nil {
+		return nil, &corruptionError{err: err}
+	}
+	return graph, nil
 }
 
 func (r *Repository) append(events []Event) error {
