@@ -60,6 +60,7 @@ const (
 type treeNode struct {
 	task           *Task
 	children       []*treeNode
+	isEpic         bool
 	isReady        bool
 	collapsed      bool // for done epics: show summary instead of children
 	collapsedCount int  // number of tasks in collapsed epic
@@ -124,7 +125,7 @@ func oldestTaskInTree(node *treeNode) *Task {
 	if node == nil || node.task == nil {
 		return nil
 	}
-	if !node.task.IsEpic {
+	if !node.isEpic {
 		return node.task
 	}
 	var oldest *Task
@@ -151,23 +152,17 @@ func renderTreeView(w io.Writer, roots []*treeNode, graph *Graph, repoDir string
 
 func buildEpicTree(graph *Graph, epicID string) *treeNode {
 	epic := graph.Tasks[epicID]
-	if epic == nil || !epic.IsEpic {
+	if epic == nil || !graph.IsEpic(epicID) {
 		return nil
 	}
-	node := &treeNode{task: epic, isReady: isReady(epic, graph)}
+	node := &treeNode{task: epic, isEpic: true, isReady: graph.IsReady(epic.ID)}
 
-	var tasks []*Task
-	for _, task := range graph.Tasks {
-		if task.IsEpic || task.EpicID != epicID {
-			continue
-		}
-		tasks = append(tasks, task)
-	}
+	tasks := graph.Children(epicID)
 	tasks = topoSortTasks(tasks, graph)
 	for _, t := range tasks {
 		node.children = append(node.children, &treeNode{
 			task:    t,
-			isReady: isReady(t, graph),
+			isReady: graph.IsReady(t.ID),
 		})
 	}
 	return node
@@ -180,7 +175,7 @@ func filterEpicChildrenForList(children []*treeNode, graph *Graph, showAll bool,
 			continue
 		}
 		if readyOnly {
-			if !isReady(child.task, graph) {
+			if !graph.IsReady(child.task.ID) {
 				continue
 			}
 		} else if !showAll {
@@ -201,7 +196,7 @@ func filterNodesByReady(nodes []*treeNode, graph *Graph) []*treeNode {
 		if node == nil || node.task == nil {
 			continue
 		}
-		if node.task.IsEpic {
+		if node.isEpic {
 			node.children = filterNodesByReady(node.children, graph)
 			if len(node.children) == 0 {
 				continue
@@ -209,7 +204,7 @@ func filterNodesByReady(nodes []*treeNode, graph *Graph) []*treeNode {
 			filtered = append(filtered, node)
 			continue
 		}
-		if !isReady(node.task, graph) {
+		if !graph.IsReady(node.task.ID) {
 			continue
 		}
 		filtered = append(filtered, node)
@@ -260,7 +255,7 @@ func filterAndCollapseNodesImpl(nodes []*treeNode, withinEpic bool) []*treeNode 
 	var filtered []*treeNode
 	for _, node := range nodes {
 		// For epics, check derived state BEFORE filtering children
-		if node.task != nil && node.task.IsEpic {
+		if node.task != nil && node.isEpic {
 			state := derivedEpicState(node.children)
 			switch state {
 			case "canceled":
@@ -279,20 +274,20 @@ func filterAndCollapseNodesImpl(nodes []*treeNode, withinEpic bool) []*treeNode 
 
 		// Recursively process children
 		// If this node is an epic, its children should preserve done tasks for progress visibility
-		if node.task != nil && node.task.IsEpic {
+		if node.task != nil && node.isEpic {
 			node.children = filterAndCollapseNodesImpl(node.children, true)
 		} else {
 			node.children = filterAndCollapseNodesImpl(node.children, withinEpic)
 		}
 
 		// Always skip canceled tasks (abandoned work)
-		if node.task != nil && !node.task.IsEpic && node.task.State == stateCanceled {
+		if node.task != nil && !node.isEpic && node.task.State == stateCanceled {
 			continue
 		}
 
 		// Skip orphan done tasks (completed work not within an active epic)
 		// Keep done tasks within epics to show progress: "3 of 5 done"
-		if node.task != nil && !node.task.IsEpic && !withinEpic && node.task.State == stateDone {
+		if node.task != nil && !node.isEpic && !withinEpic && node.task.State == stateDone {
 			continue
 		}
 
@@ -305,7 +300,7 @@ func filterAndCollapseNodesImpl(nodes []*treeNode, withinEpic bool) []*treeNode 
 func countTasks(nodes []*treeNode) int {
 	count := 0
 	for _, node := range nodes {
-		if node.task != nil && !node.task.IsEpic {
+		if node.task != nil && !node.isEpic {
 			count++
 		}
 		count += countTasks(node.children)
@@ -340,7 +335,7 @@ const (
 func computeStatsForTasks(tasks []*Task, graph *Graph) taskStats {
 	var stats taskStats
 	for _, task := range tasks {
-		if task == nil || task.IsEpic {
+		if task == nil || graph.IsEpic(task.ID) {
 			continue
 		}
 		stats.total++
@@ -356,7 +351,7 @@ func computeStatsForTasks(tasks []*Task, graph *Graph) taskStats {
 		case stateBlocked:
 			stats.blocked++
 		case stateTodo:
-			if isReady(task, graph) {
+			if graph.IsReady(task.ID) {
 				stats.ready++
 			} else {
 				stats.waiting++
@@ -437,7 +432,7 @@ func buildTree(graph *Graph) []*treeNode {
 	epicTasks := make(map[string][]*Task) // epicID -> tasks
 
 	for _, task := range graph.Tasks {
-		if task.IsEpic {
+		if graph.IsEpic(task.ID) {
 			epics = append(epics, task)
 		} else if task.EpicID == "" {
 			orphanTasks = append(orphanTasks, task)
@@ -453,7 +448,7 @@ func buildTree(graph *Graph) []*treeNode {
 	var rootEpics []*treeNode
 
 	for _, epic := range epics {
-		node := &treeNode{task: epic, isReady: isReady(epic, graph)}
+		node := &treeNode{task: epic, isEpic: true, isReady: graph.IsReady(epic.ID)}
 
 		// Add tasks under this epic, sorted by dependency order
 		tasks := epicTasks[epic.ID]
@@ -461,7 +456,7 @@ func buildTree(graph *Graph) []*treeNode {
 		for _, t := range tasks {
 			childNode := &treeNode{
 				task:    t,
-				isReady: isReady(t, graph),
+				isReady: graph.IsReady(t.ID),
 			}
 			node.children = append(node.children, childNode)
 		}
@@ -475,7 +470,7 @@ func buildTree(graph *Graph) []*treeNode {
 	for _, t := range orphanTasks {
 		orphanNodes = append(orphanNodes, &treeNode{
 			task:    t,
-			isReady: isReady(t, graph),
+			isReady: graph.IsReady(t.ID),
 		})
 	}
 
@@ -505,7 +500,7 @@ func topoSortTasks(tasks []*Task, graph *Graph) []*Task {
 		inDegree[t.ID] = 0
 	}
 	for _, t := range tasks {
-		for depID := range graph.Deps[t.ID] {
+		for _, depID := range graph.Dependencies(t.ID) {
 			if taskSet[depID] {
 				inDegree[t.ID]++
 			}
@@ -522,8 +517,8 @@ func topoSortTasks(tasks []*Task, graph *Graph) []*Task {
 
 	// Sort initial queue: ready first, then by ID
 	sort.Slice(queue, func(i, j int) bool {
-		iReady := isReady(queue[i], graph)
-		jReady := isReady(queue[j], graph)
+		iReady := graph.IsReady(queue[i].ID)
+		jReady := graph.IsReady(queue[j].ID)
 		if iReady != jReady {
 			return iReady // ready tasks first
 		}
@@ -537,22 +532,21 @@ func topoSortTasks(tasks []*Task, graph *Graph) []*Task {
 		queue = queue[1:]
 		result = append(result, t)
 
-		// Reduce in-degree of dependents
-		for _, other := range tasks {
-			if graph.Deps[other.ID] != nil {
-				if _, ok := graph.Deps[other.ID][t.ID]; ok {
-					inDegree[other.ID]--
-					if inDegree[other.ID] == 0 {
-						queue = append(queue, other)
-					}
-				}
+		// Reduce in-degree of dependents in this task set.
+		for _, dependentID := range graph.Dependents(t.ID) {
+			if !taskSet[dependentID] {
+				continue
+			}
+			inDegree[dependentID]--
+			if inDegree[dependentID] == 0 {
+				queue = append(queue, graph.Tasks[dependentID])
 			}
 		}
 
 		// Re-sort queue
 		sort.Slice(queue, func(i, j int) bool {
-			iReady := isReady(queue[i], graph)
-			jReady := isReady(queue[j], graph)
+			iReady := graph.IsReady(queue[i].ID)
+			jReady := graph.IsReady(queue[j].ID)
 			if iReady != jReady {
 				return iReady
 			}
@@ -576,7 +570,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 	showConnector := !isRoot
 
 	// Handle collapsed (done) epics
-	if node.collapsed && task.IsEpic {
+	if node.collapsed && node.isEpic {
 		title := task.Title
 		countStr := fmt.Sprintf("[%d tasks]", node.collapsedCount)
 		line := formatCollapsedEpicLine(prefix, connector, showConnector, task.ID, title, countStr, useColor, termWidth)
@@ -585,7 +579,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 	}
 
 	// Build the line
-	icon := stateIcon(task, node.isReady)
+	icon := stateIcon(task, node.isReady, node.isEpic)
 	title := task.Title
 
 	annotations := []string{}
@@ -677,8 +671,8 @@ func abbreviate(s string, maxLen int) string {
 }
 
 // stateIcon returns the appropriate icon for a task's state.
-func stateIcon(task *Task, isReady bool) string {
-	if task.IsEpic {
+func stateIcon(task *Task, isReady, isEpic bool) string {
+	if isEpic {
 		return iconEpic
 	}
 	switch task.State {
@@ -704,26 +698,10 @@ func stateIcon(task *Task, isReady bool) string {
 
 // getBlockers returns the IDs that are blocking this task.
 func getBlockers(task *Task, graph *Graph) []string {
-	var blockers []string
-
-	// Check task's own direct deps
-	for depID := range graph.Deps[task.ID] {
-		if !isDepComplete(depID, graph) {
-			blockers = append(blockers, depID)
-		}
+	if task == nil {
+		return nil
 	}
-
-	// Inherited blocking: if the task's container has external deps, propagate them
-	if task.EpicID != "" {
-		for epicDepID := range graph.Deps[task.EpicID] {
-			if !isDepComplete(epicDepID, graph) {
-				blockers = append(blockers, epicDepID)
-			}
-		}
-	}
-
-	sort.Strings(blockers)
-	return blockers
+	return graph.Blockers(task.ID)
 }
 
 // visibleLen returns the display width of a string, excluding ANSI escape codes.
@@ -878,6 +856,7 @@ func formatCollapsedEpicLine(prefix, connector string, showConnector bool, id, t
 // Visual hierarchy: icon → title → @claimer → [blocker column] → ID (right-aligned)
 // Ensures the line never exceeds termWidth by truncating content as needed.
 func formatTreeLine(prefix, connector string, showConnector bool, icon, id, title string, annotations []string, blockerAnnotation string, task *Task, isReady bool, useColor bool, termWidth int) string {
+	isEpic := icon == iconEpic
 	// Layout contract: ids are right-aligned at idStart.
 	minGap := idMinGap
 	rightMargin := idRightMargin
@@ -890,7 +869,7 @@ func formatTreeLine(prefix, connector string, showConnector bool, icon, id, titl
 	iconStr := ""
 	if icon != "" {
 		iconStr = icon + " "
-		if task.IsEpic {
+		if isEpic {
 			iconStr += " "
 		}
 	}
@@ -954,11 +933,11 @@ func formatTreeLine(prefix, connector string, showConnector bool, icon, id, titl
 		left.WriteString(titleSep)
 	}
 
-	isBlocked := task.State == stateTodo && !isReady && !task.IsEpic
+	isBlocked := task.State == stateTodo && !isReady && !isEpic
 	if useColor {
 		if isBlocked {
 			left.WriteString(colorDim)
-		} else if task.IsEpic {
+		} else if isEpic {
 			left.WriteString(colorBold)
 		}
 	}
@@ -1023,7 +1002,7 @@ func formatTreeLine(prefix, connector string, showConnector bool, icon, id, titl
 	}
 	sb.WriteString(strings.Repeat(" ", minGap))
 	if useColor {
-		if task.IsEpic {
+		if isEpic {
 			sb.WriteString(colorReset)
 		} else {
 			sb.WriteString(colorDim)

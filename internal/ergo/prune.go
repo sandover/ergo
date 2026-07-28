@@ -70,7 +70,7 @@ func selectPruneTargets(graph *Graph) []string {
 	}
 	eligibleTasks := map[string]struct{}{}
 	for _, task := range graph.Tasks {
-		if isContainer(task, graph) {
+		if graph.IsEpic(task.ID) {
 			continue
 		}
 		if task.State == stateDone || task.State == stateCanceled {
@@ -80,7 +80,7 @@ func selectPruneTargets(graph *Graph) []string {
 
 	remainingChildren := map[string]int{}
 	for _, task := range graph.Tasks {
-		if isContainer(task, graph) {
+		if graph.IsEpic(task.ID) {
 			continue
 		}
 		if _, willPrune := eligibleTasks[task.ID]; willPrune {
@@ -93,7 +93,7 @@ func selectPruneTargets(graph *Graph) []string {
 
 	eligibleContainers := map[string]struct{}{}
 	for _, task := range graph.Tasks {
-		if !isContainer(task, graph) {
+		if !graph.IsEpic(task.ID) {
 			continue
 		}
 		if remainingChildren[task.ID] == 0 {
@@ -126,7 +126,7 @@ func buildPruneItems(graph *Graph, ids []string) []PruneItem {
 			ID:          id,
 			Title:       task.Title,
 			State:       task.State,
-			IsContainer: isContainer(task, graph),
+			IsContainer: graph.IsEpic(task.ID),
 		})
 	}
 	return items

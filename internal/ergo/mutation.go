@@ -75,7 +75,7 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 				return err
 			}
 		}
-		if isContainer(task, graph) {
+		if graph.IsEpic(task.ID) {
 			if mutation.ClaimSet {
 				return errors.New("epics cannot be claimed")
 			}

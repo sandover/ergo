@@ -340,7 +340,7 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 			}
 			// Reject first-child assignment to a dirty leaf: once promoted to a
 			// container, leaf-only semantics (state/claim/results) no longer apply.
-			if !isContainer(epic, graph) {
+			if !graph.IsEpic(epic.ID) {
 				if epic.ClaimedBy != "" {
 					return fmt.Errorf("cannot add child to task %s: task is claimed by %q", epicID, epic.ClaimedBy)
 				}
@@ -577,7 +577,7 @@ func buildResultEvent(repoDir string, graph *Graph, taskID, summary, relPath str
 	if !ok {
 		return Event{}, fmt.Errorf("unknown task id %s", taskID)
 	}
-	if isContainer(task, graph) {
+	if graph.IsEpic(task.ID) {
 		return Event{}, errors.New("cannot attach result to epic")
 	}
 	if err := validateResultSummary(summary); err != nil {

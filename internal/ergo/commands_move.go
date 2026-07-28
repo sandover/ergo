@@ -40,7 +40,7 @@ func RunMove(id, destinationID string, toRoot bool, opts GlobalOptions) error {
 }
 
 func validateMovePlacement(graph *Graph, task *Task, destinationID string) error {
-	if isContainer(task, graph) {
+	if graph.IsEpic(task.ID) {
 		return fmt.Errorf("cannot move epic %s", task.ID)
 	}
 	if destinationID == "" {
@@ -56,7 +56,7 @@ func validateMovePlacement(graph *Graph, task *Task, destinationID string) error
 	if destination.EpicID != "" {
 		return fmt.Errorf("cannot nest under task %s: epics must remain at root", destinationID)
 	}
-	if !isContainer(destination, graph) {
+	if !graph.IsEpic(destination.ID) {
 		switch {
 		case destination.ClaimedBy != "":
 			return fmt.Errorf("cannot promote task %s: task is claimed by %q", destinationID, destination.ClaimedBy)

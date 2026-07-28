@@ -24,26 +24,6 @@ const (
 	dependsLinkType = "depends"
 )
 
-// isContainer returns true if the task is a container.
-// Current containers are derived from children; legacy new_epic events also
-// mark IsEpic so old empty containers remain visible after replay.
-func isContainer(task *Task, graph *Graph) bool {
-	if task == nil || graph == nil {
-		return false
-	}
-	// Legacy: tasks created via new_epic event have IsEpic=true
-	if task.IsEpic {
-		return true
-	}
-	// Derived: any task with children assigned to it is a container
-	for _, t := range graph.Tasks {
-		if t.EpicID == task.ID {
-			return true
-		}
-	}
-	return false
-}
-
 var (
 	ErrNoErgoDir = errors.New("no .ergo directory found")
 	ErrLockBusy  = errors.New("lock busy")
@@ -97,21 +77,15 @@ type GlobalOptions struct {
 }
 
 type Task struct {
-	ID     string
-	UUID   string
-	EpicID string
-	// IsEpic is a compatibility/display cache set during replay for legacy
-	// new_epic events and derived containers. Behavioral checks should prefer
-	// isContainer(task, graph).
-	IsEpic    bool
+	ID        string
+	UUID      string
+	EpicID    string
 	State     string
 	Title     string
 	Body      string
 	ClaimedBy string
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	Deps      []string
-	RDeps     []string
 	Results   []Result  // Attached results/artifacts, newest first
 	Messages  []Message // Lifecycle messages, newest first
 }
@@ -133,9 +107,12 @@ type TaskMeta struct {
 type Graph struct {
 	Tasks      map[string]*Task
 	Deps       map[string]map[string]struct{}
-	RDeps      map[string]map[string]struct{}
 	Meta       map[string]*TaskMeta
 	Tombstones map[string]TombstoneInfo
+
+	reverseDeps      map[string]map[string]struct{}
+	childrenByEpic   map[string][]*Task
+	legacyEmptyEpics map[string]struct{}
 }
 
 type TombstoneInfo struct {

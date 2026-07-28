@@ -18,18 +18,23 @@ func TestTaskDocumentRendersCompleteAgentContext(t *testing.T) {
 		ID: "ABCDEF", UUID: "uuid", EpicID: "PARENT", State: stateDoing,
 		ClaimedBy: "agent@host", Title: "Implement login", Body: "Line one\n\n- literal Markdown",
 		CreatedAt: now, UpdatedAt: now.Add(time.Minute),
-		Deps: []string{"BEFORE"}, RDeps: []string{"AFTER1"},
 		Messages: []Message{{Kind: "release", Text: "Retry with the new token.", CreatedAt: now.Add(time.Minute)}},
 		Results: []Result{
 			{Path: "docs/new.md", Summary: "docs/new.md"},
 			{Path: "docs/legacy.md", Summary: "Legacy caption"},
 		},
 	}
-	graph := &Graph{Tasks: map[string]*Task{
-		"ABCDEF": task,
-		"BEFORE": {ID: "BEFORE", Title: "Prepare schema"},
-		"AFTER1": {ID: "AFTER1", Title: "Run rollout"},
-	}}
+	graph := &Graph{
+		Tasks: map[string]*Task{
+			"ABCDEF": task,
+			"BEFORE": {ID: "BEFORE", Title: "Prepare schema"},
+			"AFTER1": {ID: "AFTER1", Title: "Run rollout"},
+		},
+		Deps: map[string]map[string]struct{}{
+			"ABCDEF": {"BEFORE": {}},
+			"AFTER1": {"ABCDEF": {}},
+		},
+	}
 	meta := &TaskMeta{LastClaimAt: now.Add(30 * time.Second)}
 
 	var buf bytes.Buffer

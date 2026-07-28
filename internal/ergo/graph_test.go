@@ -122,8 +122,8 @@ func TestReplayEvents_Dependencies(t *testing.T) {
 	if _, ok := graph.Deps["T1"]["T2"]; !ok {
 		t.Error("Expected T1 depends on T2")
 	}
-	if len(graph.RDeps["T2"]) != 1 {
-		t.Errorf("Expected T2 to have 1 rdep, got %d", len(graph.RDeps["T2"]))
+	if dependents := graph.Dependents("T2"); len(dependents) != 1 {
+		t.Errorf("Expected T2 to have 1 rdep, got %d", len(dependents))
 	}
 }
 
@@ -590,7 +590,11 @@ func TestIsEpicComplete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tt.tasks[tt.epicID] = &Task{ID: tt.epicID}
 			graph := &Graph{Tasks: tt.tasks}
+			if len(graph.Children(tt.epicID)) == 0 {
+				graph.legacyEmptyEpics = map[string]struct{}{tt.epicID: {}}
+			}
 			result := isEpicComplete(tt.epicID, graph)
 			if result != tt.expected {
 				t.Errorf("Expected isEpicComplete=%v, got %v", tt.expected, result)
@@ -610,7 +614,7 @@ func TestIsReady_EpicDeps(t *testing.T) {
 			name: "task ready when epic has no deps",
 			task: &Task{ID: "T1", EpicID: "E1", State: stateTodo},
 			setup: func(g *Graph) {
-				g.Tasks["E1"] = &Task{ID: "E1", EpicID: "", IsEpic: true} // E1 is an epic
+				g.Tasks["E1"] = &Task{ID: "E1"}
 			},
 			expected: true,
 		},
@@ -618,8 +622,8 @@ func TestIsReady_EpicDeps(t *testing.T) {
 			name: "task blocked when epic dep incomplete",
 			task: &Task{ID: "T1", EpicID: "E-build", State: stateTodo},
 			setup: func(g *Graph) {
-				g.Tasks["E-build"] = &Task{ID: "E-build", EpicID: "", IsEpic: true}   // epic
-				g.Tasks["E-design"] = &Task{ID: "E-design", EpicID: "", IsEpic: true} // epic
+				g.Tasks["E-build"] = &Task{ID: "E-build"}
+				g.Tasks["E-design"] = &Task{ID: "E-design"}
 				g.Tasks["T-design"] = &Task{ID: "T-design", EpicID: "E-design", State: stateTodo}
 				g.Deps["E-build"] = map[string]struct{}{"E-design": {}}
 			},
@@ -629,8 +633,8 @@ func TestIsReady_EpicDeps(t *testing.T) {
 			name: "task ready when epic dep complete",
 			task: &Task{ID: "T1", EpicID: "E-build", State: stateTodo},
 			setup: func(g *Graph) {
-				g.Tasks["E-build"] = &Task{ID: "E-build", EpicID: "", IsEpic: true}   // epic
-				g.Tasks["E-design"] = &Task{ID: "E-design", EpicID: "", IsEpic: true} // epic
+				g.Tasks["E-build"] = &Task{ID: "E-build"}
+				g.Tasks["E-design"] = &Task{ID: "E-design"}
 				g.Tasks["T-design"] = &Task{ID: "T-design", EpicID: "E-design", State: stateDone}
 				g.Deps["E-build"] = map[string]struct{}{"E-design": {}}
 			},

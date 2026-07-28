@@ -64,25 +64,25 @@ func snapshotGraphState(graph *Graph) graphSnapshot {
 		if task == nil {
 			continue
 		}
-		out.Tasks[id] = snapshotTaskState(task)
+		out.Tasks[id] = snapshotTaskState(graph, task)
 	}
 	return out
 }
 
-func snapshotTaskState(task *Task) taskSnapshot {
+func snapshotTaskState(graph *Graph, task *Task) taskSnapshot {
 	snap := taskSnapshot{
 		ID:        task.ID,
 		UUID:      task.UUID,
 		EpicID:    task.EpicID,
-		IsEpic:    task.IsEpic,
+		IsEpic:    graph.IsEpic(task.ID),
 		State:     task.State,
 		Title:     task.Title,
 		Body:      task.Body,
 		ClaimedBy: task.ClaimedBy,
 		CreatedAt: task.CreatedAt,
 		UpdatedAt: task.UpdatedAt,
-		Deps:      append([]string(nil), task.Deps...),
-		RDeps:     append([]string(nil), task.RDeps...),
+		Deps:      graph.Dependencies(task.ID),
+		RDeps:     graph.Dependents(task.ID),
 		Results:   snapshotResults(task.Results),
 		Messages:  snapshotMessages(task.Messages),
 	}
@@ -329,26 +329,26 @@ func TestCompactEvents_RoundTrip_TaskEvolvesOverTime(t *testing.T) {
 type simState struct {
 	tasks map[string]*Task
 	deps  map[string]map[string]struct{}
+	epics map[string]struct{}
 }
 
 func newSimState() *simState {
 	return &simState{
 		tasks: map[string]*Task{},
 		deps:  map[string]map[string]struct{}{},
+		epics: map[string]struct{}{},
 	}
 }
 
 func (s *simState) toGraph() *Graph {
 	graph := &Graph{
-		Tasks: map[string]*Task{},
-		Deps:  map[string]map[string]struct{}{},
-		RDeps: map[string]map[string]struct{}{},
-		Meta:  map[string]*TaskMeta{},
+		Tasks:            map[string]*Task{},
+		Deps:             map[string]map[string]struct{}{},
+		Meta:             map[string]*TaskMeta{},
+		legacyEmptyEpics: map[string]struct{}{},
 	}
 	for id, task := range s.tasks {
 		clone := *task
-		clone.Deps = nil
-		clone.RDeps = nil
 		graph.Tasks[id] = &clone
 	}
 	for from, tos := range s.deps {
@@ -357,6 +357,10 @@ func (s *simState) toGraph() *Graph {
 			graph.Deps[from][to] = struct{}{}
 		}
 	}
+	for id := range s.epics {
+		graph.legacyEmptyEpics[id] = struct{}{}
+	}
+	graph.rebuildIndexes()
 	return graph
 }
 
@@ -370,12 +374,12 @@ func (s *simState) ensureDepsMap(from string) map[string]struct{} {
 func (s *simState) applyNewTask(id, uuid, epicID string, isEpic bool, title, body string, createdAt time.Time) {
 	if isEpic {
 		epicID = ""
+		s.epics[id] = struct{}{}
 	}
 	s.tasks[id] = &Task{
 		ID:        id,
 		UUID:      uuid,
 		EpicID:    epicID,
-		IsEpic:    isEpic,
 		State:     stateTodo,
 		Title:     title,
 		Body:      body,
@@ -432,7 +436,7 @@ func (s *simState) applyTitle(id, title string, ts time.Time) {
 
 func (s *simState) applyEpic(id, epicID string, ts time.Time) {
 	task := s.tasks[id]
-	if task == nil || task.IsEpic {
+	if task == nil {
 		return
 	}
 	task.EpicID = epicID
@@ -441,7 +445,7 @@ func (s *simState) applyEpic(id, epicID string, ts time.Time) {
 
 func (s *simState) applyResult(taskID string, result Result, ts time.Time) {
 	task := s.tasks[taskID]
-	if task == nil || task.IsEpic {
+	if task == nil {
 		return
 	}
 	task.Results = append([]Result{result}, task.Results...)
@@ -503,7 +507,10 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 	taskIDs := func() []string {
 		ids := make([]string, 0, len(sim.tasks))
 		for id, task := range sim.tasks {
-			if task != nil && !task.IsEpic {
+			if task != nil {
+				if _, epic := sim.epics[id]; epic {
+					continue
+				}
 				ids = append(ids, id)
 			}
 		}
@@ -513,7 +520,10 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 	epicIDs := func() []string {
 		ids := make([]string, 0, len(sim.tasks))
 		for id, task := range sim.tasks {
-			if task != nil && task.IsEpic {
+			if task != nil {
+				if _, epic := sim.epics[id]; !epic {
+					continue
+				}
 				ids = append(ids, id)
 			}
 		}

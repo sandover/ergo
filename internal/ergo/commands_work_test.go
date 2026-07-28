@@ -15,7 +15,7 @@ import (
 func TestCollectEpicChildrenSortsByDependencyOrder(t *testing.T) {
 	graph := &Graph{
 		Tasks: map[string]*Task{
-			"E1":     {ID: "E1", IsEpic: true, State: stateTodo, Title: "Epic"},
+			"E1":     {ID: "E1", State: stateTodo, Title: "Epic"},
 			"A11111": {ID: "A11111", EpicID: "E1", State: stateTodo, Title: "A"},
 			"B11111": {ID: "B11111", EpicID: "E1", State: stateTodo, Title: "B"},
 			"C11111": {ID: "C11111", EpicID: "E1", State: stateTodo, Title: "C"},

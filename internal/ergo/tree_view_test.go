@@ -104,7 +104,7 @@ func TestFilterAndCollapseNodes(t *testing.T) {
 	t.Run("hides fully-canceled epics", func(t *testing.T) {
 		nodes := []*treeNode{
 			{
-				task: &Task{ID: "E1", IsEpic: true},
+				task: &Task{ID: "E1"}, isEpic: true,
 				children: []*treeNode{
 					{task: &Task{ID: "T1", State: stateCanceled}},
 					{task: &Task{ID: "T2", State: stateCanceled}},
@@ -126,7 +126,7 @@ func TestFilterAndCollapseNodes(t *testing.T) {
 	t.Run("hides fully-done epics", func(t *testing.T) {
 		nodes := []*treeNode{
 			{
-				task: &Task{ID: "E1", IsEpic: true},
+				task: &Task{ID: "E1"}, isEpic: true,
 				children: []*treeNode{
 					{task: &Task{ID: "T1", State: stateDone}},
 					{task: &Task{ID: "T2", State: stateDone}},
@@ -145,7 +145,7 @@ func TestFilterAndCollapseNodes(t *testing.T) {
 	t.Run("active epics show done tasks for progress visibility", func(t *testing.T) {
 		nodes := []*treeNode{
 			{
-				task: &Task{ID: "E1", IsEpic: true},
+				task: &Task{ID: "E1"}, isEpic: true,
 				children: []*treeNode{
 					{task: &Task{ID: "T1", State: stateDone}},     // kept for progress context
 					{task: &Task{ID: "T2", State: stateTodo}},     // active
@@ -179,7 +179,7 @@ func TestCountTasks(t *testing.T) {
 	nodes := []*treeNode{
 		{task: &Task{ID: "T1"}},
 		{
-			task: &Task{ID: "E1", IsEpic: true}, // epic doesn't count
+			task: &Task{ID: "E1"}, isEpic: true, // epic doesn't count
 			children: []*treeNode{
 				{task: &Task{ID: "T2"}},
 				{task: &Task{ID: "T3"}},
@@ -197,7 +197,7 @@ func TestCountTasks(t *testing.T) {
 func TestHideDoneEpicsInActiveView(t *testing.T) {
 	graph := &Graph{
 		Tasks: map[string]*Task{
-			"E1": {ID: "E1", IsEpic: true, Title: "My Epic"},
+			"E1": {ID: "E1", Title: "My Epic"},
 			"T1": {ID: "T1", EpicID: "E1", State: stateDone},
 			"T2": {ID: "T2", EpicID: "E1", State: stateDone},
 		},
@@ -217,7 +217,7 @@ func TestHideDoneEpicsInActiveView(t *testing.T) {
 func TestRenderTreeRootRowsNoConnectors(t *testing.T) {
 	graph := &Graph{
 		Tasks: map[string]*Task{
-			"E1": {ID: "E1", IsEpic: true, Title: "Epic"},
+			"E1": {ID: "E1", Title: "Epic"},
 			"T1": {ID: "T1", EpicID: "E1", State: stateTodo, Title: "Child 1"},
 			"T2": {ID: "T2", EpicID: "E1", State: stateDone, Title: "Child 2"},
 			"O1": {ID: "O1", State: stateTodo, Title: "Orphan"},
@@ -297,7 +297,6 @@ func TestFilterNodesByReady(t *testing.T) {
 		Deps: map[string]map[string]struct{}{
 			"T5": {"T6": {}}, // T5 depends on T6
 		},
-		RDeps: map[string]map[string]struct{}{},
 	}
 
 	t.Run("readyOnly filters out non-ready tasks", func(t *testing.T) {
@@ -325,14 +324,14 @@ func TestFilterNodesByReady(t *testing.T) {
 	t.Run("readyOnly excludes epics with no ready children", func(t *testing.T) {
 		nodes := []*treeNode{
 			{
-				task: &Task{ID: "E1", IsEpic: true},
+				task: &Task{ID: "E1"}, isEpic: true,
 				children: []*treeNode{
 					{task: graph.Tasks["T2"]}, // done, not ready
 					{task: graph.Tasks["T3"]}, // canceled, not ready
 				},
 			},
 			{
-				task: &Task{ID: "E2", IsEpic: true},
+				task: &Task{ID: "E2"}, isEpic: true,
 				children: []*treeNode{
 					{task: graph.Tasks["T1"]}, // ready
 					{task: graph.Tasks["T2"]}, // done, not ready
@@ -365,12 +364,11 @@ func TestReadyListOrderMatchesAutomaticClaim(t *testing.T) {
 	newer := time.Unix(200, 0).UTC()
 	graph := &Graph{
 		Tasks: map[string]*Task{
-			"EPIC01": {ID: "EPIC01", IsEpic: true},
+			"EPIC01": {ID: "EPIC01"},
 			"ZZZZZZ": {ID: "ZZZZZZ", EpicID: "EPIC01", State: stateTodo, CreatedAt: older},
 			"AAAAAA": {ID: "AAAAAA", EpicID: "EPIC01", State: stateTodo, CreatedAt: newer},
 		},
-		Deps:  map[string]map[string]struct{}{},
-		RDeps: map[string]map[string]struct{}{},
+		Deps: map[string]map[string]struct{}{},
 	}
 
 	roots := buildListRoots(graph, false, true, "")

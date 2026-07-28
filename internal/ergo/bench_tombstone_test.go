@@ -73,7 +73,7 @@ func buildPruneGraph(taskCount int, epicEvery int) *Graph {
 			if i%epicEvery == 0 {
 				epicIndex++
 				epicID = fmt.Sprintf("E%03d", epicIndex)
-				graph.Tasks[epicID] = &Task{ID: epicID, IsEpic: true}
+				graph.Tasks[epicID] = &Task{ID: epicID}
 			} else if epicIndex > 0 {
 				epicID = fmt.Sprintf("E%03d", epicIndex)
 			}

@@ -97,7 +97,7 @@ func assertReleasedFixture(t *testing.T, graph *Graph, fixture releasedFixture) 
 	if epic == nil || first == nil || second == nil {
 		t.Fatalf("missing released tasks: epic=%v first=%v second=%v", epic != nil, first != nil, second != nil)
 	}
-	if !isContainer(epic, graph) {
+	if !graph.IsEpic(epic.ID) {
 		t.Fatalf("%s was not derived as an epic", fixture.epicID)
 	}
 	if first.EpicID != fixture.epicID || second.EpicID != fixture.epicID {
@@ -114,8 +114,9 @@ func assertReleasedFixture(t *testing.T, graph *Graph, fixture releasedFixture) 
 		t.Fatalf("second state/claim = %s/%q, want %s/%q",
 			second.State, second.ClaimedBy, fixture.secondState, fixture.secondClaim)
 	}
-	if len(second.Deps) != 1 || second.Deps[0] != fixture.firstID {
-		t.Fatalf("second dependencies = %v, want [%s]", second.Deps, fixture.firstID)
+	dependencies := graph.Dependencies(second.ID)
+	if len(dependencies) != 1 || dependencies[0] != fixture.firstID {
+		t.Fatalf("second dependencies = %v, want [%s]", dependencies, fixture.firstID)
 	}
 	if fixture.messageText == "" {
 		if len(first.Messages) != 0 {

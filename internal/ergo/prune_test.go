@@ -13,10 +13,10 @@ import (
 func TestSelectPruneTargets_TaskEligibilityAndEpics(t *testing.T) {
 	graph := &Graph{
 		Tasks: map[string]*Task{
-			"E1": {ID: "E1", IsEpic: true},
-			"E2": {ID: "E2", IsEpic: true},
-			"E3": {ID: "E3", IsEpic: true}, // empty epic
-			"E4": {ID: "E4", IsEpic: true},
+			"E1": {ID: "E1"},
+			"E2": {ID: "E2"},
+			"E3": {ID: "E3"}, // legacy empty epic
+			"E4": {ID: "E4"},
 			"T1": {ID: "T1", EpicID: "E1", State: stateDone},
 			"T2": {ID: "T2", EpicID: "E1", State: stateCanceled},
 			"T3": {ID: "T3", EpicID: "E2", State: stateTodo},
@@ -26,6 +26,7 @@ func TestSelectPruneTargets_TaskEligibilityAndEpics(t *testing.T) {
 			"T7": {ID: "T7", EpicID: "E4", State: stateDone},
 			"T8": {ID: "T8", EpicID: "E4", State: stateTodo},
 		},
+		legacyEmptyEpics: map[string]struct{}{"E3": {}},
 	}
 
 	got := selectPruneTargets(graph)
@@ -39,8 +40,8 @@ func TestSelectPruneTargets_TaskEligibilityAndEpics(t *testing.T) {
 func TestSelectPruneTargets_EmptyEpicsAfterTaskPrune(t *testing.T) {
 	graph := &Graph{
 		Tasks: map[string]*Task{
-			"E1": {ID: "E1", IsEpic: true},
-			"E2": {ID: "E2", IsEpic: true},
+			"E1": {ID: "E1"},
+			"E2": {ID: "E2"},
 			"T1": {ID: "T1", EpicID: "E1", State: stateDone},
 			"T2": {ID: "T2", EpicID: "E1", State: stateCanceled},
 			"T3": {ID: "T3", EpicID: "E2", State: stateBlocked},

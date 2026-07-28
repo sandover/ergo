@@ -295,7 +295,7 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 	// Tree view (human-friendly hierarchical output)
 	if epicID != "" {
 		epic := graph.Tasks[epicID]
-		if epic == nil || !isContainer(epic, graph) {
+		if epic == nil || !graph.IsEpic(epic.ID) {
 			return fmt.Errorf("no such epic: %s", epicID)
 		}
 	}
@@ -393,19 +393,13 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 
 // collectEpicChildren returns all tasks belonging to the given epic in dependency order.
 func collectEpicChildren(epicID string, graph *Graph) []*Task {
-	var children []*Task
-	for _, t := range graph.Tasks {
-		if t.EpicID == epicID {
-			children = append(children, t)
-		}
-	}
-	return topoSortTasks(children, graph)
+	return topoSortTasks(graph.Children(epicID), graph)
 }
 
 func collectNonContainerTasks(graph *Graph) []*Task {
 	var tasks []*Task
 	for _, task := range graph.Tasks {
-		if !isContainer(task, graph) {
+		if !graph.IsEpic(task.ID) {
 			tasks = append(tasks, task)
 		}
 	}
@@ -425,7 +419,7 @@ func filterActiveTasks(tasks []*Task) []*Task {
 func filterReadyTasks(tasks []*Task, graph *Graph) []*Task {
 	var ready []*Task
 	for _, task := range tasks {
-		if isReady(task, graph) {
+		if graph.IsReady(task.ID) {
 			ready = append(ready, task)
 		}
 	}
@@ -543,18 +537,20 @@ func printMarkdownBody(w io.Writer, body string) {
 }
 
 func printTaskDependenciesMarkdown(w io.Writer, task *Task, graph *Graph, heading string) {
-	if len(task.Deps) == 0 && len(task.RDeps) == 0 {
+	dependencies := graph.Dependencies(task.ID)
+	dependents := graph.Dependents(task.ID)
+	if len(dependencies) == 0 && len(dependents) == 0 {
 		return
 	}
 	fmt.Fprintln(w, heading)
-	for _, id := range task.Deps {
+	for _, id := range dependencies {
 		fmt.Fprintf(w, "- depends on `%s`", id)
 		if dep := graph.Tasks[id]; dep != nil && dep.Title != "" {
 			fmt.Fprintf(w, ": %s", dep.Title)
 		}
 		fmt.Fprintln(w)
 	}
-	for _, id := range task.RDeps {
+	for _, id := range dependents {
 		fmt.Fprintf(w, "- blocks `%s`", id)
 		if dependent := graph.Tasks[id]; dependent != nil && dependent.Title != "" {
 			fmt.Fprintf(w, ": %s", dependent.Title)
@@ -616,11 +612,11 @@ func RunShow(id string, opts GlobalOptions) error {
 
 	// Collect child tasks if this is a container
 	var childTasks []*Task
-	if isContainer(task, graph) {
+	if graph.IsEpic(task.ID) {
 		childTasks = collectEpicChildren(id, graph)
 	}
 
-	if isContainer(task, graph) {
+	if graph.IsEpic(task.ID) {
 		printContainerDocument(os.Stdout, task, childTasks, graph, repoDir)
 		return nil
 	}

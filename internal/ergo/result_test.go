@@ -228,8 +228,7 @@ func TestResultCompaction(t *testing.T) {
 				},
 			},
 		},
-		Deps:  map[string]map[string]struct{}{},
-		RDeps: map[string]map[string]struct{}{},
+		Deps: map[string]map[string]struct{}{},
 		Meta: map[string]*TaskMeta{
 			"T1": {
 				CreatedTitle: "Test task",
@@ -283,8 +282,7 @@ func TestCompactionPreservesBodyUpdates(t *testing.T) {
 				UpdatedAt: now.Add(time.Minute),
 			},
 		},
-		Deps:  map[string]map[string]struct{}{},
-		RDeps: map[string]map[string]struct{}{},
+		Deps: map[string]map[string]struct{}{},
 		Meta: map[string]*TaskMeta{
 			"T1": {
 				CreatedTitle: "Fix npx caching - use @latest in docs",
