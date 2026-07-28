@@ -1,83 +1,52 @@
 ---
 name: ergo-feature-planning
 description: >-
-  Shape and execute multi-step software work with Ergo, a repository-local,
-  dependency-aware backlog. Use when work is likely to span 3 or more commits,
-  crosses concerns such as API, UI, tests, migration, or docs, or needs design
-  decisions and dependency ordering before implementation. Skip small,
-  single-concern changes and routine housekeeping.
+  Shape and execute multi-step software work with the Ergo CLI, a repository-local, dependency-aware backlog management tool. Use when work is likely to span 3 or more commits, crosses concerns such as API, UI, tests, migration, or docs, or needs design decisions and dependency ordering before implementation. Skip small, single-concern changes and routine housekeeping.
 ---
 
 # Ergo Feature Planning
 
-Turn an accepted goal into a dependency-ordered backlog that another agent can
-execute without the original conversation. Keep the backlog smaller than the
-work.
+Turn any project goal into a dependency-ordered, self-contained backlog that one or more agents can execute without the original conversation. Keep the backlog smaller than the work; don't overcomplicate. Follow a principle of parsimony: add plan complexity only when it helps an agent decide, order, or verify work.
 
 ## Bootstrap
 
 1. Expect `ergo` to be installed. If it is missing, ask the user to install it.
-2. Run `ergo --help` and `ergo quickstart` before shaping or executing work.
-3. Run `ergo where`. If no backlog exists, confirm the repository root and run
-   `ergo init`.
-4. If a command fails, read its error. Use `ergo <command> --help` to check
-   syntax and options. Do not guess alternate syntax.
+2. Run `ergo --help` and `ergo quickstart` to learn ergo.
+3. Run `ergo where`. If no backlog exists, confirm the repository root and run `ergo init`.
 
 ## Resolve decisions first
 
-Backlog shaping exposes ambiguity. Present concrete options and tradeoffs, ask
-the user, and record the decision in the relevant epic or task body. Do not hide
-a question behind `TBD`, `Consult me`, or a vague future checkpoint.
+If a missing answer could change the plan or be hard to reverse, stop and ask the user. It's their plan. Do not hide a question behind `TBD`, `Consult me`, or a vague future checkpoint.
 
-Use a checkpoint only when an implementation artifact is required to decide.
-Name the artifact, exact question, and instruction not to continue without
-approval. If the user cannot decide yet, create a spike whose result supplies
-the missing knowledge.
+A backlog can defer a decision when a task must first produce an implementation artifact, spike result, or other evidence.
 
-Revise earlier tasks when later work reveals better boundaries. Do not preserve
-a weak split merely because it was written first.
+Revise earlier tasks when later work reveals better boundaries. Do not preserve a weak split merely because it was written first. Make the tasks fit together and reach the goal.
 
-## Build the backlog
+## Shape the backlog
 
-Use one epic for each coherent feature area. Put shared scope, non-goals,
-constraints, decisions, and assumptions in its body. Leave genuinely
-standalone work at the root.
+### Organize the work
 
-Build an epic incrementally:
+Use an epic for tasks that deliver one feature or change. Put shared scope, non-goals, constraints, decisions, and assumptions in its body. The epic body coordinates the shared context; it does not replace instructions needed to execute a child.
 
-```sh
-ergo new task "Authentication"
-# prints the task ID, for example OFKSTE
+Genuinely standalone tasks don't need an epic.
 
-printf '%s\n' '## Goal' '- Add session validation.' |
-  ergo new task "Validate sessions" --epic OFKSTE
-```
+### Define tasks
 
-`new task` prints only its ID. Optional piped stdin becomes the literal initial
-body. The first child promotes a clean root todo task to an epic.
+- Make each task one atomic, reviewable change that normally fits one session. Split on real boundaries: public API, data model, migration, UI, tests, or docs.
+- Avoid tiny bookkeeping tasks and broad tasks with several reviewable outcomes.
+- Prefix knowledge-producing work with `spike:`. State what dependent tasks must learn from it.
 
-For a prepared Markdown backlog, use:
+### Plan validation
 
-```sh
-ergo new epic "Authentication" --file tasks.md
-```
+- Give each task the smallest check that can fail when its change is wrong. Do not run full CI when a smaller check covers the changed behavior. If no automated check applies, name an exact inspection or manual procedure.
+- When several tasks affect the same behavior, assign one broader check to one task that runs after them. Do not copy the check into each contributing task.
+- Use an existing integration, compatibility, or release task when possible. Create a final verification task only when no earlier task can check the combined behavior.
 
-Optional piped stdin becomes free-form epic context. The command names the epic
-and every child it creates; retain those IDs for dependencies and review.
+### Write task bodies
 
-Add only real ordering constraints. `ergo sequence TASK_A TASK_B` means B waits
-for A. Prefer independent tasks and preserve safe parallelism.
+Write for a capable agent with less context and possibly less reasoning ability. Include known facts that help the implementer act or avoid an error, such as paths, behavior, edge cases, local validation, and any shared behavior verified later. But try not to overspecify.
 
-## Shape tasks
-
-Make each task one atomic, reviewable change that normally fits one session.
-Split on real boundaries: public API, data model, migration, UI, tests, or docs.
-Avoid tiny bookkeeping tasks and broad tasks with several reviewable outcomes.
-
-Write for a capable agent with less context and possibly less reasoning ability.
-Include the paths, behavior, edge cases, and runnable proof needed to succeed.
-
-Use this body shape and omit empty sections:
+Use this body shape. Omit empty sections except `Validation Gates`; every task must name its local check and any shared behavior verified later.
 
 ```md
 ## Goal
@@ -95,79 +64,36 @@ Use this body shape and omit empty sections:
 - Do not proceed without approval.
 
 ## Validation Gates
-- <Exact test, lint, build, or inspection commands>
+- Run: <Smallest task-local test, lint, build, or inspection>
+- Deferred: <Behavior> is verified by <task ID or unambiguous title>.
 ```
 
-Prefix knowledge-producing work with `spike:`. State what dependent tasks must
-learn from it.
+A checkpoint asks the user to make a decision and stops work. For human verification, the executor performs the procedure and reports the result without stopping.
+
+### Record the backlog
+
+Build an epic incrementally while its tasks are still changing. Use bulk creation when the backlog is already prepared. Retain the returned task IDs for dependencies and review.
+
+### Add dependencies
+
+- Add a dependency only when one task must finish before another can proceed. Keep independent tasks parallel.
+- Add a dependency from every task that can affect a broad gate to the task that runs it. This prevents the gate from running early.
 
 ## Review the backlog
 
-Before presenting it, check:
+Read the backlog as if you did not shape it.
 
-- Coverage: implementation, tests, docs, migration, compatibility, and release.
-- Sizing: no task is trivial or likely to span several reviewable changes.
-- Dependencies: every edge is necessary; independent work remains independent.
-- Validation: every task has runnable evidence or exact human verification.
-- Risk: high-risk unknowns have a spike, mitigation, or explicit checkpoint.
-- Decisions: no answerable design call is deferred to an implementation agent.
-- Cleanup: no unowned compatibility path or duplicate source of truth remains.
+- Does it contain all work needed to reach the goal, including necessary tests, docs, migration, compatibility, cleanup, and release work?
+- Can another agent execute each task without the original conversation?
+- Does the full dependency graph preserve parallel work and run shared checks after every task that can affect them?
+- Is every open question, compatibility path, and duplicate source of truth resolved or assigned to a task?
 
-Fix the backlog, then give the user a concise summary of epics, key tasks,
-dependencies, decisions, and risks. Get approval before implementation when the
-user asked only for backlog shaping.
+Fix any problems. Then summarize the epics, key tasks, dependencies, decisions, and risks. Get approval before implementation when the user asked only for backlog shaping.
 
-## Execute the backlog
+## Execute and adapt
 
-Claim a specific task when its ID is known:
-
-```sh
-ergo claim ABCDEF --agent model@host
-```
-
-Use automatic claim only when choosing the oldest ready task is intentional:
-
-```sh
-ergo claim --agent model@host
-```
-
-Claim output contains the complete current task and exact lifecycle commands.
-Then:
-
-1. Read the task and relevant repository state.
-2. Implement and run its validation gates.
-3. Stop at any checkpoint or material design choice.
-4. Commit the reviewable change using repository conventions.
-5. Close it with the lifecycle command that states the outcome.
-
-Lifecycle receipts report the task's resulting state, claim changes, appended
-message or result, and ready work when applicable. Use that information before
-making another query.
-
-Messages append. Use them for decisions, completion, and attempt history. Use
-`body` only when the task specification itself changed; it replaces the entire
-body.
-
-Use `--result` only for an existing project file produced by the task. Do not
-use a commit hash, prose status, or a file created only to fill the field.
-
-```sh
-ergo done ABCDEF -m "Implemented and verified"
-ergo done ABCDEF -m "Accepted specification" --result docs/spec.md
-```
-
-Choose other exits by intent:
-
-```sh
-ergo block ABCDEF -m "Waiting for the staging credential"
-ergo release ABCDEF -m "Partial implementation is ready to continue" --result .scratch/attempt.md
-ergo cancel ABCDEF -m "Superseded by the server-side change"
-```
-
-Never leave claimed work in doing. Block records an impediment. Release records
-unfinished but retryable work. Cancel records a deliberate stop. After a spike,
-update dependent task bodies with what was learned before closing it.
-
-The backlog remains editable during execution. Use `title`, `body`, `move`,
-`sequence`, and `unsequence` to keep it true. When every child is complete, its
-epic is complete.
+- Claim a known task when possible. Use automatic claim only when choosing the oldest ready task is intentional.
+- If implementation changes the task, its dependencies, or its validation, update the backlog.
+- End every claim with the lifecycle command that matches the outcome. Never leave claimed work in doing.
+- State the outcome and checks run in the completion message. Attach a result only when the task produced an actual project file.
+- After a spike, update dependent task bodies before closing it.
