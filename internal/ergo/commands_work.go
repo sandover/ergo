@@ -56,28 +56,21 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 		return err
 	}
 
-	lockPath := filepath.Join(dir, "lock")
-	eventsPath, err := selectEventsPath(dir)
-	if err != nil {
+	var repository Repository
+	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
 		return err
 	}
 
 	var chosenID string
-	var updatedGraph *Graph
 	agentID := opts.AgentID
 	if agentID == "" {
 		return errors.New("claim requires --agent")
 	}
 
-	err = withLock(lockPath, opts, func() error {
-		graph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
-
+	update, err := repository.Update(func(graph *Graph) ([]Event, error) {
 		ready := readyTasks(graph)
 		if len(ready) == 0 {
-			return errors.New("no ready tasks")
+			return nil, errors.New("no ready tasks")
 		}
 
 		chosenID = ready[0].ID
@@ -85,13 +78,9 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 		mutation := taskMutation{Kind: "claim", State: stateDoing, StateSet: true, Claim: agentID, ClaimSet: true}
 		events, _, err := buildMutationEvents(chosenID, ready[0], mutation, agentID, now)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err := appendEvents(eventsPath, events); err != nil {
-			return err
-		}
-		updatedGraph, err = loadGraph(dir)
-		return err
+		return events, nil
 	})
 	if err != nil {
 		if err.Error() == "no ready tasks" {
@@ -101,10 +90,10 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 		return err
 	}
 
-	if chosenID == "" || updatedGraph == nil {
+	if chosenID == "" || update.Graph == nil {
 		return errors.New("internal error: missing chosen task")
 	}
-	return writeClaimSuccess(updatedGraph, chosenID, filepath.Dir(dir))
+	return writeClaimSuccess(update.Graph, chosenID, filepath.Dir(dir))
 }
 
 func writeClaimSuccess(graph *Graph, id, repoDir string) error {
@@ -197,52 +186,47 @@ func writeSequenceChanges(w *os.File, eventType string, edges []sequenceEdge) {
 }
 
 func writeLinkEvents(dir string, opts GlobalOptions, eventType string, edges []sequenceEdge) ([]sequenceEdge, error) {
-	lockPath := filepath.Join(dir, "lock")
-	eventsPath, err := selectEventsPath(dir)
-	if err != nil {
+	var repository Repository
+	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
 		return nil, err
 	}
 	var changed []sequenceEdge
-	err = withLock(lockPath, opts, func() error {
-		graph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
-
+	_, err := repository.Update(func(graph *Graph) ([]Event, error) {
+		working := cloneGraph(graph)
 		events := make([]Event, 0, len(edges))
 		now := time.Now().UTC()
 		for _, edge := range edges {
 			from := edge.FromID
 			to := edge.ToID
-			if _, ok := graph.Tombstones[from]; ok {
-				return prunedErr(from)
+			if _, ok := working.Tombstones[from]; ok {
+				return nil, prunedErr(from)
 			}
 			if _, ok := graph.Tombstones[to]; ok {
-				return prunedErr(to)
+				return nil, prunedErr(to)
 			}
-			fromItem, ok := graph.Tasks[from]
+			fromItem, ok := working.Tasks[from]
 			if !ok {
-				return fmt.Errorf("unknown id %s", from)
+				return nil, fmt.Errorf("unknown id %s", from)
 			}
-			toItem, ok := graph.Tasks[to]
+			toItem, ok := working.Tasks[to]
 			if !ok {
-				return fmt.Errorf("unknown id %s", to)
+				return nil, fmt.Errorf("unknown id %s", to)
 			}
 			if err := validateDepSelf(from, to); err != nil {
-				return err
+				return nil, err
 			}
 			if eventType == "link" {
 				if err := validateDepAncestry(fromItem, toItem); err != nil {
-					return err
+					return nil, err
 				}
-				if _, exists := graph.Deps[from][to]; exists {
+				if _, exists := working.Deps[from][to]; exists {
 					continue
 				}
-				if hasCycle(graph, from, to) {
-					return errors.New("dependency would create a cycle")
+				if hasCycle(working, from, to) {
+					return nil, errors.New("dependency would create a cycle")
 				}
 			} else {
-				if _, exists := graph.Deps[from][to]; !exists {
+				if _, exists := working.Deps[from][to]; !exists {
 					continue
 				}
 			}
@@ -252,23 +236,20 @@ func writeLinkEvents(dir string, opts GlobalOptions, eventType string, edges []s
 				Type:   dependsLinkType,
 			})
 			if err != nil {
-				return err
+				return nil, err
 			}
 			events = append(events, event)
 			changed = append(changed, edge)
 			if eventType == "link" {
-				if graph.Deps[from] == nil {
-					graph.Deps[from] = map[string]struct{}{}
+				if working.Deps[from] == nil {
+					working.Deps[from] = map[string]struct{}{}
 				}
-				graph.Deps[from][to] = struct{}{}
-			} else if graph.Deps[from] != nil {
-				delete(graph.Deps[from], to)
+				working.Deps[from][to] = struct{}{}
+			} else if working.Deps[from] != nil {
+				delete(working.Deps[from], to)
 			}
 		}
-		if len(events) == 0 {
-			return nil
-		}
-		return appendEvents(eventsPath, events)
+		return events, nil
 	})
 	return changed, err
 }
@@ -287,7 +268,11 @@ func RunList(listOpts ListOptions, opts GlobalOptions) error {
 		return err
 	}
 	repoDir := filepath.Dir(dir)
-	graph, err := loadGraphLocked(dir, opts)
+	var repository Repository
+	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
+		return err
+	}
+	graph, err := repository.View()
 	if err != nil {
 		return err
 	}
@@ -598,7 +583,11 @@ func RunShow(id string, opts GlobalOptions) error {
 		return err
 	}
 	repoDir := filepath.Dir(dir)
-	graph, err := loadGraphLocked(dir, opts)
+	var repository Repository
+	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
+		return err
+	}
+	graph, err := repository.View()
 	if err != nil {
 		return err
 	}
@@ -629,42 +618,15 @@ func RunCompact(opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	lockPath := filepath.Join(dir, "lock")
-	eventsPath, err := selectEventsPath(dir)
+	var repository Repository
+	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
+		return err
+	}
+	outcome, err := repository.Compact()
 	if err != nil {
 		return err
 	}
-	before := 0
-	after := 0
-	if err := withLock(lockPath, opts, func() error {
-		read, err := inspectEventLog(eventsPath)
-		if err != nil {
-			return err
-		}
-		before = read.recordCount
-		var graph *Graph
-		if read.snapshot != nil {
-			graph, err = replayEventsOnto(read.snapshot, read.events)
-		} else {
-			graph, err = replayEvents(read.events)
-		}
-		if err != nil {
-			return err
-		}
-		compacted, stats, err := marshalSnapshot(graph)
-		if err != nil {
-			return err
-		}
-		after = stats.Records
-		return replaceLogAtomically(eventsPath, compacted)
-	}); err != nil {
-		return err
-	}
-	resolved, err := filepath.Abs(eventsPath)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Compacted %s: %d source records -> %d snapshot records\n", resolved, before, after)
+	fmt.Printf("Compacted %s: %d source records -> %d snapshot records\n", outcome.Path, outcome.SourceRecords, outcome.SnapshotRecords)
 	return nil
 }
 

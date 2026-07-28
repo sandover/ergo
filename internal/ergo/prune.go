@@ -6,7 +6,6 @@
 package ergo
 
 import (
-	"path/filepath"
 	"sort"
 	"time"
 )
@@ -34,26 +33,28 @@ func RunPruneApply(dir string, opts GlobalOptions) (PrunePlan, error) {
 }
 
 func runPrune(dir string, opts GlobalOptions, apply bool) (PrunePlan, error) {
-	lockPath := filepath.Join(dir, "lock")
-	eventsPath, err := selectEventsPath(dir)
-	if err != nil {
+	var repository Repository
+	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
 		return PrunePlan{}, err
 	}
 	var plan PrunePlan
-	err = withLock(lockPath, opts, func() error {
-		graph, err := loadGraph(dir)
+	if !apply {
+		graph, err := repository.View()
 		if err != nil {
-			return err
+			return PrunePlan{}, err
 		}
+		return buildPrunePlan(graph), nil
+	}
+	_, err := repository.Update(func(graph *Graph) ([]Event, error) {
 		plan = buildPrunePlan(graph)
-		if !apply || len(plan.PrunedIDs) == 0 {
-			return nil
+		if len(plan.PrunedIDs) == 0 {
+			return nil, nil
 		}
 		events, err := buildTombstoneEvents(plan.PrunedIDs, opts.AgentID)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		return appendEvents(eventsPath, events)
+		return events, nil
 	})
 	return plan, err
 }

@@ -1,4 +1,4 @@
-// Purpose: Manage .ergo discovery and append-only event storage.
+// Purpose: Manage repository discovery, append-only storage, and result evidence.
 // Exports: ResultEvidence.
 // Role: Persistence layer used by commands and replay/compact paths.
 // Invariants: Writes are append-only under lock; read tolerates truncated final line.
@@ -94,7 +94,7 @@ func ergoDir(opts GlobalOptions) (string, error) {
 	return resolveErgoDir(start)
 }
 
-func loadGraph(dir string) (*Graph, error) {
+func repositoryLoadGraph(dir string) (*Graph, error) {
 	eventsPath, err := selectEventsPath(dir)
 	if err != nil {
 		return nil, err
@@ -109,12 +109,12 @@ func loadGraph(dir string) (*Graph, error) {
 	return replayEvents(read.events)
 }
 
-func loadGraphLocked(dir string, opts GlobalOptions) (*Graph, error) {
+func repositoryLoadGraphLocked(dir string, opts GlobalOptions) (*Graph, error) {
 	lockPath := filepath.Join(dir, "lock")
 	var graph *Graph
-	err := withLock(lockPath, opts, func() error {
+	err := repositoryWithLock(lockPath, opts, func() error {
 		var err error
-		graph, err = loadGraph(dir)
+		graph, err = repositoryLoadGraph(dir)
 		return err
 	})
 	if err != nil {
@@ -295,7 +295,7 @@ func formatEventsParseError(path string, lineNo int, line []byte, cause error) e
 	return fmt.Errorf("%s:%d: invalid JSON in events log (run `ergo compact` after fixing): %s (%v)", path, lineNo, snippet, cause)
 }
 
-func appendEvents(path string, events []Event) error {
+func repositoryAppendEvents(path string, events []Event) error {
 	data, err := marshalTransaction(events)
 	if err != nil || len(data) == 0 {
 		return err
@@ -394,50 +394,41 @@ func writeAllWith(w *os.File, data []byte, write func(*os.File, []byte) (int, er
 }
 
 func createTaskWithUpdates(dir string, opts GlobalOptions, epicID string, title, body string, updates map[string]string, agentID string) (createOutput, error) {
-	eventsPath, err := selectEventsPath(dir)
-	if err != nil {
+	var repository Repository
+	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
 		return createOutput{}, err
 	}
-	lockPath := filepath.Join(dir, "lock")
-	return createTaskWithDir(dir, opts, lockPath, eventsPath, epicID, title, body, updates, agentID)
-}
-
-func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epicID string, title, body string, updates map[string]string, agentID string) (createOutput, error) {
 	var output createOutput
-	err := withLock(lockPath, opts, func() error {
-		graph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
+	update, err := repository.Update(func(graph *Graph) ([]Event, error) {
 		if epicID != "" {
 			epic, ok := graph.Tasks[epicID]
 			if !ok {
-				return fmt.Errorf("unknown epic id %s", epicID)
+				return nil, fmt.Errorf("unknown epic id %s", epicID)
 			}
 			if epic.EpicID != "" {
-				return fmt.Errorf("task %s is not an epic", epicID)
+				return nil, fmt.Errorf("task %s is not an epic", epicID)
 			}
 			// Reject first-child assignment to a dirty leaf: once promoted to a
 			// container, leaf-only semantics (state/claim/results) no longer apply.
 			if !graph.IsEpic(epic.ID) {
 				if epic.ClaimedBy != "" {
-					return fmt.Errorf("cannot add child to task %s: task is claimed by %q", epicID, epic.ClaimedBy)
+					return nil, fmt.Errorf("cannot add child to task %s: task is claimed by %q", epicID, epic.ClaimedBy)
 				}
 				if epic.State != stateTodo {
-					return fmt.Errorf("cannot add child to task %s: state is %q (must be todo to promote to epic)", epicID, epic.State)
+					return nil, fmt.Errorf("cannot add child to task %s: state is %q (must be todo to promote to epic)", epicID, epic.State)
 				}
 				if len(epic.Results) > 0 {
-					return fmt.Errorf("cannot add child to task %s: task has results attached", epicID)
+					return nil, fmt.Errorf("cannot add child to task %s: task has results attached", epicID)
 				}
 			}
 		}
 		id, err := newShortID(graph.Tasks)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		uuid, err := newUUID()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		now := time.Now().UTC()
 		createdAt := formatTime(now)
@@ -452,7 +443,7 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 		}
 		event, err := newEvent("new_task", now, payload)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		newTask := &Task{
@@ -465,20 +456,22 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
-		graph.Tasks[id] = newTask
 		events := []Event{event}
 		resultPath, hasPath := updates["result.path"]
 		resultSummary, hasSummary := updates["result.summary"]
 		if hasPath || hasSummary {
 			if !hasPath {
-				return errors.New("result.summary requires result.path=")
+				return nil, errors.New("result.summary requires result.path=")
 			}
 			if !hasSummary {
 				resultSummary = resultPath
 			}
-			resultEvent, err := buildResultEvent(filepath.Dir(dir), graph, id, resultSummary, resultPath, now)
+			working := cloneGraph(graph)
+			working.Tasks[id] = newTask
+			working.rebuildIndexes()
+			resultEvent, err := buildResultEvent(filepath.Dir(dir), working, id, resultSummary, resultPath, now)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			events = append(events, resultEvent)
 			delete(updates, "result.path")
@@ -496,42 +489,34 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 		}
 		createEvents, _, err := buildMutationEvents(id, newTask, mutation, agentID, now)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if len(updates) > 0 {
 			var unknown []string
 			for key := range updates {
 				unknown = append(unknown, key)
 			}
-			return fmt.Errorf("unknown keys: %s", strings.Join(unknown, ", "))
+			return nil, fmt.Errorf("unknown keys: %s", strings.Join(unknown, ", "))
 		}
 		events = append(events, createEvents...)
-
-		if err := appendEvents(eventsPath, events); err != nil {
-			return err
-		}
-		updatedGraph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
-		task := updatedGraph.Tasks[id]
-		if task == nil {
-			return errors.New("internal error: missing created task")
-		}
 		output = createOutput{
 			ID:        id,
 			UUID:      uuid,
 			EpicID:    payload.EpicID,
-			State:     task.State,
-			Title:     task.Title,
-			Body:      task.Body,
+			State:     payload.State,
+			Title:     payload.Title,
+			Body:      payload.Body,
 			CreatedAt: createdAt,
 		}
-		return nil
+		return events, nil
 	})
 	if err != nil {
 		return createOutput{}, err
 	}
+	if update.Graph == nil || update.Graph.Tasks[output.ID] == nil {
+		return createOutput{}, errors.New("internal error: missing created task")
+	}
+	output.State = update.Graph.Tasks[output.ID].State
 	return output, nil
 }
 

@@ -34,13 +34,12 @@ func TestRepositoryOpenAndViewUseExistingSupportedLog(t *testing.T) {
 	if repository.eventsPath != path {
 		t.Fatalf("events path = %q, want %q", repository.eventsPath, path)
 	}
-	if err := repository.View(func(graph *Graph) error {
-		if graph.Tasks["T1"] == nil {
-			t.Fatal("view did not load T1")
-		}
-		return nil
-	}); err != nil {
+	graph, err := repository.View()
+	if err != nil {
 		t.Fatal(err)
+	}
+	if graph.Tasks["T1"] == nil {
+		t.Fatal("view did not load T1")
 	}
 }
 
@@ -102,6 +101,44 @@ func TestRepositoryUpdateSupportsDeterministicShortWrites(t *testing.T) {
 	}
 }
 
+func TestRepositoryUpdateReturnsPreappliedCandidateWithoutReload(t *testing.T) {
+	repository, _ := newInjectedRepository(t, systemRepositoryIO())
+	event := repositoryTestTaskEvent(t, "CAND01")
+	outcome, err := repository.Update(func(*Graph) ([]Event, error) {
+		return []Event{event}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Graph == nil || outcome.Graph.Tasks["CAND01"] == nil {
+		t.Fatal("update did not return the preapplied candidate")
+	}
+}
+
+func TestRepositoryUpdateRejectsInvalidBatchBeforeWrite(t *testing.T) {
+	repository, path := newInjectedRepository(t, systemRepositoryIO())
+	before, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	_, err = repository.Update(func(*Graph) ([]Event, error) {
+		return []Event{mustNewEvent("state", now, StateEvent{
+			ID: "MISSING", NewState: stateDone, TS: formatTime(now),
+		})}, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "orphan state event") {
+		t.Fatalf("invalid batch error = %v", err)
+	}
+	after, readErr := os.ReadFile(path)
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		t.Fatal(readErr)
+	}
+	if string(after) != string(before) {
+		t.Fatal("invalid batch changed repository bytes")
+	}
+}
+
 func TestRepositoryUpdateSupportsDeterministicWriteFailure(t *testing.T) {
 	repository, _ := newInjectedRepository(t, systemRepositoryIO())
 	injected := errors.New("injected write failure")
@@ -109,7 +146,7 @@ func TestRepositoryUpdateSupportsDeterministicWriteFailure(t *testing.T) {
 		return 0, injected
 	}
 	err := repository.update(func(*Graph) ([]Event, error) {
-		return []Event{{Type: "noop", Data: []byte(`{}`)}}, nil
+		return []Event{repositoryTestTaskEvent(t, "WRITE1")}, nil
 	})
 	if !errors.Is(err, injected) {
 		t.Fatalf("error = %v, want injected failure", err)
@@ -123,7 +160,7 @@ func TestRepositoryUpdateSupportsDeterministicOpenFailure(t *testing.T) {
 		return nil, injected
 	}
 	err := repository.update(func(*Graph) ([]Event, error) {
-		return []Event{{Type: "noop", Data: []byte(`{}`)}}, nil
+		return []Event{repositoryTestTaskEvent(t, "OPEN01")}, nil
 	})
 	if !errors.Is(err, injected) {
 		t.Fatalf("error = %v, want injected failure", err)
@@ -135,7 +172,7 @@ func TestRepositoryUpdateSupportsDeterministicPostWriteFailure(t *testing.T) {
 	injected := errors.New("injected post-write failure")
 	repository.io.postWrite = func() error { return injected }
 	err := repository.update(func(*Graph) ([]Event, error) {
-		return []Event{{Type: "noop", Data: []byte(`{}`)}}, nil
+		return []Event{repositoryTestTaskEvent(t, "POST01")}, nil
 	})
 	if !errors.Is(err, injected) {
 		t.Fatalf("error = %v, want injected failure", err)
@@ -143,6 +180,14 @@ func TestRepositoryUpdateSupportsDeterministicPostWriteFailure(t *testing.T) {
 	if info, statErr := os.Stat(path); statErr != nil || info.Size() == 0 {
 		t.Fatalf("post-write hook did not run after bytes were written: info=%v err=%v", info, statErr)
 	}
+}
+
+func repositoryTestTaskEvent(t *testing.T, id string) Event {
+	t.Helper()
+	now := time.Now().UTC()
+	return mustNewEvent("new_task", now, NewTaskEvent{
+		ID: id, UUID: "uuid-" + id, State: stateTodo, Title: "Task", CreatedAt: formatTime(now),
+	})
 }
 
 func TestRepositoryIOCanInjectSyncFailure(t *testing.T) {

@@ -572,3 +572,6 @@
 {"type":"message","ts":"2026-07-28T23:19:52.445732Z","data":{"task_id":"IL2642","kind":"done","text":"Replaced historical event reconstruction with deterministic versioned snapshot records, integrity validation, explicit tombstone GC, and byte-stable released-fixture round trips.","ts":"2026-07-28T23:19:52.445732Z"}}
 {"type":"unclaim","ts":"2026-07-28T23:19:52.445732Z","data":{"id":"IL2642","ts":"2026-07-28T23:19:52.445732Z"}}
 {"type":"state","ts":"2026-07-28T23:19:52.445732Z","data":{"id":"IL2642","state":"done","ts":"2026-07-28T23:19:52.445732Z"}}
+{"type":"message","ts":"2026-07-28T23:28:32.046436Z","data":{"task_id":"R3Y5K4","kind":"done","text":"Centralized initialization, coherent reads, validated batch updates, durable append/sync, and compaction behind Repository. Formal ownership grep, go test ./internal/ergo, go test ./cmd/ergo, and git diff --check all passed.","ts":"2026-07-28T23:28:32.046436Z"}}
+{"type":"unclaim","ts":"2026-07-28T23:28:32.046436Z","data":{"id":"R3Y5K4","ts":"2026-07-28T23:28:32.046436Z"}}
+{"type":"state","ts":"2026-07-28T23:28:32.046436Z","data":{"id":"R3Y5K4","state":"done","ts":"2026-07-28T23:28:32.046436Z"}}

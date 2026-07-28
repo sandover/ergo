@@ -8,8 +8,6 @@ package ergo
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -22,35 +20,17 @@ func RunInit(args []string, opts GlobalOptions) error {
 	if len(args) > 1 {
 		return errors.New("usage: ergo init [dir]")
 	}
-	target := filepath.Join(dir, dataDirName)
-	_, dirErr := os.Stat(target)
-	eventsPath, err := selectEventsPath(target)
+	outcome, err := InitializeRepository(dir)
 	if err != nil {
 		return err
 	}
-	_, eventsErr := os.Stat(eventsPath)
-	_, lockErr := os.Stat(filepath.Join(target, "lock"))
-	if err := os.MkdirAll(target, 0755); err != nil {
-		return err
-	}
-	lockPath := filepath.Join(target, "lock")
-	if err := ensureFileExists(eventsPath, 0644); err != nil {
-		return err
-	}
-	if err := ensureFileExists(lockPath, 0644); err != nil {
-		return err
-	}
-	resolved, err := filepath.Abs(target)
-	if err != nil {
-		return err
-	}
-	switch {
-	case os.IsNotExist(dirErr):
-		fmt.Printf("Initialized Ergo at %s\n", resolved)
-	case os.IsNotExist(eventsErr) || os.IsNotExist(lockErr):
-		fmt.Printf("Repaired Ergo at %s\n", resolved)
+	switch outcome.Status {
+	case "initialized":
+		fmt.Printf("Initialized Ergo at %s\n", outcome.Path)
+	case "repaired":
+		fmt.Printf("Repaired Ergo at %s\n", outcome.Path)
 	default:
-		fmt.Printf("Ergo already initialized at %s\n", resolved)
+		fmt.Printf("Ergo already initialized at %s\n", outcome.Path)
 	}
 	return nil
 }
@@ -105,32 +85,27 @@ func RunNewEpic(title, filePath string, opts GlobalOptions) error {
 // runBulkCreate creates an epic, its child tasks, and dependency edges.
 // It backs the `new epic` command.
 func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody string, tasks []EpicTaskInput) error {
-	lockPath := filepath.Join(dir, "lock")
-	eventsPath, err := selectEventsPath(dir)
-	if err != nil {
+	var repository Repository
+	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
 		return err
 	}
 
 	var out bulkCreateOutput
-	if err := withLock(lockPath, opts, func() error {
-		graph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
-
-		workingIDs := make(map[string]*Task, len(graph.Tasks)+len(tasks)+1)
-		for id, task := range graph.Tasks {
+	if _, err := repository.Update(func(graph *Graph) ([]Event, error) {
+		working := cloneGraph(graph)
+		workingIDs := make(map[string]*Task, len(working.Tasks)+len(tasks)+1)
+		for id, task := range working.Tasks {
 			workingIDs[id] = task
 		}
 
 		now := time.Now().UTC()
 		epicID, err := newShortID(workingIDs)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		epicUUID, err := newUUID()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		workingIDs[epicID] = &Task{ID: epicID}
 		createdAt := formatTime(now)
@@ -144,7 +119,7 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 			CreatedAt: createdAt,
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		out = bulkCreateOutput{
@@ -164,11 +139,11 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 
 			taskID, err := newShortID(workingIDs)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			taskUUID, err := newUUID()
 			if err != nil {
-				return err
+				return nil, err
 			}
 			workingIDs[taskID] = &Task{ID: taskID, EpicID: epicID}
 
@@ -183,7 +158,7 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 				CreatedAt: formatTime(taskNow),
 			})
 			if err != nil {
-				return err
+				return nil, err
 			}
 			newEvents = append(newEvents, taskEvent)
 			out.Children = append(out.Children, bulkCreateChildOutput{
@@ -192,9 +167,9 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 			})
 
 			titleToID[taskTitle] = taskID
-			graph.Tasks[taskID] = &Task{ID: taskID, EpicID: epicID}
-			if graph.Deps[taskID] == nil {
-				graph.Deps[taskID] = map[string]struct{}{}
+			working.Tasks[taskID] = &Task{ID: taskID, EpicID: epicID}
+			if working.Deps[taskID] == nil {
+				working.Deps[taskID] = map[string]struct{}{}
 			}
 		}
 
@@ -211,10 +186,10 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 				seenEdges[edgeKey] = struct{}{}
 
 				if err := validateDepSelf(fromID, toID); err != nil {
-					return err
+					return nil, err
 				}
-				if hasCycle(graph, fromID, toID) {
-					return errors.New("dependency would create a cycle")
+				if hasCycle(working, fromID, toID) {
+					return nil, errors.New("dependency would create a cycle")
 				}
 
 				linkNow := time.Now().UTC()
@@ -224,13 +199,13 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 					Type:   dependsLinkType,
 				})
 				if err != nil {
-					return err
+					return nil, err
 				}
 				newEvents = append(newEvents, linkEvent)
-				if graph.Deps[fromID] == nil {
-					graph.Deps[fromID] = map[string]struct{}{}
+				if working.Deps[fromID] == nil {
+					working.Deps[fromID] = map[string]struct{}{}
 				}
-				graph.Deps[fromID][toID] = struct{}{}
+				working.Deps[fromID][toID] = struct{}{}
 				out.Edges = append(out.Edges, sequenceEdge{
 					FromID: fromID,
 					ToID:   toID,
@@ -238,7 +213,7 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 			}
 		}
 
-		return appendEvents(eventsPath, newEvents)
+		return newEvents, nil
 	}); err != nil {
 		return err
 	}

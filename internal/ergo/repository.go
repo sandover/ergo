@@ -25,6 +25,53 @@ type Repository struct {
 	io         repositoryIO
 }
 
+type UpdateOutcome struct {
+	Graph *Graph
+}
+
+type CompactOutcome struct {
+	Path            string
+	SourceRecords   int
+	SnapshotRecords int
+}
+
+type InitializeOutcome struct {
+	Path   string
+	Status string
+}
+
+func InitializeRepository(dir string) (InitializeOutcome, error) {
+	target := filepath.Join(dir, dataDirName)
+	_, dirErr := os.Stat(target)
+	eventsPath, err := selectEventsPath(target)
+	if err != nil {
+		return InitializeOutcome{}, err
+	}
+	_, eventsErr := os.Stat(eventsPath)
+	lockPath := filepath.Join(target, "lock")
+	_, lockErr := os.Stat(lockPath)
+	if err := os.MkdirAll(target, 0755); err != nil {
+		return InitializeOutcome{}, err
+	}
+	if err := ensureFileExists(eventsPath, 0644); err != nil {
+		return InitializeOutcome{}, err
+	}
+	if err := ensureFileExists(lockPath, 0644); err != nil {
+		return InitializeOutcome{}, err
+	}
+	resolved, err := filepath.Abs(target)
+	if err != nil {
+		return InitializeOutcome{}, err
+	}
+	status := "existing"
+	if os.IsNotExist(dirErr) {
+		status = "initialized"
+	} else if os.IsNotExist(eventsErr) || os.IsNotExist(lockErr) {
+		status = "repaired"
+	}
+	return InitializeOutcome{Path: resolved, Status: status}, nil
+}
+
 // repositoryIO contains the deliberately small set of write operations that
 // persistence tests must be able to fail deterministically. Production code
 // uses the operating-system implementations below.
@@ -76,38 +123,107 @@ func (r *Repository) openAt(dir string, opts GlobalOptions, io repositoryIO) err
 }
 
 // View loads a coherent snapshot while holding the repository lock.
-func (r *Repository) View(fn func(*Graph) error) error {
+func (r *Repository) View() (*Graph, error) {
 	if r == nil || r.eventsPath == "" {
-		return errors.New("repository is not open")
+		return nil, errors.New("repository is not open")
 	}
-	return withLock(r.lockPath, r.opts, func() error {
-		graph, err := r.load()
-		if err != nil {
-			return err
-		}
-		return fn(graph)
+	var graph *Graph
+	err := withLock(r.lockPath, r.opts, func() error {
+		var err error
+		graph, err = r.load()
+		return err
 	})
+	return graph, err
 }
 
 // repositoryUpdate is the internal mutation boundary. The callback validates
 // against the locked snapshot and returns the complete current event batch.
 // Transaction envelopes and durability semantics are intentionally delegated
 // to the later transaction-record change.
-func (r *Repository) update(fn func(*Graph) ([]Event, error)) error {
+func (r *Repository) Update(fn func(*Graph) ([]Event, error)) (UpdateOutcome, error) {
 	if r == nil || r.eventsPath == "" {
-		return errors.New("repository is not open")
+		return UpdateOutcome{}, errors.New("repository is not open")
 	}
-	return withLock(r.lockPath, r.opts, func() error {
+	var outcome UpdateOutcome
+	err := withLock(r.lockPath, r.opts, func() error {
 		graph, err := r.load()
 		if err != nil {
 			return err
 		}
+		base := cloneGraph(graph)
 		events, err := fn(graph)
 		if err != nil {
 			return err
 		}
-		return r.append(events)
+		candidate, err := replayEventsOnto(base, events)
+		if err != nil {
+			return err
+		}
+		if err := r.append(events); err != nil {
+			return err
+		}
+		outcome.Graph = candidate
+		return nil
 	})
+	return outcome, err
+}
+
+func (r *Repository) Compact() (CompactOutcome, error) {
+	if r == nil || r.eventsPath == "" {
+		return CompactOutcome{}, errors.New("repository is not open")
+	}
+	var outcome CompactOutcome
+	err := withLock(r.lockPath, r.opts, func() error {
+		read, err := inspectEventLog(r.eventsPath)
+		if err != nil {
+			return err
+		}
+		graph, err := r.load()
+		if err != nil {
+			return err
+		}
+		data, stats, err := marshalSnapshot(graph)
+		if err != nil {
+			return err
+		}
+		path, err := filepath.Abs(r.eventsPath)
+		if err != nil {
+			return err
+		}
+		if err := replaceLogAtomically(r.eventsPath, data); err != nil {
+			return err
+		}
+		outcome = CompactOutcome{Path: path, SourceRecords: read.recordCount, SnapshotRecords: stats.Records}
+		return nil
+	})
+	return outcome, err
+}
+
+func (r *Repository) Dir() string        { return r.dir }
+func (r *Repository) ProjectDir() string { return filepath.Dir(r.dir) }
+
+func cloneGraph(graph *Graph) *Graph {
+	clone := newGraph()
+	for id, task := range graph.Tasks {
+		copied := *task
+		copied.Results = append([]Result(nil), task.Results...)
+		copied.Messages = append([]Message(nil), task.Messages...)
+		clone.Tasks[id] = &copied
+	}
+	for from, deps := range graph.Deps {
+		clone.Deps[from] = map[string]struct{}{}
+		for to := range deps {
+			clone.Deps[from][to] = struct{}{}
+		}
+	}
+	for id, info := range graph.Tombstones {
+		clone.Tombstones[id] = info
+	}
+	for id := range graph.legacyEmptyEpics {
+		clone.legacyEmptyEpics[id] = struct{}{}
+	}
+	clone.rebuildIndexes()
+	return clone
 }
 
 func (r *Repository) load() (*Graph, error) {

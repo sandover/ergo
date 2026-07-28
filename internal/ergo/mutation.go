@@ -9,7 +9,6 @@ package ergo
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -44,56 +43,51 @@ type mutationOutcome struct {
 }
 
 func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskMutation) (mutationOutcome, error) {
-	lockPath := filepath.Join(dir, "lock")
-	eventsPath, err := selectEventsPath(dir)
-	if err != nil {
+	var repository Repository
+	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
 		return mutationOutcome{}, err
 	}
-	repoDir := filepath.Dir(dir)
+	repoDir := repository.ProjectDir()
 	var outcome mutationOutcome
 
-	err = withLock(lockPath, opts, func() error {
-		graph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
+	update, err := repository.Update(func(graph *Graph) ([]Event, error) {
 		if _, ok := graph.Tombstones[id]; ok {
-			return prunedErr(id)
+			return nil, prunedErr(id)
 		}
 		task := graph.Tasks[id]
 		if task == nil {
-			return fmt.Errorf("unknown task id %s", id)
+			return nil, fmt.Errorf("unknown task id %s", id)
 		}
 		if len(mutation.AllowedStates) > 0 && !containsString(mutation.AllowedStates, task.State) {
-			return fmt.Errorf("%s cannot apply to state=%s", mutation.Kind, task.State)
+			return nil, fmt.Errorf("%s cannot apply to state=%s", mutation.Kind, task.State)
 		}
 		if mutation.ClaimConflict && task.ClaimedBy != "" && task.ClaimedBy != mutation.Claim {
-			return fmt.Errorf("task %s is already claimed by %s", id, task.ClaimedBy)
+			return nil, fmt.Errorf("task %s is already claimed by %s", id, task.ClaimedBy)
 		}
 		if mutation.EpicSet && mutation.ValidateMove {
 			if err := validateMovePlacement(graph, task, mutation.EpicID); err != nil {
-				return err
+				return nil, err
 			}
 		}
 		if graph.IsEpic(task.ID) {
 			if mutation.ClaimSet {
-				return errors.New("epics cannot be claimed")
+				return nil, errors.New("epics cannot be claimed")
 			}
 			if mutation.StateSet {
-				return errors.New("epics do not have state")
+				return nil, errors.New("epics do not have state")
 			}
 			if mutation.ResultSet {
-				return errors.New("epics cannot have results")
+				return nil, errors.New("epics cannot have results")
 			}
 			if mutation.MessageSet {
-				return errors.New("epics cannot have lifecycle messages")
+				return nil, errors.New("epics cannot have lifecycle messages")
 			}
 		}
 
 		now := time.Now().UTC()
 		events, fields, err := buildMutationEvents(id, task, mutation, opts.AgentID, now)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if mutation.ResultSet {
 			summary := mutation.ResultSummary
@@ -102,24 +96,19 @@ func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskM
 			}
 			resultEvent, err := buildResultEvent(repoDir, graph, id, summary, mutation.ResultPath, now)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			events = insertBeforeLifecycleEvents(events, resultEvent)
 		}
-
-		if err := appendEvents(eventsPath, events); err != nil {
-			return err
-		}
-		updatedGraph, err := loadGraph(dir)
-		if err != nil {
-			return err
-		}
-		outcome = mutationOutcome{Graph: updatedGraph, ChangedFields: fields}
+		outcome.ChangedFields = fields
 		if mutation.ResultSet {
 			outcome.ChangedFields = append(outcome.ChangedFields, "result")
 		}
-		return nil
+		return events, nil
 	})
+	if err == nil {
+		outcome.Graph = update.Graph
+	}
 	return outcome, err
 }
 
