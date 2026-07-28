@@ -550,3 +550,6 @@
 {"type":"message","ts":"2026-07-28T22:58:56.732677Z","data":{"task_id":"72DYHE","kind":"done","text":"Removed the superseded standalone writer identified by the persistence-wave lint gate; focused transaction tests still pass.","ts":"2026-07-28T22:58:56.732677Z"}}
 {"type":"unclaim","ts":"2026-07-28T22:58:56.732677Z","data":{"id":"72DYHE","ts":"2026-07-28T22:58:56.732677Z"}}
 {"type":"state","ts":"2026-07-28T22:58:56.732677Z","data":{"id":"72DYHE","state":"done","ts":"2026-07-28T22:58:56.732677Z"}}
+{"type":"message","ts":"2026-07-28T22:59:17.966474Z","data":{"task_id":"H2FM3C","kind":"done","text":"Persistence wave passed focused integration tests plus go mod tidy, golangci-lint, and the full race-enabled test suite.","ts":"2026-07-28T22:59:17.966474Z"}}
+{"type":"unclaim","ts":"2026-07-28T22:59:17.966474Z","data":{"id":"H2FM3C","ts":"2026-07-28T22:59:17.966474Z"}}
+{"type":"state","ts":"2026-07-28T22:59:17.966474Z","data":{"id":"H2FM3C","state":"done","ts":"2026-07-28T22:59:17.966474Z"}}
