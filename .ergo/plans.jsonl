@@ -543,3 +543,10 @@
 {"type":"message","ts":"2026-07-28T22:58:06.547569Z","data":{"task_id":"45MQ2K","kind":"done","text":"Made replay fail closed with source-aware diagnostics and final invariant validation while preserving enumerated v1-v4 compatibility.","ts":"2026-07-28T22:58:06.547569Z"}}
 {"type":"unclaim","ts":"2026-07-28T22:58:06.547569Z","data":{"id":"45MQ2K","ts":"2026-07-28T22:58:06.547569Z"}}
 {"type":"state","ts":"2026-07-28T22:58:06.547569Z","data":{"id":"45MQ2K","state":"done","ts":"2026-07-28T22:58:06.547569Z"}}
+{"type":"claim","ts":"2026-07-28T22:58:11.991502Z","data":{"id":"H2FM3C","agent_id":"codex@local","ts":"2026-07-28T22:58:11.991502Z"}}
+{"type":"state","ts":"2026-07-28T22:58:11.991502Z","data":{"id":"H2FM3C","state":"doing","ts":"2026-07-28T22:58:11.991502Z"}}
+{"type":"claim","ts":"2026-07-28T22:58:34.445341Z","data":{"id":"72DYHE","agent_id":"codex@local","ts":"2026-07-28T22:58:34.445341Z"}}
+{"type":"state","ts":"2026-07-28T22:58:34.445341Z","data":{"id":"72DYHE","state":"doing","ts":"2026-07-28T22:58:34.445341Z"}}
+{"type":"message","ts":"2026-07-28T22:58:56.732677Z","data":{"task_id":"72DYHE","kind":"done","text":"Removed the superseded standalone writer identified by the persistence-wave lint gate; focused transaction tests still pass.","ts":"2026-07-28T22:58:56.732677Z"}}
+{"type":"unclaim","ts":"2026-07-28T22:58:56.732677Z","data":{"id":"72DYHE","ts":"2026-07-28T22:58:56.732677Z"}}
+{"type":"state","ts":"2026-07-28T22:58:56.732677Z","data":{"id":"72DYHE","state":"done","ts":"2026-07-28T22:58:56.732677Z"}}

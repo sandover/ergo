@@ -300,12 +300,6 @@ func replaceEventsAtomically(path string, events []Event) error {
 	return syncDir(filepath.Dir(path))
 }
 
-func writeAll(w *os.File, data []byte) error {
-	return writeAllWith(w, data, func(file *os.File, chunk []byte) (int, error) {
-		return file.Write(chunk)
-	})
-}
-
 func writeAllWith(w *os.File, data []byte, write func(*os.File, []byte) (int, error)) error {
 	for len(data) > 0 {
 		n, err := write(w, data)
