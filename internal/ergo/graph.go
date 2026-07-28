@@ -13,6 +13,114 @@ import (
 	"time"
 )
 
+func eventReplayContext(event Event, fallbackIndex int) string {
+	if event.Source.Path == "" {
+		return fmt.Sprintf("event %d", fallbackIndex+1)
+	}
+	context := fmt.Sprintf("%s:%d", event.Source.Path, event.Source.Line)
+	if event.Source.TransactionIndex > 0 {
+		context += fmt.Sprintf(" transaction event %d", event.Source.TransactionIndex)
+	}
+	return context
+}
+
+func replayDecodeError(context, kind, target string, cause error) error {
+	return fmt.Errorf("%s: event %q%s: invalid payload: %w", context, kind, replayTarget(target), cause)
+}
+
+func replayInvariantError(context, kind, target, detail string) error {
+	return fmt.Errorf("%s: event %q%s: %s", context, kind, replayTarget(target), detail)
+}
+
+func replayTarget(target string) string {
+	if target == "" {
+		return ""
+	}
+	return fmt.Sprintf(" for %s", target)
+}
+
+// isReadableState enumerates the current states plus the v1 error state.
+// Current writers reject error, but released histories continue to normalize it
+// into the in-memory task model.
+func isReadableState(state string) bool {
+	switch state {
+	case stateTodo, stateDoing, stateBlocked, stateDone, stateCanceled, stateError:
+		return true
+	default:
+		return false
+	}
+}
+
+type replayEventSource struct {
+	context string
+	kind    string
+	order   int
+}
+
+func validateReplayInvariants(
+	graph *Graph,
+	taskSource, lifecycleSource, parentSource map[string]replayEventSource,
+	linkSource map[string]map[string]replayEventSource,
+) error {
+	for id, task := range graph.Tasks {
+		created := taskSource[id]
+		parentChanged := parentSource[id]
+		if parentChanged.context == "" {
+			parentChanged = created
+		}
+		if task.EpicID != "" {
+			if task.EpicID == id {
+				return replayInvariantError(parentChanged.context, parentChanged.kind, id, "task cannot be its own epic")
+			}
+			parent := graph.Tasks[task.EpicID]
+			if parent == nil {
+				return replayInvariantError(parentChanged.context, parentChanged.kind, id, fmt.Sprintf("unknown parent epic %s", task.EpicID))
+			}
+			if parent.EpicID != "" {
+				return replayInvariantError(parentChanged.context, parentChanged.kind, id, fmt.Sprintf("nested epic relationship through %s", task.EpicID))
+			}
+		}
+
+		// Released v1 histories may finish in error while retaining their
+		// claim. Pre-v3 blocked histories may do the same. Both are explicit
+		// read-time compatibility forms; current commands normalize them on
+		// the next lifecycle mutation.
+		switch task.State {
+		case stateError, stateBlocked:
+			// Compatibility form: claim may be empty or populated.
+		default:
+			if err := validateClaimInvariant(task.State, task.ClaimedBy); err != nil {
+				source := lifecycleSource[id]
+				if source.context == "" {
+					source = created
+				}
+				return replayInvariantError(source.context, source.kind, id, err.Error())
+			}
+		}
+	}
+
+	for from, deps := range graph.Deps {
+		fromTask := graph.Tasks[from]
+		for to := range deps {
+			toTask := graph.Tasks[to]
+			if fromTask == nil || toTask == nil {
+				return replayInvariantError(taskSource[from].context, "link", from+" -> "+to, "dangling dependency endpoint")
+			}
+			if err := validateDepAncestry(fromTask, toTask); err != nil {
+				source := linkSource[from][to]
+				if candidate := parentSource[from]; candidate.order > source.order {
+					source = candidate
+				}
+				if candidate := parentSource[to]; candidate.order > source.order {
+					source = candidate
+				}
+				return replayInvariantError(source.context, source.kind, from+" -> "+to, err.Error())
+			}
+		}
+	}
+	return nil
+}
+
 func replayEvents(events []Event) (*Graph, error) {
 	graph := &Graph{
 		Tasks:      map[string]*Task{},
@@ -22,22 +130,39 @@ func replayEvents(events []Event) (*Graph, error) {
 		Tombstones: map[string]TombstoneInfo{},
 	}
 
-	for _, event := range events {
+	taskSource := map[string]replayEventSource{}
+	lifecycleSource := map[string]replayEventSource{}
+	parentSource := map[string]replayEventSource{}
+	linkSource := map[string]map[string]replayEventSource{}
+	for eventIndex, event := range events {
+		context := eventReplayContext(event, eventIndex)
+		if event.Type == "" {
+			return nil, replayInvariantError(context, "", "", "event kind is empty")
+		}
+		if _, err := parseTime(event.TS); err != nil {
+			return nil, replayDecodeError(context, event.Type, "", fmt.Errorf("invalid event ts: %w", err))
+		}
 		switch event.Type {
 		case "new_task", "new_epic":
 			var data NewTaskEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, "", err)
+			}
+			if data.ID == "" {
+				return nil, replayInvariantError(context, event.Type, "", "task id is empty")
 			}
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
 			if _, exists := graph.Tasks[data.ID]; exists {
-				return nil, fmt.Errorf("duplicate task id %s", data.ID)
+				return nil, replayInvariantError(context, event.Type, data.ID, "duplicate task id")
 			}
 			createdAt, err := parseTime(data.CreatedAt)
 			if err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, data.ID, fmt.Errorf("invalid created_at: %w", err))
+			}
+			if !isReadableState(data.State) {
+				return nil, replayInvariantError(context, event.Type, data.ID, fmt.Sprintf("invalid state %q", data.State))
 			}
 			task := &Task{
 				ID:        data.ID,
@@ -51,6 +176,10 @@ func replayEvents(events []Event) (*Graph, error) {
 				UpdatedAt: createdAt,
 			}
 			graph.Tasks[data.ID] = task
+			source := replayEventSource{context: context, kind: event.Type, order: eventIndex}
+			taskSource[data.ID] = source
+			lifecycleSource[data.ID] = source
+			parentSource[data.ID] = source
 			graph.Meta[data.ID] = &TaskMeta{
 				CreatedTitle:     data.Title,
 				CreatedBody:      data.Body,
@@ -62,20 +191,24 @@ func replayEvents(events []Event) (*Graph, error) {
 		case "state":
 			var data StateEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, "", err)
 			}
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
 			task, ok := graph.Tasks[data.ID]
 			if !ok {
-				continue
+				return nil, replayInvariantError(context, event.Type, data.ID, "orphan state event")
+			}
+			if !isReadableState(data.NewState) {
+				return nil, replayInvariantError(context, event.Type, data.ID, fmt.Sprintf("invalid state %q", data.NewState))
 			}
 			ts, err := parseTime(data.TS)
 			if err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, data.ID, fmt.Errorf("invalid ts: %w", err))
 			}
 			task.State = data.NewState
+			lifecycleSource[data.ID] = replayEventSource{context: context, kind: event.Type}
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
 			// todo/done/canceled clear claim
 			if data.NewState == stateTodo || data.NewState == stateDone || data.NewState == stateCanceled {
@@ -88,20 +221,24 @@ func replayEvents(events []Event) (*Graph, error) {
 		case "claim":
 			var data ClaimEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, "", err)
 			}
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
 			task, ok := graph.Tasks[data.ID]
 			if !ok {
-				continue
+				return nil, replayInvariantError(context, event.Type, data.ID, "orphan claim event")
+			}
+			if strings.TrimSpace(data.AgentID) == "" {
+				return nil, replayInvariantError(context, event.Type, data.ID, "claim agent is empty")
 			}
 			ts, err := parseTime(data.TS)
 			if err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, data.ID, fmt.Errorf("invalid ts: %w", err))
 			}
 			task.ClaimedBy = data.AgentID
+			lifecycleSource[data.ID] = replayEventSource{context: context, kind: event.Type}
 			meta := graph.Meta[data.ID]
 			if meta != nil {
 				meta.LastClaimAt = ts
@@ -109,7 +246,7 @@ func replayEvents(events []Event) (*Graph, error) {
 		case "link":
 			var data LinkEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, "", err)
 			}
 			if _, tombstoned := graph.Tombstones[data.FromID]; tombstoned {
 				continue
@@ -118,16 +255,34 @@ func replayEvents(events []Event) (*Graph, error) {
 				continue
 			}
 			if data.Type != dependsLinkType {
-				continue
+				return nil, replayInvariantError(context, event.Type, data.FromID+" -> "+data.ToID, fmt.Sprintf("unknown link type %q", data.Type))
+			}
+			fromTask, fromOK := graph.Tasks[data.FromID]
+			toTask, toOK := graph.Tasks[data.ToID]
+			if !fromOK || !toOK {
+				return nil, replayInvariantError(context, event.Type, data.FromID+" -> "+data.ToID, "dangling dependency endpoint")
+			}
+			if err := validateDepSelf(data.FromID, data.ToID); err != nil {
+				return nil, replayInvariantError(context, event.Type, data.FromID+" -> "+data.ToID, err.Error())
+			}
+			if err := validateDepAncestry(fromTask, toTask); err != nil {
+				return nil, replayInvariantError(context, event.Type, data.FromID+" -> "+data.ToID, err.Error())
+			}
+			if hasCycle(graph, data.FromID, data.ToID) {
+				return nil, replayInvariantError(context, event.Type, data.FromID+" -> "+data.ToID, "dependency cycle")
 			}
 			if graph.Deps[data.FromID] == nil {
 				graph.Deps[data.FromID] = map[string]struct{}{}
 			}
 			graph.Deps[data.FromID][data.ToID] = struct{}{}
+			if linkSource[data.FromID] == nil {
+				linkSource[data.FromID] = map[string]replayEventSource{}
+			}
+			linkSource[data.FromID][data.ToID] = replayEventSource{context: context, kind: event.Type, order: eventIndex}
 		case "unlink":
 			var data LinkEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, "", err)
 			}
 			if _, tombstoned := graph.Tombstones[data.FromID]; tombstoned {
 				continue
@@ -136,26 +291,32 @@ func replayEvents(events []Event) (*Graph, error) {
 				continue
 			}
 			if data.Type != dependsLinkType {
-				continue
+				return nil, replayInvariantError(context, event.Type, data.FromID+" -> "+data.ToID, fmt.Sprintf("unknown link type %q", data.Type))
+			}
+			if graph.Tasks[data.FromID] == nil || graph.Tasks[data.ToID] == nil {
+				return nil, replayInvariantError(context, event.Type, data.FromID+" -> "+data.ToID, "dangling dependency endpoint")
 			}
 			if graph.Deps[data.FromID] != nil {
 				delete(graph.Deps[data.FromID], data.ToID)
 			}
+			if linkSource[data.FromID] != nil {
+				delete(linkSource[data.FromID], data.ToID)
+			}
 		case "title":
 			var data TitleUpdateEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, "", err)
 			}
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
 			task, ok := graph.Tasks[data.ID]
 			if !ok {
-				continue
+				return nil, replayInvariantError(context, event.Type, data.ID, "orphan title event")
 			}
 			ts, err := parseTime(data.TS)
 			if err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, data.ID, fmt.Errorf("invalid ts: %w", err))
 			}
 			task.Title = data.Title
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
@@ -166,18 +327,18 @@ func replayEvents(events []Event) (*Graph, error) {
 		case "body":
 			var data BodyUpdateEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, "", err)
 			}
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
 			task, ok := graph.Tasks[data.ID]
 			if !ok {
-				continue
+				return nil, replayInvariantError(context, event.Type, data.ID, "orphan body event")
 			}
 			ts, err := parseTime(data.TS)
 			if err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, data.ID, fmt.Errorf("invalid ts: %w", err))
 			}
 			task.Body = data.Body
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
@@ -188,20 +349,21 @@ func replayEvents(events []Event) (*Graph, error) {
 		case "epic":
 			var data EpicAssignEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, "", err)
 			}
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
 			task, ok := graph.Tasks[data.ID]
 			if !ok {
-				continue
+				return nil, replayInvariantError(context, event.Type, data.ID, "orphan epic assignment")
 			}
 			ts, err := parseTime(data.TS)
 			if err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, data.ID, fmt.Errorf("invalid ts: %w", err))
 			}
 			task.EpicID = data.EpicID
+			parentSource[data.ID] = replayEventSource{context: context, kind: event.Type, order: eventIndex}
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
 			meta := graph.Meta[data.ID]
 			if meta != nil {
@@ -210,41 +372,48 @@ func replayEvents(events []Event) (*Graph, error) {
 		case "unclaim":
 			var data UnclaimEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, "", err)
 			}
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
 			task, ok := graph.Tasks[data.ID]
 			if !ok {
-				continue
+				return nil, replayInvariantError(context, event.Type, data.ID, "orphan unclaim event")
+			}
+			if _, err := parseTime(data.TS); err != nil {
+				return nil, replayDecodeError(context, event.Type, data.ID, fmt.Errorf("invalid ts: %w", err))
 			}
 			task.ClaimedBy = ""
+			lifecycleSource[data.ID] = replayEventSource{context: context, kind: event.Type}
 		case "tombstone":
 			var data TombstoneEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, "", err)
+			}
+			if data.ID == "" {
+				return nil, replayInvariantError(context, event.Type, "", "task id is empty")
 			}
 			ts, err := parseTime(data.TS)
 			if err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, data.ID, fmt.Errorf("invalid ts: %w", err))
 			}
 			applyTombstone(graph, data.ID, TombstoneInfo{AgentID: data.AgentID, At: ts})
 		case "result":
 			var data ResultEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, "", err)
 			}
 			if _, tombstoned := graph.Tombstones[data.TaskID]; tombstoned {
 				continue
 			}
 			task, ok := graph.Tasks[data.TaskID]
 			if !ok {
-				continue
+				return nil, replayInvariantError(context, event.Type, data.TaskID, "orphan result event")
 			}
 			ts, err := parseTime(data.TS)
 			if err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, data.TaskID, fmt.Errorf("invalid ts: %w", err))
 			}
 			// Prepend to keep newest first
 			result := Result{
@@ -260,25 +429,31 @@ func replayEvents(events []Event) (*Graph, error) {
 		case "message":
 			var data MessageEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, "", err)
 			}
 			if _, tombstoned := graph.Tombstones[data.TaskID]; tombstoned {
 				continue
 			}
 			task, ok := graph.Tasks[data.TaskID]
 			if !ok {
-				continue
+				return nil, replayInvariantError(context, event.Type, data.TaskID, "orphan message event")
 			}
 			if err := validateMessageKind(data.Kind); err != nil {
-				return nil, err
+				return nil, replayInvariantError(context, event.Type, data.TaskID, err.Error())
 			}
 			ts, err := parseTime(data.TS)
 			if err != nil {
-				return nil, err
+				return nil, replayDecodeError(context, event.Type, data.TaskID, fmt.Errorf("invalid ts: %w", err))
 			}
 			task.Messages = append([]Message{{Kind: data.Kind, Text: data.Text, CreatedAt: ts}}, task.Messages...)
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
+		default:
+			return nil, replayInvariantError(context, event.Type, "", "unknown event kind")
 		}
+	}
+
+	if err := validateReplayInvariants(graph, taskSource, lifecycleSource, parentSource, linkSource); err != nil {
+		return nil, err
 	}
 
 	for from, deps := range graph.Deps {
@@ -628,7 +803,7 @@ func sortedTasks(tasks map[string]*Task) []*Task {
 func isDepComplete(depID string, graph *Graph) bool {
 	dep, ok := graph.Tasks[depID]
 	if !ok {
-		return true // unknown deps don't block
+		return false
 	}
 	if isContainer(dep, graph) {
 		return isEpicComplete(depID, graph)

@@ -248,6 +248,12 @@ func TestReplayEvents_TombstoneRandomized(t *testing.T) {
 
 		if r.Intn(3) == 0 {
 			ts = now(len(events))
+			events = append(events, mustNewEvent("claim", ts, ClaimEvent{
+				ID:      id,
+				AgentID: "agent-1",
+				TS:      formatTime(ts),
+			}))
+			ts = now(len(events))
 			events = append(events, mustNewEvent("state", ts, StateEvent{
 				ID:       id,
 				NewState: stateDoing,

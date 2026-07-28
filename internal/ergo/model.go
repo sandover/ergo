@@ -147,6 +147,14 @@ type Event struct {
 	Type string          `json:"type"`
 	TS   string          `json:"ts"`
 	Data json.RawMessage `json:"data"`
+	// Source is populated while reading a backlog and is never serialized.
+	Source EventSource `json:"-"`
+}
+
+type EventSource struct {
+	Path             string
+	Line             int
+	TransactionIndex int
 }
 
 type NewTaskEvent struct {

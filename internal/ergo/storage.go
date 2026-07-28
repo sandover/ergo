@@ -164,6 +164,7 @@ func inspectEventLog(path string) (eventLogRead, error) {
 			if err := json.Unmarshal(trimmed, &event); err != nil {
 				return formatEventsParseError(path, lineNo, trimmed, err)
 			}
+			event.Source = EventSource{Path: path, Line: lineNo}
 			result.events = append(result.events, event)
 			return nil
 		}
@@ -177,7 +178,14 @@ func inspectEventLog(path string) (eventLogRead, error) {
 		if len(record.Events) == 0 {
 			return fmt.Errorf("%s:%d: transaction record contains no events", path, lineNo)
 		}
-		result.events = append(result.events, record.Events...)
+		for i := range record.Events {
+			record.Events[i].Source = EventSource{
+				Path:             path,
+				Line:             lineNo,
+				TransactionIndex: i + 1,
+			}
+			result.events = append(result.events, record.Events[i])
+		}
 		return nil
 	}
 
