@@ -73,27 +73,11 @@ func ergoDir(opts GlobalOptions) (string, error) {
 	return resolveErgoDir(start)
 }
 
-// getEventsPath selects the repository event log without renaming existing data.
-// New repositories use backlog.jsonl. Existing earlier filenames remain in place.
-func getEventsPath(dir string) string {
-	backlogPath := filepath.Join(dir, backlogFileName)
-	plansPath := filepath.Join(dir, plansFileName)
-	oldPath := filepath.Join(dir, oldEventsFileName)
-
-	if _, err := os.Stat(backlogPath); err == nil {
-		return backlogPath
-	}
-	if _, err := os.Stat(plansPath); err == nil {
-		return plansPath
-	}
-	if _, err := os.Stat(oldPath); err == nil {
-		return oldPath
-	}
-	return backlogPath
-}
-
 func loadGraph(dir string) (*Graph, error) {
-	eventsPath := getEventsPath(dir)
+	eventsPath, err := selectEventsPath(dir)
+	if err != nil {
+		return nil, err
+	}
 	events, err := readEvents(eventsPath)
 	if err != nil {
 		return nil, err
@@ -199,24 +183,31 @@ func formatEventsParseError(path string, lineNo int, line []byte, cause error) e
 }
 
 func appendEvents(path string, events []Event) error {
-	if len(events) == 0 {
-		return nil
-	}
-	var buf bytes.Buffer
-	for _, event := range events {
-		data, err := json.Marshal(event)
-		if err != nil {
-			return err
-		}
-		buf.Write(data)
-		buf.WriteByte('\n')
+	data, err := marshalEvents(events)
+	if err != nil || len(data) == 0 {
+		return err
 	}
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	return writeAll(file, buf.Bytes())
+	return writeAllWith(file, data, func(file *os.File, data []byte) (int, error) {
+		return file.Write(data)
+	})
+}
+
+func marshalEvents(events []Event) ([]byte, error) {
+	var buf bytes.Buffer
+	for _, event := range events {
+		data, err := json.Marshal(event)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(data)
+		buf.WriteByte('\n')
+	}
+	return buf.Bytes(), nil
 }
 
 func writeEventsFile(path string, events []Event) error {
@@ -263,10 +254,19 @@ func appendEventsAtomically(path string, existing, appended []Event) error {
 }
 
 func writeAll(w *os.File, data []byte) error {
+	return writeAllWith(w, data, func(file *os.File, chunk []byte) (int, error) {
+		return file.Write(chunk)
+	})
+}
+
+func writeAllWith(w *os.File, data []byte, write func(*os.File, []byte) (int, error)) error {
 	for len(data) > 0 {
-		n, err := w.Write(data)
+		n, err := write(w, data)
 		if err != nil {
 			return err
+		}
+		if n <= 0 || n > len(data) {
+			return errors.New("event log write made no progress")
 		}
 		data = data[n:]
 	}
@@ -274,7 +274,10 @@ func writeAll(w *os.File, data []byte) error {
 }
 
 func createTaskWithUpdates(dir string, opts GlobalOptions, epicID string, title, body string, updates map[string]string, agentID string) (createOutput, error) {
-	eventsPath := getEventsPath(dir)
+	eventsPath, err := selectEventsPath(dir)
+	if err != nil {
+		return createOutput{}, err
+	}
 	lockPath := filepath.Join(dir, "lock")
 	return createTaskWithDir(dir, opts, lockPath, eventsPath, epicID, title, body, updates, agentID)
 }

@@ -57,7 +57,10 @@ func RunClaimOldestReady(opts GlobalOptions) error {
 	}
 
 	lockPath := filepath.Join(dir, "lock")
-	eventsPath := getEventsPath(dir)
+	eventsPath, err := selectEventsPath(dir)
+	if err != nil {
+		return err
+	}
 
 	var chosenID string
 	var updatedGraph *Graph
@@ -195,9 +198,12 @@ func writeSequenceChanges(w *os.File, eventType string, edges []sequenceEdge) {
 
 func writeLinkEvents(dir string, opts GlobalOptions, eventType string, edges []sequenceEdge) ([]sequenceEdge, error) {
 	lockPath := filepath.Join(dir, "lock")
-	eventsPath := getEventsPath(dir)
+	eventsPath, err := selectEventsPath(dir)
+	if err != nil {
+		return nil, err
+	}
 	var changed []sequenceEdge
-	err := withLock(lockPath, opts, func() error {
+	err = withLock(lockPath, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err
@@ -628,7 +634,10 @@ func RunCompact(opts GlobalOptions) error {
 		return err
 	}
 	lockPath := filepath.Join(dir, "lock")
-	eventsPath := getEventsPath(dir)
+	eventsPath, err := selectEventsPath(dir)
+	if err != nil {
+		return err
+	}
 	before := 0
 	after := 0
 	if err := withLock(lockPath, opts, func() error {

@@ -35,9 +35,12 @@ func RunPruneApply(dir string, opts GlobalOptions) (PrunePlan, error) {
 
 func runPrune(dir string, opts GlobalOptions, apply bool) (PrunePlan, error) {
 	lockPath := filepath.Join(dir, "lock")
-	eventsPath := getEventsPath(dir)
+	eventsPath, err := selectEventsPath(dir)
+	if err != nil {
+		return PrunePlan{}, err
+	}
 	var plan PrunePlan
-	err := withLock(lockPath, opts, func() error {
+	err = withLock(lockPath, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err

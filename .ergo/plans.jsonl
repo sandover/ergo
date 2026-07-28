@@ -519,3 +519,6 @@
 {"type":"link","ts":"2026-07-28T22:45:16.038703Z","data":{"from_id":"5GRMXW","to_id":"PN4YAX","type":"depends"}}
 {"type":"link","ts":"2026-07-28T22:45:16.094081Z","data":{"from_id":"5GRMXW","to_id":"6RHLRC","type":"depends"}}
 {"type":"link","ts":"2026-07-28T22:45:16.148939Z","data":{"from_id":"CDTR3O","to_id":"5GRMXW","type":"depends"}}
+{"type":"message","ts":"2026-07-28T22:46:06.57746Z","data":{"task_id":"Z7JHMF","kind":"done","text":"Introduced Repository.Open/View/update ownership, strict single-log selection, injectable persistence failures, and focused passing tests.","ts":"2026-07-28T22:46:06.57746Z"}}
+{"type":"unclaim","ts":"2026-07-28T22:46:06.57746Z","data":{"id":"Z7JHMF","ts":"2026-07-28T22:46:06.57746Z"}}
+{"type":"state","ts":"2026-07-28T22:46:06.57746Z","data":{"id":"Z7JHMF","state":"done","ts":"2026-07-28T22:46:06.57746Z"}}

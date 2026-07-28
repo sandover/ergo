@@ -121,7 +121,7 @@ func TestReadEvents_TombstoneRoundTrip(t *testing.T) {
 	}
 }
 
-func TestGetEventsPath_PrefersBacklogDotJsonl(t *testing.T) {
+func TestSelectEventsPath_RejectsMultipleCandidates(t *testing.T) {
 	dir := t.TempDir()
 	backlogPath := filepath.Join(dir, backlogFileName)
 	plansPath := filepath.Join(dir, plansFileName)
@@ -137,28 +137,33 @@ func TestGetEventsPath_PrefersBacklogDotJsonl(t *testing.T) {
 		t.Fatalf("write events.jsonl: %v", err)
 	}
 
-	result := getEventsPath(dir)
-	if result != backlogPath {
-		t.Fatalf("expected %q, got %q", backlogPath, result)
+	_, err := selectEventsPath(dir)
+	if err == nil {
+		t.Fatal("expected conflicting backlog files to fail")
+	}
+	for _, path := range []string{backlogPath, plansPath, oldPath} {
+		if !strings.Contains(err.Error(), path) {
+			t.Fatalf("expected error to identify %q, got %q", path, err)
+		}
 	}
 }
 
-func TestGetEventsPath_FallbackToPlansJsonl(t *testing.T) {
+func TestSelectEventsPath_UsesPlansJsonl(t *testing.T) {
 	dir := t.TempDir()
 	plansPath := filepath.Join(dir, plansFileName)
-	oldPath := filepath.Join(dir, oldEventsFileName)
 	if err := os.WriteFile(plansPath, []byte{}, 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(oldPath, []byte{}, 0644); err != nil {
+	result, err := selectEventsPath(dir)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if result := getEventsPath(dir); result != plansPath {
+	if result != plansPath {
 		t.Fatalf("expected %q, got %q", plansPath, result)
 	}
 }
 
-func TestGetEventsPath_FallbackToEventsJsonl(t *testing.T) {
+func TestSelectEventsPath_UsesEventsJsonl(t *testing.T) {
 	dir := t.TempDir()
 	oldPath := filepath.Join(dir, oldEventsFileName)
 
@@ -168,17 +173,23 @@ func TestGetEventsPath_FallbackToEventsJsonl(t *testing.T) {
 	}
 
 	// Should use events.jsonl when plans.jsonl doesn't exist
-	result := getEventsPath(dir)
+	result, err := selectEventsPath(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if result != oldPath {
 		t.Fatalf("expected %q, got %q", oldPath, result)
 	}
 }
 
-func TestGetEventsPath_DefaultToBacklogJsonl(t *testing.T) {
+func TestSelectEventsPath_DefaultsToBacklogJsonl(t *testing.T) {
 	dir := t.TempDir()
 	backlogPath := filepath.Join(dir, backlogFileName)
 
-	result := getEventsPath(dir)
+	result, err := selectEventsPath(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if result != backlogPath {
 		t.Fatalf("expected %q, got %q", backlogPath, result)
 	}

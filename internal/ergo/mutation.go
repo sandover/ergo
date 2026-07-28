@@ -45,11 +45,14 @@ type mutationOutcome struct {
 
 func applyTaskMutation(dir string, opts GlobalOptions, id string, mutation taskMutation) (mutationOutcome, error) {
 	lockPath := filepath.Join(dir, "lock")
-	eventsPath := getEventsPath(dir)
+	eventsPath, err := selectEventsPath(dir)
+	if err != nil {
+		return mutationOutcome{}, err
+	}
 	repoDir := filepath.Dir(dir)
 	var outcome mutationOutcome
 
-	err := withLock(lockPath, opts, func() error {
+	err = withLock(lockPath, opts, func() error {
 		graph, err := loadGraph(dir)
 		if err != nil {
 			return err

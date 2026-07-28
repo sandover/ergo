@@ -24,7 +24,10 @@ func RunInit(args []string, opts GlobalOptions) error {
 	}
 	target := filepath.Join(dir, dataDirName)
 	_, dirErr := os.Stat(target)
-	eventsPath := getEventsPath(target)
+	eventsPath, err := selectEventsPath(target)
+	if err != nil {
+		return err
+	}
 	_, eventsErr := os.Stat(eventsPath)
 	_, lockErr := os.Stat(filepath.Join(target, "lock"))
 	if err := os.MkdirAll(target, 0755); err != nil {
@@ -103,7 +106,10 @@ func RunNewEpic(title, filePath string, opts GlobalOptions) error {
 // It backs the `new epic` command.
 func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody string, tasks []EpicTaskInput) error {
 	lockPath := filepath.Join(dir, "lock")
-	eventsPath := getEventsPath(dir)
+	eventsPath, err := selectEventsPath(dir)
+	if err != nil {
+		return err
+	}
 
 	var out bulkCreateOutput
 	if err := withLock(lockPath, opts, func() error {
