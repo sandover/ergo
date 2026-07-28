@@ -114,8 +114,8 @@ func BenchmarkTombstoneCompact1000(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := compactEvents(graph); err != nil {
-			b.Fatalf("compactEvents failed: %v", err)
+		if _, _, err := marshalSnapshot(graph); err != nil {
+			b.Fatalf("marshalSnapshot failed: %v", err)
 		}
 	}
 }

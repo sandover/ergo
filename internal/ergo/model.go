@@ -84,30 +84,16 @@ type Task struct {
 	Title     string
 	Body      string
 	ClaimedBy string
+	ClaimedAt time.Time
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	Results   []Result  // Attached results/artifacts, newest first
 	Messages  []Message // Lifecycle messages, newest first
 }
 
-type TaskMeta struct {
-	CreatedTitle     string
-	CreatedBody      string
-	CreatedState     string
-	CreatedEpicID    string
-	CreatedEpicIDSet bool
-	CreatedAt        time.Time
-	LastStateAt      time.Time
-	LastClaimAt      time.Time
-	LastTitleAt      time.Time
-	LastBodyAt       time.Time
-	LastEpicAt       time.Time
-}
-
 type Graph struct {
 	Tasks      map[string]*Task
 	Deps       map[string]map[string]struct{}
-	Meta       map[string]*TaskMeta
 	Tombstones map[string]TombstoneInfo
 
 	reverseDeps      map[string]map[string]struct{}

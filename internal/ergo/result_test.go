@@ -356,26 +356,9 @@ func TestResultCompaction(t *testing.T) {
 			},
 		},
 		Deps: map[string]map[string]struct{}{},
-		Meta: map[string]*TaskMeta{
-			"T1": {
-				CreatedTitle: "Test task",
-				CreatedBody:  "",
-				CreatedState: stateTodo,
-				CreatedAt:    now,
-			},
-		},
 	}
 
-	// Compact and replay
-	events, err := compactEvents(graph)
-	if err != nil {
-		t.Fatalf("compactEvents failed: %v", err)
-	}
-
-	replayedGraph, err := replayEvents(events)
-	if err != nil {
-		t.Fatalf("replayEvents failed: %v", err)
-	}
+	replayedGraph := roundTripSnapshot(t, graph)
 
 	task := replayedGraph.Tasks["T1"]
 	if task == nil {
@@ -410,27 +393,9 @@ func TestCompactionPreservesBodyUpdates(t *testing.T) {
 			},
 		},
 		Deps: map[string]map[string]struct{}{},
-		Meta: map[string]*TaskMeta{
-			"T1": {
-				CreatedTitle: "Fix npx caching - use @latest in docs",
-				CreatedBody:  "",
-				CreatedState: stateTodo,
-				CreatedAt:    now,
-				LastBodyAt:   now.Add(time.Minute),
-			},
-		},
 	}
 
-	// Compact and replay
-	events, err := compactEvents(graph)
-	if err != nil {
-		t.Fatalf("compactEvents failed: %v", err)
-	}
-
-	replayedGraph, err := replayEvents(events)
-	if err != nil {
-		t.Fatalf("replayEvents failed: %v", err)
-	}
+	replayedGraph := roundTripSnapshot(t, graph)
 
 	task := replayedGraph.Tasks["T1"]
 	if task == nil {

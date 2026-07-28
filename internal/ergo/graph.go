@@ -121,19 +121,36 @@ func validateReplayInvariants(
 	return nil
 }
 
-func replayEvents(events []Event) (*Graph, error) {
-	graph := &Graph{
+func newGraph() *Graph {
+	return &Graph{
 		Tasks:            map[string]*Task{},
 		Deps:             map[string]map[string]struct{}{},
-		Meta:             map[string]*TaskMeta{},
 		Tombstones:       map[string]TombstoneInfo{},
 		legacyEmptyEpics: map[string]struct{}{},
 	}
+}
 
+func replayEvents(events []Event) (*Graph, error) {
+	return replayEventsOnto(newGraph(), events)
+}
+
+func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 	taskSource := map[string]replayEventSource{}
 	lifecycleSource := map[string]replayEventSource{}
 	parentSource := map[string]replayEventSource{}
 	linkSource := map[string]map[string]replayEventSource{}
+	for id := range graph.Tasks {
+		source := replayEventSource{context: "snapshot", kind: snapshotTaskRecordType, order: -1}
+		taskSource[id] = source
+		lifecycleSource[id] = source
+		parentSource[id] = source
+	}
+	for from, deps := range graph.Deps {
+		linkSource[from] = map[string]replayEventSource{}
+		for to := range deps {
+			linkSource[from][to] = replayEventSource{context: "snapshot", kind: snapshotDependencyRecordType, order: -1}
+		}
+	}
 	for eventIndex, event := range events {
 		context := eventReplayContext(event, eventIndex)
 		if event.Type == "" {
@@ -182,14 +199,6 @@ func replayEvents(events []Event) (*Graph, error) {
 			taskSource[data.ID] = source
 			lifecycleSource[data.ID] = source
 			parentSource[data.ID] = source
-			graph.Meta[data.ID] = &TaskMeta{
-				CreatedTitle:     data.Title,
-				CreatedBody:      data.Body,
-				CreatedState:     data.State,
-				CreatedEpicID:    data.EpicID,
-				CreatedEpicIDSet: true,
-				CreatedAt:        createdAt,
-			}
 		case "state":
 			var data StateEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
@@ -215,10 +224,7 @@ func replayEvents(events []Event) (*Graph, error) {
 			// todo/done/canceled clear claim
 			if data.NewState == stateTodo || data.NewState == stateDone || data.NewState == stateCanceled {
 				task.ClaimedBy = ""
-			}
-			meta := graph.Meta[data.ID]
-			if meta != nil {
-				meta.LastStateAt = ts
+				task.ClaimedAt = time.Time{}
 			}
 		case "claim":
 			var data ClaimEvent
@@ -240,11 +246,8 @@ func replayEvents(events []Event) (*Graph, error) {
 				return nil, replayDecodeError(context, event.Type, data.ID, fmt.Errorf("invalid ts: %w", err))
 			}
 			task.ClaimedBy = data.AgentID
+			task.ClaimedAt = ts
 			lifecycleSource[data.ID] = replayEventSource{context: context, kind: event.Type}
-			meta := graph.Meta[data.ID]
-			if meta != nil {
-				meta.LastClaimAt = ts
-			}
 		case "link":
 			var data LinkEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
@@ -322,10 +325,6 @@ func replayEvents(events []Event) (*Graph, error) {
 			}
 			task.Title = data.Title
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
-			meta := graph.Meta[data.ID]
-			if meta != nil {
-				meta.LastTitleAt = ts
-			}
 		case "body":
 			var data BodyUpdateEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
@@ -344,10 +343,6 @@ func replayEvents(events []Event) (*Graph, error) {
 			}
 			task.Body = data.Body
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
-			meta := graph.Meta[data.ID]
-			if meta != nil {
-				meta.LastBodyAt = ts
-			}
 		case "epic":
 			var data EpicAssignEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
@@ -367,10 +362,6 @@ func replayEvents(events []Event) (*Graph, error) {
 			task.EpicID = data.EpicID
 			parentSource[data.ID] = replayEventSource{context: context, kind: event.Type, order: eventIndex}
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
-			meta := graph.Meta[data.ID]
-			if meta != nil {
-				meta.LastEpicAt = ts
-			}
 		case "unclaim":
 			var data UnclaimEvent
 			if err := json.Unmarshal(event.Data, &data); err != nil {
@@ -387,6 +378,7 @@ func replayEvents(events []Event) (*Graph, error) {
 				return nil, replayDecodeError(context, event.Type, data.ID, fmt.Errorf("invalid ts: %w", err))
 			}
 			task.ClaimedBy = ""
+			task.ClaimedAt = time.Time{}
 			lifecycleSource[data.ID] = replayEventSource{context: context, kind: event.Type}
 		case "tombstone":
 			var data TombstoneEvent
@@ -470,7 +462,6 @@ func applyTombstone(graph *Graph, id string, info TombstoneInfo) {
 	}
 	graph.Tombstones[id] = info
 	delete(graph.Tasks, id)
-	delete(graph.Meta, id)
 	delete(graph.legacyEmptyEpics, id)
 	delete(graph.Deps, id)
 	for from, deps := range graph.Deps {
@@ -525,183 +516,6 @@ func isLegacyHeading(line string) bool {
 		line = strings.TrimPrefix(line, "#")
 	}
 	return strings.TrimSpace(line) != ""
-}
-
-func compactEvents(graph *Graph) ([]Event, error) {
-	tasks := sortedTasks(graph.Tasks)
-	var events []Event
-
-	for _, task := range tasks {
-		meta := graph.Meta[task.ID]
-		createdAt := task.CreatedAt
-		createdState := task.State
-		createdTitle := task.Title
-		createdBody := task.Body
-		createdEpicID := task.EpicID
-		var lastStateAt time.Time
-		var lastClaimAt time.Time
-		var lastTitleAt time.Time
-		var lastBodyAt time.Time
-		var lastEpicAt time.Time
-		if meta != nil {
-			if !meta.CreatedAt.IsZero() {
-				createdAt = meta.CreatedAt
-			}
-			if meta.CreatedState != "" {
-				createdState = meta.CreatedState
-			}
-			if meta.CreatedTitle != "" {
-				createdTitle = meta.CreatedTitle
-			}
-			if meta.CreatedBody != "" {
-				createdBody = meta.CreatedBody
-			}
-			if meta.CreatedEpicIDSet {
-				createdEpicID = meta.CreatedEpicID
-			}
-			lastStateAt = meta.LastStateAt
-			lastClaimAt = meta.LastClaimAt
-			lastTitleAt = meta.LastTitleAt
-			lastBodyAt = meta.LastBodyAt
-			lastEpicAt = meta.LastEpicAt
-		}
-
-		payload := NewTaskEvent{
-			ID:        task.ID,
-			UUID:      task.UUID,
-			EpicID:    createdEpicID,
-			State:     createdState,
-			Title:     createdTitle,
-			Body:      createdBody,
-			CreatedAt: formatTime(createdAt),
-		}
-		eventType := "new_task"
-		if graph.IsEpic(task.ID) && len(graph.Children(task.ID)) == 0 {
-			eventType = "new_epic"
-		}
-		event, err := newEvent(eventType, createdAt, payload)
-		if err != nil {
-			return nil, err
-		}
-		events = append(events, event)
-
-		if task.Title != createdTitle || (!lastTitleAt.IsZero() && lastTitleAt.After(createdAt)) {
-			ts := pickTime(lastTitleAt, task.UpdatedAt)
-			titleEvent, err := newEvent("title", ts, TitleUpdateEvent{
-				ID:    task.ID,
-				Title: task.Title,
-				TS:    formatTime(ts),
-			})
-			if err != nil {
-				return nil, err
-			}
-			events = append(events, titleEvent)
-		}
-
-		if task.Body != createdBody || (!lastBodyAt.IsZero() && lastBodyAt.After(createdAt)) {
-			ts := pickTime(lastBodyAt, task.UpdatedAt)
-			bodyEvent, err := newEvent("body", ts, BodyUpdateEvent{
-				ID:   task.ID,
-				Body: task.Body,
-				TS:   formatTime(ts),
-			})
-			if err != nil {
-				return nil, err
-			}
-			events = append(events, bodyEvent)
-		}
-
-		if !graph.IsEpic(task.ID) && (task.EpicID != createdEpicID || (!lastEpicAt.IsZero() && lastEpicAt.After(createdAt))) {
-			ts := pickTime(lastEpicAt, task.UpdatedAt)
-			epicEvent, err := newEvent("epic", ts, EpicAssignEvent{
-				ID:     task.ID,
-				EpicID: task.EpicID,
-				TS:     formatTime(ts),
-			})
-			if err != nil {
-				return nil, err
-			}
-			events = append(events, epicEvent)
-		}
-
-		if task.ClaimedBy != "" {
-			ts := pickTime(lastClaimAt, task.UpdatedAt)
-			claimEvent, err := newEvent("claim", ts, ClaimEvent{
-				ID:      task.ID,
-				AgentID: task.ClaimedBy,
-				TS:      formatTime(ts),
-			})
-			if err != nil {
-				return nil, err
-			}
-			events = append(events, claimEvent)
-		}
-
-		if task.State != createdState || (!lastStateAt.IsZero() && lastStateAt.After(createdAt)) {
-			ts := pickTime(lastStateAt, task.UpdatedAt)
-			stateEvent, err := newEvent("state", ts, StateEvent{
-				ID:       task.ID,
-				NewState: task.State,
-				TS:       formatTime(ts),
-			})
-			if err != nil {
-				return nil, err
-			}
-			events = append(events, stateEvent)
-		}
-
-		// Emit result events (in chronological order, oldest first)
-		for i := len(task.Results) - 1; i >= 0; i-- {
-			result := task.Results[i]
-			resultEvent, err := newEvent("result", result.CreatedAt, ResultEvent{
-				TaskID:            task.ID,
-				Summary:           result.Summary,
-				Path:              result.Path,
-				Sha256AtAttach:    result.Sha256AtAttach,
-				MtimeAtAttach:     result.MtimeAtAttach,
-				GitCommitAtAttach: result.GitCommitAtAttach,
-				TS:                formatTime(result.CreatedAt),
-			})
-			if err != nil {
-				return nil, err
-			}
-			events = append(events, resultEvent)
-		}
-
-		// Emit lifecycle messages in chronological order, oldest first.
-		for i := len(task.Messages) - 1; i >= 0; i-- {
-			message := task.Messages[i]
-			messageEvent, err := newEvent("message", message.CreatedAt, MessageEvent{
-				TaskID: task.ID,
-				Kind:   message.Kind,
-				Text:   message.Text,
-				TS:     formatTime(message.CreatedAt),
-			})
-			if err != nil {
-				return nil, err
-			}
-			events = append(events, messageEvent)
-		}
-	}
-
-	fromIDs := sortedMapKeys(graph.Deps)
-	for _, from := range fromIDs {
-		toIDs := sortedKeys(graph.Deps[from])
-		for _, to := range toIDs {
-			now := time.Now().UTC()
-			linkEvent, err := newEvent("link", now, LinkEvent{
-				FromID: from,
-				ToID:   to,
-				Type:   dependsLinkType,
-			})
-			if err != nil {
-				return nil, err
-			}
-			events = append(events, linkEvent)
-		}
-	}
-
-	return events, nil
 }
 
 func readyTasks(graph *Graph) []*Task {

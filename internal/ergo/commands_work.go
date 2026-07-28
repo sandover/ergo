@@ -118,7 +118,7 @@ func writeClaimSuccess(graph *Graph, id, repoDir string) error {
 		"cancel":  "ergo cancel " + id,
 		"release": "ergo release " + id,
 	}
-	printTaskDocument(os.Stdout, task, graph.Meta[id], graph, repoDir)
+	printTaskDocument(os.Stdout, task, graph, repoDir)
 	fmt.Println("## Next")
 	fmt.Println()
 	fmt.Println("- `" + next["done"] + "`")
@@ -433,7 +433,7 @@ type frontMatterField struct {
 }
 
 // printTaskDocument renders the complete leaf representation used by show and claim.
-func printTaskDocument(w io.Writer, task *Task, meta *TaskMeta, graph *Graph, repoDir string) {
+func printTaskDocument(w io.Writer, task *Task, graph *Graph, repoDir string) {
 	fields := []frontMatterField{
 		{key: "id", value: task.ID},
 		{key: "title", value: task.Title},
@@ -444,7 +444,7 @@ func printTaskDocument(w io.Writer, task *Task, meta *TaskMeta, graph *Graph, re
 	}
 	if task.ClaimedBy != "" {
 		fields = append(fields, frontMatterField{key: "claimed_by", value: task.ClaimedBy})
-		if claimedAt := claimedAtForTask(task, meta); claimedAt != "" {
+		if claimedAt := claimedAtForTask(task); claimedAt != "" {
 			fields = append(fields, frontMatterField{key: "claimed_at", value: claimedAt})
 		}
 	}
@@ -620,7 +620,7 @@ func RunShow(id string, opts GlobalOptions) error {
 		printContainerDocument(os.Stdout, task, childTasks, graph, repoDir)
 		return nil
 	}
-	printTaskDocument(os.Stdout, task, graph.Meta[id], graph, repoDir)
+	printTaskDocument(os.Stdout, task, graph, repoDir)
 	return nil
 }
 
@@ -637,21 +637,26 @@ func RunCompact(opts GlobalOptions) error {
 	before := 0
 	after := 0
 	if err := withLock(lockPath, opts, func() error {
-		events, err := readEvents(eventsPath)
+		read, err := inspectEventLog(eventsPath)
 		if err != nil {
 			return err
 		}
-		before = len(events)
-		graph, err := replayEvents(events)
+		before = read.recordCount
+		var graph *Graph
+		if read.snapshot != nil {
+			graph, err = replayEventsOnto(read.snapshot, read.events)
+		} else {
+			graph, err = replayEvents(read.events)
+		}
 		if err != nil {
 			return err
 		}
-		compacted, err := compactEvents(graph)
+		compacted, stats, err := marshalSnapshot(graph)
 		if err != nil {
 			return err
 		}
-		after = len(compacted)
-		return replaceEventsAtomically(eventsPath, compacted)
+		after = stats.Records
+		return replaceLogAtomically(eventsPath, compacted)
 	}); err != nil {
 		return err
 	}
@@ -659,7 +664,7 @@ func RunCompact(opts GlobalOptions) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Compacted %s: %d -> %d events (%d removed)\n", resolved, before, after, before-after)
+	fmt.Printf("Compacted %s: %d source records -> %d snapshot records\n", resolved, before, after)
 	return nil
 }
 

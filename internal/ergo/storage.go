@@ -39,6 +39,8 @@ type transactionRecord struct {
 
 type eventLogRead struct {
 	events         []Event
+	snapshot       *Graph
+	recordCount    int
 	validBytes     int64
 	truncatedTail  bool
 	needsSeparator bool
@@ -97,11 +99,14 @@ func loadGraph(dir string) (*Graph, error) {
 	if err != nil {
 		return nil, err
 	}
-	events, err := readEvents(eventsPath)
+	read, err := inspectEventLog(eventsPath)
 	if err != nil {
 		return nil, err
 	}
-	return replayEvents(events)
+	if read.snapshot != nil {
+		return replayEventsOnto(read.snapshot, read.events)
+	}
+	return replayEvents(read.events)
 }
 
 func loadGraphLocked(dir string, opts GlobalOptions) (*Graph, error) {
@@ -122,6 +127,9 @@ func readEvents(path string) ([]Event, error) {
 	read, err := inspectEventLog(path)
 	if err != nil {
 		return nil, err
+	}
+	if read.snapshot != nil {
+		return nil, fmt.Errorf("%s: snapshot backlog cannot be represented as an event slice", path)
 	}
 	return read.events, nil
 }
@@ -150,10 +158,27 @@ func inspectEventLog(path string) (eventLogRead, error) {
 	var pending []byte
 	pendingNo := 0
 	currentNo := 0
+	seenRecords := 0
+	var snapshotDecoder *snapshotBlockDecoder
 
 	processLine := func(lineNo int, line []byte) error {
 		trimmed := bytes.TrimSpace(line)
 		if len(trimmed) == 0 {
+			return nil
+		}
+		seenRecords++
+		result.recordCount++
+		if snapshotDecoder != nil && snapshotDecoder.seen < snapshotDecoder.total() {
+			if err := snapshotDecoder.consume(lineNo, trimmed); err != nil {
+				return err
+			}
+			if snapshotDecoder.seen == snapshotDecoder.total() {
+				graph, err := snapshotDecoder.finish()
+				if err != nil {
+					return err
+				}
+				result.snapshot = graph
+			}
 			return nil
 		}
 		var header struct {
@@ -161,6 +186,27 @@ func inspectEventLog(path string) (eventLogRead, error) {
 		}
 		if err := json.Unmarshal(trimmed, &header); err != nil {
 			return formatEventsParseError(path, lineNo, trimmed, err)
+		}
+		if header.Type == snapshotRecordType {
+			if seenRecords != 1 || result.snapshot != nil || snapshotDecoder != nil {
+				return fmt.Errorf("%s:%d: snapshot manifest must be the first and only snapshot", path, lineNo)
+			}
+			decoder, err := newSnapshotDecoder(path, lineNo, trimmed)
+			if err != nil {
+				return err
+			}
+			snapshotDecoder = decoder
+			if decoder.total() == 0 {
+				graph, err := decoder.finish()
+				if err != nil {
+					return err
+				}
+				result.snapshot = graph
+			}
+			return nil
+		}
+		if snapshotKind(header.Type) {
+			return fmt.Errorf("%s:%d: snapshot data record outside a snapshot block: %q", path, lineNo, header.Type)
 		}
 		if header.Type != transactionRecordType {
 			var event Event
@@ -216,7 +262,8 @@ func inspectEventLog(path string) (eventLogRead, error) {
 			// Only malformed JSON in an unterminated final record is a
 			// recoverable interrupted write. A complete JSON value with an
 			// unsupported version or invalid semantics remains corruption.
-			if !endsWithNewline && !json.Valid(bytes.TrimSpace(pending)) {
+			incompleteSnapshot := snapshotDecoder != nil && snapshotDecoder.seen < snapshotDecoder.total()
+			if !incompleteSnapshot && !endsWithNewline && !json.Valid(bytes.TrimSpace(pending)) {
 				result.truncatedTail = true
 				return result, nil
 			}
@@ -228,6 +275,10 @@ func inspectEventLog(path string) (eventLogRead, error) {
 		} else if len(pending) > 0 {
 			result.needsSeparator = true
 		}
+	}
+	if snapshotDecoder != nil && snapshotDecoder.seen != snapshotDecoder.total() {
+		return eventLogRead{}, fmt.Errorf("%s:%d: incomplete snapshot: got %d of %d data records",
+			path, snapshotDecoder.line, snapshotDecoder.seen, snapshotDecoder.total())
 	}
 	return result, nil
 }
@@ -295,6 +346,31 @@ func writeEventsFile(path string, events []Event) error {
 func replaceEventsAtomically(path string, events []Event) error {
 	tmpPath := path + ".tmp"
 	if err := writeEventsFile(tmpPath, events); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(path))
+}
+
+func replaceLogAtomically(path string, data []byte) error {
+	tmpPath := path + ".tmp"
+	file, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	if err := writeAllWith(file, data, func(file *os.File, chunk []byte) (int, error) {
+		return file.Write(chunk)
+	}); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
 		return err
 	}
 	if err := os.Rename(tmpPath, path); err != nil {
@@ -390,15 +466,6 @@ func createTaskWithDir(dir string, opts GlobalOptions, lockPath, eventsPath, epi
 			UpdatedAt: now,
 		}
 		graph.Tasks[id] = newTask
-		graph.Meta[id] = &TaskMeta{
-			CreatedTitle:     title,
-			CreatedBody:      body,
-			CreatedState:     stateTodo,
-			CreatedEpicID:    epicID,
-			CreatedEpicIDSet: true,
-			CreatedAt:        now,
-		}
-
 		events := []Event{event}
 		resultPath, hasPath := updates["result.path"]
 		resultSummary, hasSummary := updates["result.summary"]

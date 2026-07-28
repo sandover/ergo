@@ -50,12 +50,12 @@ func deriveFileURL(relPath, repoDir string) string {
 	return u.String()
 }
 
-func claimedAtForTask(task *Task, meta *TaskMeta) string {
-	if task == nil || meta == nil || task.ClaimedBy == "" {
+func claimedAtForTask(task *Task) string {
+	if task == nil || task.ClaimedBy == "" {
 		return ""
 	}
-	if meta.LastClaimAt.IsZero() {
+	if task.ClaimedAt.IsZero() {
 		return ""
 	}
-	return formatTime(meta.LastClaimAt)
+	return formatTime(task.ClaimedAt)
 }

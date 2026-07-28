@@ -565,3 +565,10 @@
 {"type":"message","ts":"2026-07-28T23:08:55.18615Z","data":{"task_id":"43MFQC","kind":"done","text":"Hardened result containment and regular-file checks, same-descriptor evidence capture, and bounded Git provenance across normal, packed, detached, and worktree repositories.","ts":"2026-07-28T23:08:55.18615Z"}}
 {"type":"unclaim","ts":"2026-07-28T23:08:55.18615Z","data":{"id":"43MFQC","ts":"2026-07-28T23:08:55.18615Z"}}
 {"type":"state","ts":"2026-07-28T23:08:55.18615Z","data":{"id":"43MFQC","state":"done","ts":"2026-07-28T23:08:55.18615Z"}}
+{"type":"claim","ts":"2026-07-28T23:09:01.947763Z","data":{"id":"IL2642","agent_id":"codex@local","ts":"2026-07-28T23:09:01.947763Z"}}
+{"type":"state","ts":"2026-07-28T23:09:01.947763Z","data":{"id":"IL2642","state":"doing","ts":"2026-07-28T23:09:01.947763Z"}}
+{"type":"claim","ts":"2026-07-28T23:09:02.010223Z","data":{"id":"R3Y5K4","agent_id":"codex@local","ts":"2026-07-28T23:09:02.010223Z"}}
+{"type":"state","ts":"2026-07-28T23:09:02.010223Z","data":{"id":"R3Y5K4","state":"doing","ts":"2026-07-28T23:09:02.010223Z"}}
+{"type":"message","ts":"2026-07-28T23:19:52.445732Z","data":{"task_id":"IL2642","kind":"done","text":"Replaced historical event reconstruction with deterministic versioned snapshot records, integrity validation, explicit tombstone GC, and byte-stable released-fixture round trips.","ts":"2026-07-28T23:19:52.445732Z"}}
+{"type":"unclaim","ts":"2026-07-28T23:19:52.445732Z","data":{"id":"IL2642","ts":"2026-07-28T23:19:52.445732Z"}}
+{"type":"state","ts":"2026-07-28T23:19:52.445732Z","data":{"id":"IL2642","state":"done","ts":"2026-07-28T23:19:52.445732Z"}}

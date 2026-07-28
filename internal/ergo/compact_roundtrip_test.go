@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"testing"
@@ -26,6 +27,7 @@ type taskSnapshot struct {
 	Title     string         `json:"title"`
 	Body      string         `json:"body"`
 	ClaimedBy string         `json:"claimed_by"`
+	ClaimedAt time.Time      `json:"claimed_at"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	Deps      []string       `json:"deps"`
@@ -79,6 +81,7 @@ func snapshotTaskState(graph *Graph, task *Task) taskSnapshot {
 		Title:     task.Title,
 		Body:      task.Body,
 		ClaimedBy: task.ClaimedBy,
+		ClaimedAt: task.ClaimedAt,
 		CreatedAt: task.CreatedAt,
 		UpdatedAt: task.UpdatedAt,
 		Deps:      graph.Dependencies(task.ID),
@@ -314,14 +317,7 @@ func TestCompactEvents_RoundTrip_TaskEvolvesOverTime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("replayEvents(before) failed: %v", err)
 	}
-	compacted, err := compactEvents(graphBefore)
-	if err != nil {
-		t.Fatalf("compactEvents failed: %v", err)
-	}
-	graphAfter, err := replayEvents(compacted)
-	if err != nil {
-		t.Fatalf("replayEvents(after) failed: %v", err)
-	}
+	graphAfter := roundTripSnapshot(t, graphBefore)
 
 	assertGraphStateEqual(t, graphBefore, graphAfter)
 }
@@ -344,7 +340,6 @@ func (s *simState) toGraph() *Graph {
 	graph := &Graph{
 		Tasks:            map[string]*Task{},
 		Deps:             map[string]map[string]struct{}{},
-		Meta:             map[string]*TaskMeta{},
 		legacyEmptyEpics: map[string]struct{}{},
 	}
 	for id, task := range s.tasks {
@@ -734,15 +729,25 @@ func TestCompactEvents_RoundTrip_Randomized(t *testing.T) {
 			if err != nil {
 				t.Fatalf("replayEvents(before) failed: %v", err)
 			}
-			compacted, err := compactEvents(graphBefore)
-			if err != nil {
-				t.Fatalf("compactEvents failed: %v", err)
-			}
-			graphAfter, err := replayEvents(compacted)
-			if err != nil {
-				t.Fatalf("replayEvents(after) failed: %v", err)
-			}
+			graphAfter := roundTripSnapshot(t, graphBefore)
 			assertGraphStateEqual(t, graphBefore, graphAfter)
 		})
 	}
+}
+
+func roundTripSnapshot(t *testing.T, graph *Graph) *Graph {
+	t.Helper()
+	data, _, err := marshalSnapshot(graph)
+	if err != nil {
+		t.Fatalf("marshalSnapshot failed: %v", err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, backlogFileName), data, 0644); err != nil {
+		t.Fatalf("write snapshot: %v", err)
+	}
+	replayed, err := loadGraph(dir)
+	if err != nil {
+		t.Fatalf("load snapshot: %v", err)
+	}
+	return replayed
 }

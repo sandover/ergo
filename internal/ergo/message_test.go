@@ -35,14 +35,7 @@ func TestMessageReplayAndCompact(t *testing.T) {
 		t.Fatalf("messages = %#v, want %#v", got, want)
 	}
 
-	compacted, err := compactEvents(graph)
-	if err != nil {
-		t.Fatal(err)
-	}
-	replayed, err := replayEvents(compacted)
-	if err != nil {
-		t.Fatal(err)
-	}
+	replayed := roundTripSnapshot(t, graph)
 	if got := replayed.Tasks["ABCDEF"].Messages; !reflect.DeepEqual(got, want) {
 		t.Fatalf("compacted messages = %#v, want %#v", got, want)
 	}

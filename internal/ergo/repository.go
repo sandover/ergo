@@ -111,11 +111,14 @@ func (r *Repository) update(fn func(*Graph) ([]Event, error)) error {
 }
 
 func (r *Repository) load() (*Graph, error) {
-	events, err := readEvents(r.eventsPath)
+	read, err := inspectEventLog(r.eventsPath)
 	if err != nil {
 		return nil, err
 	}
-	return replayEvents(events)
+	if read.snapshot != nil {
+		return replayEventsOnto(read.snapshot, read.events)
+	}
+	return replayEvents(read.events)
 }
 
 func (r *Repository) append(events []Event) error {

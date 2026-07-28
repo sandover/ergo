@@ -1392,7 +1392,7 @@ func TestCompact_ConfirmsCompletion(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("compact failed: exit %d", code)
 	}
-	if !strings.Contains(stdout, "backlog.jsonl: 0 -> 0 events (0 removed)") {
+	if !strings.Contains(stdout, "backlog.jsonl: 0 source records -> 1 snapshot records") {
 		t.Errorf("unexpected compact output: %q", stdout)
 	}
 }

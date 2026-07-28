@@ -73,13 +73,17 @@ func TestCompatibilityReleasedBacklogsCompactWithoutSemanticLoss(t *testing.T) {
 			if err != nil {
 				t.Fatalf("replay released fixture: %v", err)
 			}
-			compacted, err := compactEvents(before)
+			first, _, err := marshalSnapshot(before)
 			if err != nil {
-				t.Fatalf("compact released fixture: %v", err)
+				t.Fatalf("marshal released fixture: %v", err)
 			}
-			after, err := replayEvents(compacted)
+			after := roundTripSnapshot(t, before)
+			second, _, err := marshalSnapshot(after)
 			if err != nil {
-				t.Fatalf("replay compacted fixture: %v", err)
+				t.Fatalf("remarshal released fixture: %v", err)
+			}
+			if string(first) != string(second) {
+				t.Fatal("released fixture snapshot was not deterministic")
 			}
 			assertGraphStateEqual(t, before, after)
 		})

@@ -16,7 +16,8 @@ func TestTaskDocumentRendersCompleteAgentContext(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0).UTC()
 	task := &Task{
 		ID: "ABCDEF", UUID: "uuid", EpicID: "PARENT", State: stateDoing,
-		ClaimedBy: "agent@host", Title: "Implement login", Body: "Line one\n\n- literal Markdown",
+		ClaimedBy: "agent@host", ClaimedAt: now.Add(30 * time.Second),
+		Title: "Implement login", Body: "Line one\n\n- literal Markdown",
 		CreatedAt: now, UpdatedAt: now.Add(time.Minute),
 		Messages: []Message{{Kind: "release", Text: "Retry with the new token.", CreatedAt: now.Add(time.Minute)}},
 		Results: []Result{
@@ -35,10 +36,8 @@ func TestTaskDocumentRendersCompleteAgentContext(t *testing.T) {
 			"AFTER1": {"ABCDEF": {}},
 		},
 	}
-	meta := &TaskMeta{LastClaimAt: now.Add(30 * time.Second)}
-
 	var buf bytes.Buffer
-	printTaskDocument(&buf, task, meta, graph, "/repo")
+	printTaskDocument(&buf, task, graph, "/repo")
 	output := buf.String()
 	if !strings.HasPrefix(output, "---\nid: \"ABCDEF\"\n") {
 		t.Fatalf("ID is not fixed at the start of front matter: %s", output)
