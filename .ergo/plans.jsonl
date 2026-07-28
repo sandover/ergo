@@ -580,3 +580,15 @@
 {"type":"message","ts":"2026-07-28T23:36:09.690484Z","data":{"task_id":"WTJUKA","kind":"done","text":"Separated event and log codecs, legacy normalization, pure clone-and-apply reduction, graph queries, and snapshot ownership. Exhaustiveness, purity, atomic rejection, replay equivalence, and both focused package suites pass.","ts":"2026-07-28T23:36:09.690484Z"}}
 {"type":"unclaim","ts":"2026-07-28T23:36:09.690484Z","data":{"id":"WTJUKA","ts":"2026-07-28T23:36:09.690484Z"}}
 {"type":"state","ts":"2026-07-28T23:36:09.690484Z","data":{"id":"WTJUKA","state":"done","ts":"2026-07-28T23:36:09.690484Z"}}
+{"type":"claim","ts":"2026-07-28T23:36:09.724885Z","data":{"id":"N32CGA","agent_id":"codex@local","ts":"2026-07-28T23:36:09.724885Z"}}
+{"type":"state","ts":"2026-07-28T23:36:09.724885Z","data":{"id":"N32CGA","state":"doing","ts":"2026-07-28T23:36:09.724885Z"}}
+{"type":"claim","ts":"2026-07-28T23:36:47.488545Z","data":{"id":"R3Y5K4","agent_id":"codex@local","ts":"2026-07-28T23:36:47.488545Z"}}
+{"type":"state","ts":"2026-07-28T23:36:47.488545Z","data":{"id":"R3Y5K4","state":"doing","ts":"2026-07-28T23:36:47.488545Z"}}
+{"type":"claim","ts":"2026-07-28T23:36:47.498717Z","data":{"id":"WTJUKA","agent_id":"codex@local","ts":"2026-07-28T23:36:47.498717Z"}}
+{"type":"state","ts":"2026-07-28T23:36:47.498717Z","data":{"id":"WTJUKA","state":"doing","ts":"2026-07-28T23:36:47.498717Z"}}
+{"type":"message","ts":"2026-07-28T23:37:15.385139Z","data":{"task_id":"R3Y5K4","kind":"done","text":"Removed repository migration shims reported by the domain-wave lint gate; ownership grep and both package suites pass.","ts":"2026-07-28T23:37:15.385139Z"}}
+{"type":"unclaim","ts":"2026-07-28T23:37:15.385139Z","data":{"id":"R3Y5K4","ts":"2026-07-28T23:37:15.385139Z"}}
+{"type":"state","ts":"2026-07-28T23:37:15.385139Z","data":{"id":"R3Y5K4","state":"done","ts":"2026-07-28T23:37:15.385139Z"}}
+{"type":"message","ts":"2026-07-28T23:37:15.394582Z","data":{"task_id":"WTJUKA","kind":"done","text":"Removed the final reducer-era time helper reported by the domain-wave lint gate; package suites and full race-enabled CI pass.","ts":"2026-07-28T23:37:15.394582Z"}}
+{"type":"unclaim","ts":"2026-07-28T23:37:15.394582Z","data":{"id":"WTJUKA","ts":"2026-07-28T23:37:15.394582Z"}}
+{"type":"state","ts":"2026-07-28T23:37:15.394582Z","data":{"id":"WTJUKA","state":"done","ts":"2026-07-28T23:37:15.394582Z"}}

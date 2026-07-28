@@ -101,20 +101,6 @@ func repositoryLoadGraph(dir string) (*Graph, error) {
 	return replayEvents(read.events)
 }
 
-func repositoryLoadGraphLocked(dir string, opts GlobalOptions) (*Graph, error) {
-	lockPath := filepath.Join(dir, "lock")
-	var graph *Graph
-	err := repositoryWithLock(lockPath, opts, func() error {
-		var err error
-		graph, err = repositoryLoadGraph(dir)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	return graph, nil
-}
-
 func readEvents(path string) ([]Event, error) {
 	read, err := inspectEventLog(path)
 	if err != nil {
@@ -293,17 +279,6 @@ func writeEventsFile(path string, events []Event) error {
 		return err
 	}
 	return file.Sync()
-}
-
-func replaceEventsAtomically(path string, events []Event) error {
-	tmpPath := path + ".tmp"
-	if err := writeEventsFile(tmpPath, events); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		return err
-	}
-	return syncDir(filepath.Dir(path))
 }
 
 func replaceLogAtomically(path string, data []byte) error {

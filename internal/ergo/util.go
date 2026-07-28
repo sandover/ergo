@@ -117,13 +117,6 @@ func prunedErr(id string) error {
 	return fmt.Errorf("id %s is pruned", id)
 }
 
-func pickTime(candidate, fallback time.Time) time.Time {
-	if !candidate.IsZero() {
-		return candidate
-	}
-	return fallback
-}
-
 func maxTime(current, next time.Time) time.Time {
 	if next.After(current) {
 		return next

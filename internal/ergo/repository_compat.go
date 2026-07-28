@@ -6,10 +6,6 @@ func loadGraph(dir string) (*Graph, error) {
 	return repositoryLoadGraph(dir)
 }
 
-func loadGraphLocked(dir string, opts GlobalOptions) (*Graph, error) {
-	return repositoryLoadGraphLocked(dir, opts)
-}
-
 func appendEvents(path string, events []Event) error {
 	return repositoryAppendEvents(path, events)
 }
