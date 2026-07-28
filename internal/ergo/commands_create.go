@@ -8,11 +8,11 @@ package ergo
 import (
 	"errors"
 	"fmt"
-	"strings"
+	"io"
 	"time"
 )
 
-func RunInit(args []string, opts GlobalOptions) error {
+func RunInit(args []string, opts GlobalOptions, render RenderOptions) error {
 	dir := "."
 	if len(args) > 0 {
 		dir = args[0]
@@ -20,26 +20,26 @@ func RunInit(args []string, opts GlobalOptions) error {
 	if len(args) > 1 {
 		return errors.New("usage: ergo init [dir]")
 	}
-	outcome, err := InitializeRepository(dir)
+	outcome, err := NewApplication(opts).Initialize(InitializeRequest{Dir: dir})
 	if err != nil {
 		return err
 	}
-	switch outcome.Status {
-	case "initialized":
-		fmt.Printf("Initialized Ergo at %s\n", outcome.Path)
-	case "repaired":
-		fmt.Printf("Repaired Ergo at %s\n", outcome.Path)
-	default:
-		fmt.Printf("Ergo already initialized at %s\n", outcome.Path)
-	}
+	RenderInitialize(render.writer(), outcome)
 	return nil
 }
 
-func RunNewTask(title, epicID string, opts GlobalOptions) error {
-	body, _, err := readOptionalBodyFromStdin()
-	if err != nil {
-		return err
+func RenderInitialize(w io.Writer, outcome InitializeResult) {
+	switch outcome.Status {
+	case "initialized":
+		fmt.Fprintf(w, "Initialized Ergo at %s\n", outcome.Path)
+	case "repaired":
+		fmt.Fprintf(w, "Repaired Ergo at %s\n", outcome.Path)
+	default:
+		fmt.Fprintf(w, "Ergo already initialized at %s\n", outcome.Path)
 	}
+}
+
+func RunNewTask(title, epicID, body string, opts GlobalOptions, render RenderOptions) error {
 	created, err := NewApplication(opts).CreateTask(CreateTaskRequest{
 		Title: title, EpicID: epicID, Body: body,
 	})
@@ -47,40 +47,31 @@ func RunNewTask(title, epicID string, opts GlobalOptions) error {
 		return err
 	}
 
-	fmt.Println(created.ID)
+	RenderCreateTask(render.writer(), created)
 	return nil
 }
 
-func RunNewEpic(title, filePath string, opts GlobalOptions) error {
-	if strings.TrimSpace(filePath) == "" {
-		return errors.New(NewEpicUsage)
-	}
-	title = strings.TrimSpace(title)
-	if title == "" {
-		return errors.New(NewEpicUsage)
-	}
-	tasks, err := ParseEpicFile(filePath)
-	if err != nil {
-		return err
-	}
-	body, _, err := readOptionalBodyFromStdin()
-	if err != nil {
-		return err
-	}
+func RenderCreateTask(w io.Writer, outcome CreateTaskOutcome) {
+	fmt.Fprintln(w, outcome.ID)
+}
 
-	dir, err := ergoDir(opts)
+func RunNewEpic(title, filePath, body string, opts GlobalOptions, render RenderOptions) error {
+	outcome, err := NewApplication(opts).CreateEpic(CreateEpicRequest{
+		Title: title, FilePath: filePath, Body: body,
+	})
 	if err != nil {
 		return err
 	}
-	return runBulkCreate(dir, opts, title, body, tasks)
+	RenderCreateEpic(render.writer(), outcome)
+	return nil
 }
 
 // runBulkCreate creates an epic, its child tasks, and dependency edges.
 // It backs the `new epic` command.
-func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody string, tasks []EpicTaskInput) error {
+func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody string, tasks []EpicTaskInput) (bulkCreateOutput, error) {
 	var repository Repository
 	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
-		return err
+		return bulkCreateOutput{}, err
 	}
 
 	var out bulkCreateOutput
@@ -208,13 +199,15 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 
 		return newEvents, nil
 	}); err != nil {
-		return err
+		return bulkCreateOutput{}, err
 	}
+	return out, nil
+}
 
-	fmt.Printf("Epic %s - %s\n", out.ID, out.Title)
+func RenderCreateEpic(w io.Writer, out bulkCreateOutput) {
+	fmt.Fprintf(w, "Epic %s - %s\n", out.ID, out.Title)
 	for _, child := range out.Children {
-		fmt.Printf("  %s - %s\n", child.ID, child.Title)
+		fmt.Fprintf(w, "  %s - %s\n", child.ID, child.Title)
 	}
-	fmt.Printf("%d tasks, %d dependencies\n", len(out.Children), len(out.Edges))
-	return nil
+	fmt.Fprintf(w, "%d tasks, %d dependencies\n", len(out.Children), len(out.Edges))
 }

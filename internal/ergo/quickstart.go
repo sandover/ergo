@@ -8,12 +8,18 @@ package ergo
 import (
 	"errors"
 	"fmt"
+	"io"
 )
 
-func RunQuickstart(args []string) error {
+func RunQuickstart(args []string, render RenderOptions) error {
 	if len(args) != 0 {
 		return errors.New("usage: ergo quickstart")
 	}
-	fmt.Println(QuickstartText(stdoutIsTTY()))
+	outcome := NewApplication(RepositoryOptions{}).Quickstart(QuickstartRequest{Color: render.Color})
+	RenderQuickstart(render.writer(), outcome)
 	return nil
+}
+
+func RenderQuickstart(w io.Writer, outcome QuickstartOutcome) {
+	fmt.Fprintln(w, outcome.Text)
 }

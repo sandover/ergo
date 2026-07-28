@@ -8,10 +8,51 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/sandover/ergo/internal/ergo"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
+
+func commandRender(cmd *cobra.Command) ergo.RenderOptions {
+	options := ergo.RenderOptions{Writer: cmd.OutOrStdout(), Width: 80}
+	if file, ok := cmd.OutOrStdout().(*os.File); ok {
+		options.Color = term.IsTerminal(int(file.Fd()))
+		if width, _, err := term.GetSize(int(file.Fd())); err == nil && width > 0 {
+			options.Width = width
+		}
+	}
+	return options
+}
+
+func commandInput(cmd *cobra.Command, required bool, id string) (string, error) {
+	in := cmd.InOrStdin()
+	if file, ok := in.(*os.File); ok {
+		info, err := file.Stat()
+		if err != nil {
+			return "", err
+		}
+		if info.Mode()&os.ModeCharDevice != 0 {
+			if required {
+				return "", errors.New("body requires piped stdin; example: printf '%s\\n' '## Goal' | ergo body " + id)
+			}
+			return "", nil
+		}
+	}
+	body, err := io.ReadAll(in)
+	return string(body), err
+}
+
+func commandHasInput(cmd *cobra.Command) bool {
+	file, ok := cmd.InOrStdin().(*os.File)
+	if !ok {
+		return true
+	}
+	info, err := file.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice == 0
+}
 
 func init() {
 	// ergo init
@@ -59,7 +100,7 @@ var initCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunInit(args, globalOpts)
+		return ergo.RunInit(args, globalOpts, commandRender(cmd))
 	},
 }
 
@@ -100,7 +141,11 @@ var newTaskCmd = &cobra.Command{
 			return errors.New(guidance)
 		}
 		epicID, _ := cmd.Flags().GetString("epic")
-		return ergo.RunNewTask(args[0], epicID, globalOpts)
+		body, err := commandInput(cmd, false, "")
+		if err != nil {
+			return err
+		}
+		return ergo.RunNewTask(args[0], epicID, body, globalOpts, commandRender(cmd))
 	},
 }
 
@@ -118,7 +163,11 @@ var newEpicCmd = &cobra.Command{
 		if keys := legacyCreationKeys(args[0]); len(keys) > 0 {
 			return errors.New(`creation JSON is not accepted; use ergo new epic "<title>" --file <path>`)
 		}
-		return ergo.RunNewEpic(args[0], epicTaskFile, globalOpts)
+		body, err := commandInput(cmd, false, "")
+		if err != nil {
+			return err
+		}
+		return ergo.RunNewEpic(args[0], epicTaskFile, body, globalOpts, commandRender(cmd))
 	},
 }
 
@@ -160,7 +209,7 @@ var listCmd = &cobra.Command{
 			EpicID:    epicID,
 			ReadyOnly: readyOnly,
 			ShowAll:   showAll,
-		}, globalOpts)
+		}, globalOpts, commandRender(cmd))
 	},
 }
 
@@ -181,7 +230,7 @@ var showCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunShow(args[0], globalOpts)
+		return ergo.RunShow(args[0], globalOpts, commandRender(cmd))
 	},
 }
 
@@ -199,9 +248,9 @@ var claimCmd = &cobra.Command{
 		agentID, _ := cmd.Flags().GetString("agent")
 
 		if len(args) == 0 {
-			return ergo.RunClaimOldestReady(agentID, globalOpts)
+			return ergo.RunClaimOldestReady(agentID, globalOpts, commandRender(cmd))
 		}
-		return ergo.RunClaim(args[0], agentID, globalOpts)
+		return ergo.RunClaim(args[0], agentID, globalOpts, commandRender(cmd))
 	},
 }
 
@@ -225,11 +274,14 @@ func newLifecycleCmd(kind, short string) *cobra.Command {
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		resultPath, _ := cmd.Flags().GetString("result")
 		messages, _ := cmd.Flags().GetStringArray("message")
+		if commandHasInput(cmd) {
+			return fmt.Errorf("%s does not read stdin; use ergo body %s to replace the body or -m <message> to add a lifecycle note", kind, args[0])
+		}
 		return ergo.RunLifecycle(kind, args[0], ergo.LifecycleOptions{
 			ResultPath: resultPath,
 			ResultSet:  cmd.Flags().Changed("result"),
 			Messages:   messages,
-		}, globalOpts)
+		}, globalOpts, commandRender(cmd))
 	}
 	return cmd
 }
@@ -244,7 +296,7 @@ var titleCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunTitle(args[0], args[1], globalOpts)
+		return ergo.RunTitle(args[0], args[1], globalOpts, commandRender(cmd))
 	},
 }
 
@@ -259,7 +311,11 @@ var bodyCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunBody(args[0], globalOpts)
+		body, err := commandInput(cmd, true, args[0])
+		if err != nil {
+			return err
+		}
+		return ergo.RunBody(args[0], []byte(body), globalOpts, commandRender(cmd))
 	},
 }
 
@@ -282,7 +338,7 @@ var moveCmd = &cobra.Command{
 		if !toRoot {
 			destination = args[1]
 		}
-		return ergo.RunMove(args[0], destination, toRoot, globalOpts)
+		return ergo.RunMove(args[0], destination, toRoot, globalOpts, commandRender(cmd))
 	},
 }
 
@@ -300,7 +356,7 @@ var sequenceCmd = &cobra.Command{
 	Use:   "sequence <A> <B> [<C>...]",
 	Short: "Enforce task order (A then B then C)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunSequence(args, globalOpts)
+		return ergo.RunSequence(args, globalOpts, commandRender(cmd))
 	},
 }
 
@@ -308,7 +364,7 @@ var unsequenceCmd = &cobra.Command{
 	Use:   "unsequence <A> <B> [<C>...]",
 	Short: "Remove task order (A then B then C)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunUnsequence(args, globalOpts)
+		return ergo.RunUnsequence(args, globalOpts, commandRender(cmd))
 	},
 }
 
@@ -318,7 +374,7 @@ var whereCmd = &cobra.Command{
 	Short: "Show ergo directory path",
 	Args:  noArgs("where"),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunWhere(globalOpts)
+		return ergo.RunWhere(globalOpts, commandRender(cmd))
 	},
 }
 
@@ -328,7 +384,7 @@ var compactCmd = &cobra.Command{
 	Short: "Compact the event log",
 	Args:  noArgs("compact"),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunCompact(globalOpts)
+		return ergo.RunCompact(globalOpts, commandRender(cmd))
 	},
 }
 
@@ -339,7 +395,7 @@ var pruneCmd = &cobra.Command{
 	Args:  noArgs("prune [--yes]"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		confirm, _ := cmd.Flags().GetBool("yes")
-		return ergo.RunPrune(confirm, globalOpts)
+		return ergo.RunPrune(confirm, globalOpts, commandRender(cmd))
 	},
 }
 
@@ -353,7 +409,7 @@ var quickstartCmd = &cobra.Command{
 	Short: "Show quickstart guide",
 	Args:  noArgs("quickstart"),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return ergo.RunQuickstart(args)
+		return ergo.RunQuickstart(args, commandRender(cmd))
 	},
 }
 

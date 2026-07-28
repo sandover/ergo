@@ -8,35 +8,28 @@ package ergo
 import (
 	"errors"
 	"fmt"
+	"io"
 )
 
-func RunMove(id, destinationID string, toRoot bool, opts GlobalOptions) error {
-	if toRoot && destinationID != "" {
-		return errors.New("move destination and --root are mutually exclusive")
-	}
-	if !toRoot && destinationID == "" {
-		return errors.New("usage: ergo move <id> <epic-id> | ergo move <id> --root")
-	}
-	dir, err := ergoDir(opts)
+func RunMove(id, destinationID string, toRoot bool, opts GlobalOptions, render RenderOptions) error {
+	outcome, err := NewApplication(opts).Move(MoveRequest{ID: id, DestinationID: destinationID, ToRoot: toRoot})
 	if err != nil {
 		return err
 	}
-	outcome, err := applyTaskMutation(dir, opts, id, taskMutation{
-		Kind: "move", EpicID: destinationID, EpicSet: true, ValidateMove: true,
-	}, "")
-	if err != nil {
-		return err
-	}
-	if len(outcome.ChangedFields) == 0 {
-		fmt.Printf("%s placement unchanged\n", id)
-		return nil
-	}
-	if toRoot {
-		fmt.Printf("%s moved to root\n", id)
-		return nil
-	}
-	fmt.Printf("%s moved to %s\n", id, destinationID)
+	RenderMove(render.writer(), outcome)
 	return nil
+}
+
+func RenderMove(w io.Writer, outcome MoveOutcome) {
+	if !outcome.Changed {
+		fmt.Fprintf(w, "%s placement unchanged\n", outcome.ID)
+		return
+	}
+	if outcome.ToRoot {
+		fmt.Fprintf(w, "%s moved to root\n", outcome.ID)
+		return
+	}
+	fmt.Fprintf(w, "%s moved to %s\n", outcome.ID, outcome.DestinationID)
 }
 
 func validateMovePlacement(graph *Graph, task *Task, destinationID string) error {

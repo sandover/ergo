@@ -6,58 +6,40 @@
 package ergo
 
 import (
-	"errors"
 	"fmt"
 	"io"
-	"os"
-	"strings"
 )
 
-func RunTitle(id, title string, opts GlobalOptions) error {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		return errors.New("title cannot be empty")
-	}
-	dir, err := ergoDir(opts)
+func RunTitle(id, title string, opts GlobalOptions, render RenderOptions) error {
+	outcome, err := NewApplication(opts).UpdateTitle(UpdateTitleRequest{ID: id, Title: title})
 	if err != nil {
 		return err
 	}
-	outcome, err := applyTaskMutation(dir, opts, id, taskMutation{
-		Kind: "title", Title: title, TitleSet: true,
-	}, "")
-	if err != nil {
-		return err
-	}
-	if len(outcome.ChangedFields) == 0 {
-		fmt.Printf("%s - %s (title unchanged)\n", id, title)
-		return nil
-	}
-	fmt.Printf("%s - %s\n", id, title)
+	RenderTitle(render.writer(), outcome)
 	return nil
 }
 
-func RunBody(id string, opts GlobalOptions) error {
-	if !stdinIsPiped() {
-		return errors.New("body requires piped stdin; example: printf '%s\\n' '## Goal' | ergo body " + id)
-	}
-	body, err := io.ReadAll(os.Stdin)
+func RunBody(id string, body []byte, opts GlobalOptions, render RenderOptions) error {
+	outcome, err := NewApplication(opts).UpdateBody(UpdateBodyRequest{ID: id, Body: body})
 	if err != nil {
 		return err
 	}
-	dir, err := ergoDir(opts)
-	if err != nil {
-		return err
-	}
-	outcome, err := applyTaskMutation(dir, opts, id, taskMutation{
-		Kind: "body", Body: string(body), BodySet: true,
-	}, "")
-	if err != nil {
-		return err
-	}
-	if len(outcome.ChangedFields) == 0 {
-		fmt.Printf("%s body unchanged\n", id)
-		return nil
-	}
-	fmt.Printf("%s body: %d bytes\n", id, len(body))
+	RenderBody(render.writer(), outcome)
 	return nil
+}
+
+func RenderTitle(w io.Writer, outcome UpdateTitleOutcome) {
+	if !outcome.Changed {
+		fmt.Fprintf(w, "%s - %s (title unchanged)\n", outcome.ID, outcome.Title)
+		return
+	}
+	fmt.Fprintf(w, "%s - %s\n", outcome.ID, outcome.Title)
+}
+
+func RenderBody(w io.Writer, outcome UpdateBodyOutcome) {
+	if !outcome.Changed {
+		fmt.Fprintf(w, "%s body unchanged\n", outcome.ID)
+		return
+	}
+	fmt.Fprintf(w, "%s body: %d bytes\n", outcome.ID, outcome.Bytes)
 }

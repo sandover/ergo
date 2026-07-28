@@ -8,6 +8,7 @@ package ergo
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -17,10 +18,7 @@ type LifecycleOptions struct {
 	Messages   []string
 }
 
-func RunLifecycle(kind, id string, lifecycle LifecycleOptions, opts GlobalOptions) error {
-	if stdinIsPiped() {
-		return fmt.Errorf("%s does not read stdin; use ergo body %s to replace the body or -m <message> to add a lifecycle note", kind, id)
-	}
+func RunLifecycle(kind, id string, lifecycle LifecycleOptions, opts GlobalOptions, render RenderOptions) error {
 	outcome, err := NewApplication(opts).Lifecycle(LifecycleRequest{
 		Kind: kind, ID: id, ResultPath: lifecycle.ResultPath,
 		ResultSet: lifecycle.ResultSet, Messages: lifecycle.Messages,
@@ -28,25 +26,29 @@ func RunLifecycle(kind, id string, lifecycle LifecycleOptions, opts GlobalOption
 	if err != nil {
 		return err
 	}
+	RenderLifecycle(render.writer(), outcome)
+	return nil
+}
+
+func RenderLifecycle(w io.Writer, outcome LifecycleOutcome) {
 	task := outcome.Task
-	fmt.Printf("%s - %s\n", task.ID, task.Title)
-	fmt.Printf("State: %s\n", task.State)
+	fmt.Fprintf(w, "%s - %s\n", task.ID, task.Title)
+	fmt.Fprintf(w, "State: %s\n", task.State)
 	if containsString(outcome.ChangedFields, "claim") {
-		fmt.Println("Claim: cleared")
+		fmt.Fprintln(w, "Claim: cleared")
 	}
 	if outcome.MessageSet {
-		fmt.Println("Message: appended")
+		fmt.Fprintln(w, "Message: appended")
 	}
-	if lifecycle.ResultSet {
-		fmt.Printf("Result: %s\n", outcome.ResultPath)
+	if outcome.ResultPath != "" {
+		fmt.Fprintf(w, "Result: %s\n", outcome.ResultPath)
 	}
 	if len(outcome.ChangedFields) == 0 {
-		fmt.Println("No changes.")
+		fmt.Fprintln(w, "No changes.")
 	}
 	if outcome.Ready != nil {
-		fmt.Printf("Ready: %s - %s\n", outcome.Ready.ID, outcome.Ready.Title)
+		fmt.Fprintf(w, "Ready: %s - %s\n", outcome.Ready.ID, outcome.Ready.Title)
 	}
-	return nil
 }
 
 func normalizeLifecycleMessages(messages []string) (string, bool, error) {
