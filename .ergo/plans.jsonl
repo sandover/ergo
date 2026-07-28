@@ -522,3 +522,8 @@
 {"type":"message","ts":"2026-07-28T22:46:06.57746Z","data":{"task_id":"Z7JHMF","kind":"done","text":"Introduced Repository.Open/View/update ownership, strict single-log selection, injectable persistence failures, and focused passing tests.","ts":"2026-07-28T22:46:06.57746Z"}}
 {"type":"unclaim","ts":"2026-07-28T22:46:06.57746Z","data":{"id":"Z7JHMF","ts":"2026-07-28T22:46:06.57746Z"}}
 {"type":"state","ts":"2026-07-28T22:46:06.57746Z","data":{"id":"Z7JHMF","state":"done","ts":"2026-07-28T22:46:06.57746Z"}}
+{"type":"claim","ts":"2026-07-28T22:46:19.116484Z","data":{"id":"72DYHE","agent_id":"codex@local","ts":"2026-07-28T22:46:19.116484Z"}}
+{"type":"state","ts":"2026-07-28T22:46:19.116484Z","data":{"id":"72DYHE","state":"doing","ts":"2026-07-28T22:46:19.116484Z"}}
+{"type":"message","ts":"2026-07-28T22:47:28.742187Z","data":{"task_id":"W5Q57B","kind":"done","text":"Added provenance-labelled released v1-v4 backlog fixtures with semantic replay and compaction coverage; focused compatibility tests pass.","ts":"2026-07-28T22:47:28.742187Z"}}
+{"type":"unclaim","ts":"2026-07-28T22:47:28.742187Z","data":{"id":"W5Q57B","ts":"2026-07-28T22:47:28.742187Z"}}
+{"type":"state","ts":"2026-07-28T22:47:28.742187Z","data":{"id":"W5Q57B","state":"done","ts":"2026-07-28T22:47:28.742187Z"}}

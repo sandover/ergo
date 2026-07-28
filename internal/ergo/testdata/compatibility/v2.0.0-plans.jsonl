@@ -1,0 +1,13 @@
+{"type":"new_task","ts":"2026-07-28T22:40:27.578732Z","data":{"id":"QZ43EH","uuid":"1ec20354-16a7-4edf-ac03-8ec664e2819b","epic_id":"","state":"todo","title":"v2.0.0 epic","body":"","created_at":"2026-07-28T22:40:27.578732Z"}}
+{"type":"new_task","ts":"2026-07-28T22:40:27.583516Z","data":{"id":"YDSBYY","uuid":"82ad2667-4fc6-4ff0-a969-3695cda314a4","epic_id":"QZ43EH","state":"todo","title":"v2.0.0 first","body":"v2.0.0 first body\n","created_at":"2026-07-28T22:40:27.583516Z"}}
+{"type":"new_task","ts":"2026-07-28T22:40:27.587469Z","data":{"id":"HAVLMC","uuid":"ce80ddac-cb42-4aa4-a9fa-d45f26b5f21c","epic_id":"QZ43EH","state":"todo","title":"v2.0.0 second","body":"v2.0.0 second body\n","created_at":"2026-07-28T22:40:27.587469Z"}}
+{"type":"link","ts":"2026-07-28T22:40:27.590562Z","data":{"from_id":"HAVLMC","to_id":"YDSBYY","type":"depends"}}
+{"type":"claim","ts":"2026-07-28T22:40:27.593618Z","data":{"id":"YDSBYY","agent_id":"fixture@v2.0.0","ts":"2026-07-28T22:40:27.593618Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.593618Z","data":{"id":"YDSBYY","state":"doing","ts":"2026-07-28T22:40:27.593618Z"}}
+{"type":"result","ts":"2026-07-28T22:40:27.596332Z","data":{"task_id":"YDSBYY","summary":"v2.0.0 evidence","path":"go.mod","sha256_at_attach":"810030118cc0e279b7c00f0d4f1a1da1dac54653cfda09640fadbb4673ebbfac","mtime_at_attach":"2026-07-28T22:40:27.572554597Z","ts":"2026-07-28T22:40:27.596332Z"}}
+{"type":"unclaim","ts":"2026-07-28T22:40:27.596332Z","data":{"id":"YDSBYY","ts":"2026-07-28T22:40:27.596332Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.596332Z","data":{"id":"YDSBYY","state":"done","ts":"2026-07-28T22:40:27.596332Z"}}
+{"type":"claim","ts":"2026-07-28T22:40:27.599383Z","data":{"id":"HAVLMC","agent_id":"fixture@v2.0.0","ts":"2026-07-28T22:40:27.599383Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.599383Z","data":{"id":"HAVLMC","state":"doing","ts":"2026-07-28T22:40:27.599383Z"}}
+{"type":"unclaim","ts":"2026-07-28T22:40:27.602496Z","data":{"id":"HAVLMC","ts":"2026-07-28T22:40:27.602496Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.602496Z","data":{"id":"HAVLMC","state":"blocked","ts":"2026-07-28T22:40:27.602496Z"}}

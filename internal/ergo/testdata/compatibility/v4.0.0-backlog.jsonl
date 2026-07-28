@@ -1,0 +1,15 @@
+{"type":"new_task","ts":"2026-07-28T22:40:27.656647Z","data":{"id":"NX5XPB","uuid":"d2736d4f-9e28-47bb-8634-6fa8d2698020","epic_id":"","state":"todo","title":"v4.0.0 epic","body":"","created_at":"2026-07-28T22:40:27.656647Z"}}
+{"type":"new_task","ts":"2026-07-28T22:40:27.661395Z","data":{"id":"NNZXBA","uuid":"017fe022-b51a-49fe-b2ce-15c550ea9cf5","epic_id":"NX5XPB","state":"todo","title":"v4.0.0 first","body":"v4.0.0 first body\n","created_at":"2026-07-28T22:40:27.661395Z"}}
+{"type":"new_task","ts":"2026-07-28T22:40:27.665198Z","data":{"id":"64EBIM","uuid":"9989936b-6619-4c88-8b9c-40f3c3efd903","epic_id":"NX5XPB","state":"todo","title":"v4.0.0 second","body":"v4.0.0 second body\n","created_at":"2026-07-28T22:40:27.665198Z"}}
+{"type":"link","ts":"2026-07-28T22:40:27.669439Z","data":{"from_id":"64EBIM","to_id":"NNZXBA","type":"depends"}}
+{"type":"claim","ts":"2026-07-28T22:40:27.673359Z","data":{"id":"NNZXBA","agent_id":"fixture@v4.0.0","ts":"2026-07-28T22:40:27.673359Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.673359Z","data":{"id":"NNZXBA","state":"doing","ts":"2026-07-28T22:40:27.673359Z"}}
+{"type":"message","ts":"2026-07-28T22:40:27.676448Z","data":{"task_id":"NNZXBA","kind":"done","text":"v4.0.0 completed","ts":"2026-07-28T22:40:27.676448Z"}}
+{"type":"result","ts":"2026-07-28T22:40:27.676448Z","data":{"task_id":"NNZXBA","summary":"go.mod","path":"go.mod","sha256_at_attach":"810030118cc0e279b7c00f0d4f1a1da1dac54653cfda09640fadbb4673ebbfac","mtime_at_attach":"2026-07-28T22:40:27.650870723Z","ts":"2026-07-28T22:40:27.676448Z"}}
+{"type":"unclaim","ts":"2026-07-28T22:40:27.676448Z","data":{"id":"NNZXBA","ts":"2026-07-28T22:40:27.676448Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.676448Z","data":{"id":"NNZXBA","state":"done","ts":"2026-07-28T22:40:27.676448Z"}}
+{"type":"claim","ts":"2026-07-28T22:40:27.680032Z","data":{"id":"64EBIM","agent_id":"fixture@v4.0.0","ts":"2026-07-28T22:40:27.680032Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.680032Z","data":{"id":"64EBIM","state":"doing","ts":"2026-07-28T22:40:27.680032Z"}}
+{"type":"message","ts":"2026-07-28T22:40:27.683302Z","data":{"task_id":"64EBIM","kind":"block","text":"v4.0.0 waiting","ts":"2026-07-28T22:40:27.683302Z"}}
+{"type":"unclaim","ts":"2026-07-28T22:40:27.683302Z","data":{"id":"64EBIM","ts":"2026-07-28T22:40:27.683302Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.683302Z","data":{"id":"64EBIM","state":"blocked","ts":"2026-07-28T22:40:27.683302Z"}}

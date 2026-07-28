@@ -1,0 +1,15 @@
+{"type":"new_task","ts":"2026-07-28T22:40:27.617549Z","data":{"id":"27P2GS","uuid":"b61f0606-2dde-4987-8eea-fe6a85648012","epic_id":"","state":"todo","title":"v3.0.0 epic","body":"","created_at":"2026-07-28T22:40:27.617549Z"}}
+{"type":"new_task","ts":"2026-07-28T22:40:27.621452Z","data":{"id":"RJZVUO","uuid":"5f48cab0-558a-4c4f-9f3a-a3c15d89670a","epic_id":"27P2GS","state":"todo","title":"v3.0.0 first","body":"v3.0.0 first body\n","created_at":"2026-07-28T22:40:27.621452Z"}}
+{"type":"new_task","ts":"2026-07-28T22:40:27.625108Z","data":{"id":"KMLJS2","uuid":"e1e419bb-15d0-47eb-bbc4-8deb0d3a2d1c","epic_id":"27P2GS","state":"todo","title":"v3.0.0 second","body":"v3.0.0 second body\n","created_at":"2026-07-28T22:40:27.625108Z"}}
+{"type":"link","ts":"2026-07-28T22:40:27.628466Z","data":{"from_id":"KMLJS2","to_id":"RJZVUO","type":"depends"}}
+{"type":"claim","ts":"2026-07-28T22:40:27.631574Z","data":{"id":"RJZVUO","agent_id":"fixture@v3.0.0","ts":"2026-07-28T22:40:27.631574Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.631574Z","data":{"id":"RJZVUO","state":"doing","ts":"2026-07-28T22:40:27.631574Z"}}
+{"type":"message","ts":"2026-07-28T22:40:27.634928Z","data":{"task_id":"RJZVUO","kind":"done","text":"v3.0.0 completed","ts":"2026-07-28T22:40:27.634928Z"}}
+{"type":"result","ts":"2026-07-28T22:40:27.634928Z","data":{"task_id":"RJZVUO","summary":"go.mod","path":"go.mod","sha256_at_attach":"810030118cc0e279b7c00f0d4f1a1da1dac54653cfda09640fadbb4673ebbfac","mtime_at_attach":"2026-07-28T22:40:27.611201437Z","ts":"2026-07-28T22:40:27.634928Z"}}
+{"type":"unclaim","ts":"2026-07-28T22:40:27.634928Z","data":{"id":"RJZVUO","ts":"2026-07-28T22:40:27.634928Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.634928Z","data":{"id":"RJZVUO","state":"done","ts":"2026-07-28T22:40:27.634928Z"}}
+{"type":"claim","ts":"2026-07-28T22:40:27.63798Z","data":{"id":"KMLJS2","agent_id":"fixture@v3.0.0","ts":"2026-07-28T22:40:27.63798Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.63798Z","data":{"id":"KMLJS2","state":"doing","ts":"2026-07-28T22:40:27.63798Z"}}
+{"type":"message","ts":"2026-07-28T22:40:27.641261Z","data":{"task_id":"KMLJS2","kind":"block","text":"v3.0.0 waiting","ts":"2026-07-28T22:40:27.641261Z"}}
+{"type":"unclaim","ts":"2026-07-28T22:40:27.641261Z","data":{"id":"KMLJS2","ts":"2026-07-28T22:40:27.641261Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.641261Z","data":{"id":"KMLJS2","state":"blocked","ts":"2026-07-28T22:40:27.641261Z"}}

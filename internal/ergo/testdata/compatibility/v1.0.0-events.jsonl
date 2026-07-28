@@ -1,0 +1,11 @@
+{"type":"new_task","ts":"2026-07-28T22:40:27.53968Z","data":{"id":"RHMKMK","uuid":"f144f0af-115a-45e4-8454-f079b9446444","epic_id":"","state":"todo","title":"v1.0.0 epic","body":"","created_at":"2026-07-28T22:40:27.53968Z"}}
+{"type":"new_task","ts":"2026-07-28T22:40:27.544591Z","data":{"id":"TSDLBT","uuid":"e330ef85-4589-4802-9c65-98c0168690fe","epic_id":"RHMKMK","state":"todo","title":"v1.0.0 first","body":"v1.0.0 first body\n","created_at":"2026-07-28T22:40:27.544591Z"}}
+{"type":"new_task","ts":"2026-07-28T22:40:27.548085Z","data":{"id":"S3BKFM","uuid":"d437d19b-9988-4f15-9314-321440d45ac3","epic_id":"RHMKMK","state":"todo","title":"v1.0.0 second","body":"v1.0.0 second body\n","created_at":"2026-07-28T22:40:27.548085Z"}}
+{"type":"link","ts":"2026-07-28T22:40:27.551669Z","data":{"from_id":"S3BKFM","to_id":"TSDLBT","type":"depends"}}
+{"type":"claim","ts":"2026-07-28T22:40:27.554769Z","data":{"id":"TSDLBT","agent_id":"fixture@v1.0.0","ts":"2026-07-28T22:40:27.554769Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.554769Z","data":{"id":"TSDLBT","state":"doing","ts":"2026-07-28T22:40:27.554769Z"}}
+{"type":"result","ts":"2026-07-28T22:40:27.557811Z","data":{"task_id":"TSDLBT","summary":"go.mod","path":"go.mod","sha256_at_attach":"89d23bec566eb5def606154877bfbb170820dcecb3a2939c0c27844be6e6ba4e","mtime_at_attach":"2026-07-28T22:40:27.531562701Z","ts":"2026-07-28T22:40:27.557811Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.557925Z","data":{"id":"TSDLBT","state":"done","ts":"2026-07-28T22:40:27.557925Z"}}
+{"type":"claim","ts":"2026-07-28T22:40:27.561201Z","data":{"id":"S3BKFM","agent_id":"fixture@v1.0.0","ts":"2026-07-28T22:40:27.561201Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.561201Z","data":{"id":"S3BKFM","state":"doing","ts":"2026-07-28T22:40:27.561201Z"}}
+{"type":"state","ts":"2026-07-28T22:40:27.563909Z","data":{"id":"S3BKFM","state":"error","ts":"2026-07-28T22:40:27.563909Z"}}
