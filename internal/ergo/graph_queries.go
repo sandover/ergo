@@ -134,3 +134,87 @@ func (graph *Graph) IsBlocked(id string) bool {
 	}
 	return task.State == stateTodo && task.ClaimedBy == "" && len(graph.Blockers(id)) > 0
 }
+
+func readyTasks(graph *Graph) []*Task {
+	tasks := filterNonContainers(listTasks(graph, "", true), graph)
+	sort.Slice(tasks, func(i, j int) bool {
+		if tasks[i].CreatedAt.Equal(tasks[j].CreatedAt) {
+			return tasks[i].ID < tasks[j].ID
+		}
+		return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+	})
+	return tasks
+}
+
+func filterNonContainers(tasks []*Task, graph *Graph) []*Task {
+	filtered := tasks[:0]
+	for _, task := range tasks {
+		if !graph.IsEpic(task.ID) {
+			filtered = append(filtered, task)
+		}
+	}
+	return filtered
+}
+
+func listTasks(graph *Graph, epicID string, readyOnly bool) []*Task {
+	var tasks []*Task
+	for _, task := range graph.Tasks {
+		if epicID != "" && task.EpicID != epicID {
+			continue
+		}
+		if readyOnly && !graph.IsReady(task.ID) {
+			continue
+		}
+		tasks = append(tasks, task)
+	}
+	sort.Slice(tasks, func(i, j int) bool { return tasks[i].ID < tasks[j].ID })
+	return tasks
+}
+
+func sortedTasks(tasks map[string]*Task) []*Task {
+	values := make([]*Task, 0, len(tasks))
+	for _, task := range tasks {
+		values = append(values, task)
+	}
+	sort.Slice(values, func(i, j int) bool { return values[i].ID < values[j].ID })
+	return values
+}
+
+func isDepComplete(depID string, graph *Graph) bool {
+	return graph != nil && graph.IsComplete(depID)
+}
+
+func isReady(task *Task, graph *Graph) bool {
+	return task != nil && graph != nil && graph.IsReady(task.ID)
+}
+
+func isBlocked(task *Task, graph *Graph) bool {
+	return task != nil && graph != nil && graph.IsBlocked(task.ID)
+}
+
+func isEpicComplete(epicID string, graph *Graph) bool {
+	return graph != nil && graph.IsEpic(epicID) && graph.IsComplete(epicID)
+}
+
+func hasCycle(graph *Graph, from, to string) bool {
+	if from == to {
+		return true
+	}
+	return isReachable(graph, to, from, make(map[string]bool))
+}
+
+func isReachable(graph *Graph, start, target string, visited map[string]bool) bool {
+	if start == target {
+		return true
+	}
+	if visited[start] {
+		return false
+	}
+	visited[start] = true
+	for dep := range graph.Deps[start] {
+		if isReachable(graph, dep, target, visited) {
+			return true
+		}
+	}
+	return false
+}

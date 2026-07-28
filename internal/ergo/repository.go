@@ -136,10 +136,9 @@ func (r *Repository) View() (*Graph, error) {
 	return graph, err
 }
 
-// repositoryUpdate is the internal mutation boundary. The callback validates
-// against the locked snapshot and returns the complete current event batch.
-// Transaction envelopes and durability semantics are intentionally delegated
-// to the later transaction-record change.
+// Update is the mutation boundary. The callback builds a complete event batch
+// against the locked snapshot; the pure reducer validates its resulting graph
+// before the transaction is appended.
 func (r *Repository) Update(fn func(*Graph) ([]Event, error)) (UpdateOutcome, error) {
 	if r == nil || r.eventsPath == "" {
 		return UpdateOutcome{}, errors.New("repository is not open")
@@ -155,7 +154,7 @@ func (r *Repository) Update(fn func(*Graph) ([]Event, error)) (UpdateOutcome, er
 		if err != nil {
 			return err
 		}
-		candidate, err := replayEventsOnto(base, events)
+		candidate, err := applyTransaction(base, events)
 		if err != nil {
 			return err
 		}
@@ -201,30 +200,6 @@ func (r *Repository) Compact() (CompactOutcome, error) {
 
 func (r *Repository) Dir() string        { return r.dir }
 func (r *Repository) ProjectDir() string { return filepath.Dir(r.dir) }
-
-func cloneGraph(graph *Graph) *Graph {
-	clone := newGraph()
-	for id, task := range graph.Tasks {
-		copied := *task
-		copied.Results = append([]Result(nil), task.Results...)
-		copied.Messages = append([]Message(nil), task.Messages...)
-		clone.Tasks[id] = &copied
-	}
-	for from, deps := range graph.Deps {
-		clone.Deps[from] = map[string]struct{}{}
-		for to := range deps {
-			clone.Deps[from][to] = struct{}{}
-		}
-	}
-	for id, info := range graph.Tombstones {
-		clone.Tombstones[id] = info
-	}
-	for id := range graph.legacyEmptyEpics {
-		clone.legacyEmptyEpics[id] = struct{}{}
-	}
-	clone.rebuildIndexes()
-	return clone
-}
 
 func (r *Repository) load() (*Graph, error) {
 	read, err := inspectEventLog(r.eventsPath)

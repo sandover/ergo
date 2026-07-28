@@ -1,4 +1,4 @@
-// Purpose: Replay events into graph state and compute readiness/compaction.
+// Purpose: Decode canonical mutations into current graph state.
 // Exports: none (package-internal graph helpers).
 // Role: Core domain logic for state reconstruction and queries.
 // Invariants: Tombstones remove tasks; results are ordered newest-first.
@@ -6,9 +6,7 @@
 package ergo
 
 import (
-	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 )
@@ -134,6 +132,39 @@ func replayEvents(events []Event) (*Graph, error) {
 	return replayEventsOnto(newGraph(), events)
 }
 
+// applyTransaction applies a proposed current transaction to an isolated graph
+// copy. The caller's graph remains unchanged on both success and failure.
+func applyTransaction(graph *Graph, events []Event) (*Graph, error) {
+	return replayEventsOnto(cloneGraph(graph), events)
+}
+
+func cloneGraph(graph *Graph) *Graph {
+	clone := newGraph()
+	if graph == nil {
+		return clone
+	}
+	for id, task := range graph.Tasks {
+		copied := *task
+		copied.Results = append([]Result(nil), task.Results...)
+		copied.Messages = append([]Message(nil), task.Messages...)
+		clone.Tasks[id] = &copied
+	}
+	for from, deps := range graph.Deps {
+		clone.Deps[from] = map[string]struct{}{}
+		for to := range deps {
+			clone.Deps[from][to] = struct{}{}
+		}
+	}
+	for id, info := range graph.Tombstones {
+		clone.Tombstones[id] = info
+	}
+	for id := range graph.legacyEmptyEpics {
+		clone.legacyEmptyEpics[id] = struct{}{}
+	}
+	clone.rebuildIndexes()
+	return clone
+}
+
 func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 	taskSource := map[string]replayEventSource{}
 	lifecycleSource := map[string]replayEventSource{}
@@ -153,18 +184,13 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 	}
 	for eventIndex, event := range events {
 		context := eventReplayContext(event, eventIndex)
-		if event.Type == "" {
-			return nil, replayInvariantError(context, "", "", "event kind is empty")
+		decoded, err := decodeEvent(event, eventIndex)
+		if err != nil {
+			return nil, err
 		}
-		if _, err := parseTime(event.TS); err != nil {
-			return nil, replayDecodeError(context, event.Type, "", fmt.Errorf("invalid event ts: %w", err))
-		}
-		switch event.Type {
-		case "new_task", "new_epic":
-			var data NewTaskEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, replayDecodeError(context, event.Type, "", err)
-			}
+		switch decoded.kind {
+		case eventNewTask:
+			data := decoded.payload.(NewTaskEvent)
 			if data.ID == "" {
 				return nil, replayInvariantError(context, event.Type, "", "task id is empty")
 			}
@@ -192,18 +218,15 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 				UpdatedAt: createdAt,
 			}
 			graph.Tasks[data.ID] = task
-			if event.Type == "new_epic" {
+			if decoded.legacyExplicitEpic {
 				graph.legacyEmptyEpics[data.ID] = struct{}{}
 			}
-			source := replayEventSource{context: context, kind: event.Type, order: eventIndex}
+			source := replayEventSource{context: context, kind: decoded.wireKind, order: eventIndex}
 			taskSource[data.ID] = source
 			lifecycleSource[data.ID] = source
 			parentSource[data.ID] = source
-		case "state":
-			var data StateEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, replayDecodeError(context, event.Type, "", err)
-			}
+		case eventState:
+			data := decoded.payload.(StateEvent)
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
@@ -226,11 +249,8 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 				task.ClaimedBy = ""
 				task.ClaimedAt = time.Time{}
 			}
-		case "claim":
-			var data ClaimEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, replayDecodeError(context, event.Type, "", err)
-			}
+		case eventClaim:
+			data := decoded.payload.(ClaimEvent)
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
@@ -248,11 +268,8 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 			task.ClaimedBy = data.AgentID
 			task.ClaimedAt = ts
 			lifecycleSource[data.ID] = replayEventSource{context: context, kind: event.Type}
-		case "link":
-			var data LinkEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, replayDecodeError(context, event.Type, "", err)
-			}
+		case eventLink:
+			data := decoded.payload.(LinkEvent)
 			if _, tombstoned := graph.Tombstones[data.FromID]; tombstoned {
 				continue
 			}
@@ -284,11 +301,8 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 				linkSource[data.FromID] = map[string]replayEventSource{}
 			}
 			linkSource[data.FromID][data.ToID] = replayEventSource{context: context, kind: event.Type, order: eventIndex}
-		case "unlink":
-			var data LinkEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, replayDecodeError(context, event.Type, "", err)
-			}
+		case eventUnlink:
+			data := decoded.payload.(LinkEvent)
 			if _, tombstoned := graph.Tombstones[data.FromID]; tombstoned {
 				continue
 			}
@@ -307,11 +321,8 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 			if linkSource[data.FromID] != nil {
 				delete(linkSource[data.FromID], data.ToID)
 			}
-		case "title":
-			var data TitleUpdateEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, replayDecodeError(context, event.Type, "", err)
-			}
+		case eventTitle:
+			data := decoded.payload.(TitleUpdateEvent)
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
@@ -325,11 +336,8 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 			}
 			task.Title = data.Title
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
-		case "body":
-			var data BodyUpdateEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, replayDecodeError(context, event.Type, "", err)
-			}
+		case eventBody:
+			data := decoded.payload.(BodyUpdateEvent)
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
@@ -343,11 +351,8 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 			}
 			task.Body = data.Body
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
-		case "epic":
-			var data EpicAssignEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, replayDecodeError(context, event.Type, "", err)
-			}
+		case eventEpic:
+			data := decoded.payload.(EpicAssignEvent)
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
@@ -362,11 +367,8 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 			task.EpicID = data.EpicID
 			parentSource[data.ID] = replayEventSource{context: context, kind: event.Type, order: eventIndex}
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
-		case "unclaim":
-			var data UnclaimEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, replayDecodeError(context, event.Type, "", err)
-			}
+		case eventUnclaim:
+			data := decoded.payload.(UnclaimEvent)
 			if _, tombstoned := graph.Tombstones[data.ID]; tombstoned {
 				continue
 			}
@@ -380,11 +382,8 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 			task.ClaimedBy = ""
 			task.ClaimedAt = time.Time{}
 			lifecycleSource[data.ID] = replayEventSource{context: context, kind: event.Type}
-		case "tombstone":
-			var data TombstoneEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, replayDecodeError(context, event.Type, "", err)
-			}
+		case eventTombstone:
+			data := decoded.payload.(TombstoneEvent)
 			if data.ID == "" {
 				return nil, replayInvariantError(context, event.Type, "", "task id is empty")
 			}
@@ -393,11 +392,8 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 				return nil, replayDecodeError(context, event.Type, data.ID, fmt.Errorf("invalid ts: %w", err))
 			}
 			applyTombstone(graph, data.ID, TombstoneInfo{AgentID: data.AgentID, At: ts})
-		case "result":
-			var data ResultEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, replayDecodeError(context, event.Type, "", err)
-			}
+		case eventResult:
+			data := decoded.payload.(ResultEvent)
 			if _, tombstoned := graph.Tombstones[data.TaskID]; tombstoned {
 				continue
 			}
@@ -420,11 +416,8 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 			}
 			task.Results = append([]Result{result}, task.Results...)
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
-		case "message":
-			var data MessageEvent
-			if err := json.Unmarshal(event.Data, &data); err != nil {
-				return nil, replayDecodeError(context, event.Type, "", err)
-			}
+		case eventMessage:
+			data := decoded.payload.(MessageEvent)
 			if _, tombstoned := graph.Tombstones[data.TaskID]; tombstoned {
 				continue
 			}
@@ -442,7 +435,7 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 			task.Messages = append([]Message{{Kind: data.Kind, Text: data.Text, CreatedAt: ts}}, task.Messages...)
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
 		default:
-			return nil, replayInvariantError(context, event.Type, "", "unknown event kind")
+			return nil, replayInvariantError(context, decoded.wireKind, "", "unsupported canonical event kind")
 		}
 	}
 
@@ -472,153 +465,4 @@ func applyTombstone(graph *Graph, id string, info TombstoneInfo) {
 			}
 		}
 	}
-}
-
-func applyLegacyTitleMigration(graph *Graph) {
-	for _, task := range graph.Tasks {
-		if strings.TrimSpace(task.Title) != "" {
-			continue
-		}
-		title, body := deriveTitleAndBodyFromLegacy(task.Body)
-		task.Title = title
-		task.Body = body
-	}
-}
-
-func deriveTitleAndBodyFromLegacy(body string) (string, string) {
-	lines := strings.Split(body, "\n")
-	for i, raw := range lines {
-		trimmed := strings.TrimSpace(raw)
-		if trimmed == "" || isLegacyHeading(trimmed) {
-			continue
-		}
-		title := trimmed
-		if i+1 >= len(lines) {
-			return title, ""
-		}
-		return title, strings.Join(lines[i+1:], "\n")
-	}
-	if strings.TrimSpace(body) == "" {
-		return "(untitled)", ""
-	}
-	return "(untitled)", body
-}
-
-func isLegacyHeading(line string) bool {
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return false
-	}
-	if !strings.HasPrefix(line, "#") {
-		return false
-	}
-	for len(line) > 0 && line[0] == '#' {
-		line = strings.TrimPrefix(line, "#")
-	}
-	return strings.TrimSpace(line) != ""
-}
-
-func readyTasks(graph *Graph) []*Task {
-	tasks := listTasks(graph, "", true)
-	if len(tasks) == 0 {
-		return nil
-	}
-	// Exclude containers from ready list (they complete implicitly)
-	tasks = filterNonContainers(tasks, graph)
-	if len(tasks) == 0 {
-		return nil
-	}
-	sort.Slice(tasks, func(i, j int) bool {
-		if tasks[i].CreatedAt.Equal(tasks[j].CreatedAt) {
-			return tasks[i].ID < tasks[j].ID
-		}
-		return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
-	})
-	return tasks
-}
-
-// filterNonContainers removes tasks that are containers (have children).
-func filterNonContainers(tasks []*Task, graph *Graph) []*Task {
-	filtered := tasks[:0]
-	for _, task := range tasks {
-		if !graph.IsEpic(task.ID) {
-			filtered = append(filtered, task)
-		}
-	}
-	return filtered
-}
-
-func listTasks(graph *Graph, epicID string, readyOnly bool) []*Task {
-	var tasks []*Task
-	for _, task := range graph.Tasks {
-		if epicID != "" && task.EpicID != epicID {
-			continue
-		}
-		ready := graph.IsReady(task.ID)
-		if readyOnly && !ready {
-			continue
-		}
-		tasks = append(tasks, task)
-	}
-	sort.Slice(tasks, func(i, j int) bool { return tasks[i].ID < tasks[j].ID })
-	return tasks
-}
-
-func sortedTasks(tasks map[string]*Task) []*Task {
-	values := make([]*Task, 0, len(tasks))
-	for _, task := range tasks {
-		values = append(values, task)
-	}
-	sort.Slice(values, func(i, j int) bool { return values[i].ID < values[j].ID })
-	return values
-}
-
-// isDepComplete returns true if the dependency identified by depID is fully satisfied.
-// For containers: all children must be done or canceled.
-// For leaves: the task must be done or canceled.
-func isDepComplete(depID string, graph *Graph) bool {
-	return graph != nil && graph.IsComplete(depID)
-}
-
-func isReady(task *Task, graph *Graph) bool {
-	return task != nil && graph != nil && graph.IsReady(task.ID)
-}
-
-func isBlocked(task *Task, graph *Graph) bool {
-	return task != nil && graph != nil && graph.IsBlocked(task.ID)
-}
-
-// isEpicComplete returns true if all tasks in the epic are done or canceled.
-// An epic with no tasks is considered complete.
-func isEpicComplete(epicID string, graph *Graph) bool {
-	return graph != nil && graph.IsEpic(epicID) && graph.IsComplete(epicID)
-}
-
-// hasCycle returns true if adding a dependency from -> to would create a cycle.
-// Uses DFS to check if 'from' is reachable from 'to' (which would mean to -> ... -> from exists).
-func hasCycle(graph *Graph, from, to string) bool {
-	// If from == to, it's a self-loop
-	if from == to {
-		return true
-	}
-	// Check if 'from' is reachable from 'to' via existing deps
-	visited := make(map[string]bool)
-	return isReachable(graph, to, from, visited)
-}
-
-// isReachable returns true if 'target' is reachable from 'start' via deps.
-func isReachable(graph *Graph, start, target string, visited map[string]bool) bool {
-	if start == target {
-		return true
-	}
-	if visited[start] {
-		return false
-	}
-	visited[start] = true
-	for dep := range graph.Deps[start] {
-		if isReachable(graph, dep, target, visited) {
-			return true
-		}
-	}
-	return false
 }

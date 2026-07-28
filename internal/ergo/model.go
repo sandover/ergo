@@ -1,12 +1,11 @@
 // Purpose: Define core domain types, constants, and validation rules.
-// Exports: GlobalOptions, Task, Graph, Event, and related structs.
+// Exports: GlobalOptions, Task, Graph, Result, Message, and related domain structs.
 // Role: Shared model and state machine definitions.
 // Invariants: lifecycle postconditions and claim ownership must stay consistent.
 // Notes: Error values are stable sentinel constants.
 package ergo
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -106,90 +105,6 @@ type TombstoneInfo struct {
 	At      time.Time
 }
 
-type Event struct {
-	Type string          `json:"type"`
-	TS   string          `json:"ts"`
-	Data json.RawMessage `json:"data"`
-	// Source is populated while reading a backlog and is never serialized.
-	Source EventSource `json:"-"`
-}
-
-type EventSource struct {
-	Path             string
-	Line             int
-	TransactionIndex int
-}
-
-type NewTaskEvent struct {
-	ID        string `json:"id"`
-	UUID      string `json:"uuid"`
-	EpicID    string `json:"epic_id"`
-	State     string `json:"state"`
-	Title     string `json:"title"`
-	Body      string `json:"body"`
-	CreatedAt string `json:"created_at"`
-}
-
-type StateEvent struct {
-	ID       string `json:"id"`
-	NewState string `json:"state"`
-	TS       string `json:"ts"`
-}
-
-type LinkEvent struct {
-	FromID string `json:"from_id"`
-	ToID   string `json:"to_id"`
-	Type   string `json:"type"`
-}
-
-type ClaimEvent struct {
-	ID      string `json:"id"`
-	AgentID string `json:"agent_id"`
-	TS      string `json:"ts"`
-}
-
-type TitleUpdateEvent struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	TS    string `json:"ts"`
-}
-
-type BodyUpdateEvent struct {
-	ID   string `json:"id"`
-	Body string `json:"body"`
-	TS   string `json:"ts"`
-}
-
-type EpicAssignEvent struct {
-	ID     string `json:"id"`
-	EpicID string `json:"epic_id"`
-	TS     string `json:"ts"`
-}
-
-type UnclaimEvent struct {
-	ID string `json:"id"`
-	TS string `json:"ts"`
-}
-
-// TombstoneEvent marks an entity as deleted in the event log.
-// Interpretation is handled during replay.
-type TombstoneEvent struct {
-	ID      string `json:"id"`
-	AgentID string `json:"agent_id,omitempty"`
-	TS      string `json:"ts"`
-}
-
-// ResultEvent records a result attachment in the event log.
-type ResultEvent struct {
-	TaskID            string `json:"task_id"`
-	Summary           string `json:"summary"`
-	Path              string `json:"path"`                           // relative to project root
-	Sha256AtAttach    string `json:"sha256_at_attach"`               // required
-	MtimeAtAttach     string `json:"mtime_at_attach,omitempty"`      // optional
-	GitCommitAtAttach string `json:"git_commit_at_attach,omitempty"` // optional
-	TS                string `json:"ts"`
-}
-
 // Result represents an attached result/artifact for a task.
 // Path is relative to the project root; file_url is derived at read time.
 type Result struct {
@@ -199,14 +114,6 @@ type Result struct {
 	MtimeAtAttach     string    `json:"mtime_at_attach,omitempty"`      // optional
 	GitCommitAtAttach string    `json:"git_commit_at_attach,omitempty"` // optional
 	CreatedAt         time.Time `json:"created_at"`
-}
-
-// MessageEvent records a note attached to a lifecycle postcondition.
-type MessageEvent struct {
-	TaskID string `json:"task_id"`
-	Kind   string `json:"kind"`
-	Text   string `json:"text"`
-	TS     string `json:"ts"`
 }
 
 // Message is a durable lifecycle note reconstructed from the event log.

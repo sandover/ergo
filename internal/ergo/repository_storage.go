@@ -29,14 +29,6 @@ const (
 	maxLogRecordBytes = 10 * 1024 * 1024
 )
 
-const transactionRecordType = "transaction"
-
-type transactionRecord struct {
-	Type    string  `json:"type"`
-	Version int     `json:"version"`
-	Events  []Event `json:"events"`
-}
-
 type eventLogRead struct {
 	events         []Event
 	snapshot       *Graph
@@ -208,33 +200,11 @@ func inspectEventLog(path string) (eventLogRead, error) {
 		if snapshotKind(header.Type) {
 			return fmt.Errorf("%s:%d: snapshot data record outside a snapshot block: %q", path, lineNo, header.Type)
 		}
-		if header.Type != transactionRecordType {
-			var event Event
-			if err := json.Unmarshal(trimmed, &event); err != nil {
-				return formatEventsParseError(path, lineNo, trimmed, err)
-			}
-			event.Source = EventSource{Path: path, Line: lineNo}
-			result.events = append(result.events, event)
-			return nil
+		events, err := decodeEventLogRecord(path, lineNo, trimmed)
+		if err != nil {
+			return err
 		}
-		var record transactionRecord
-		if err := json.Unmarshal(trimmed, &record); err != nil {
-			return formatEventsParseError(path, lineNo, trimmed, err)
-		}
-		if record.Version != 1 {
-			return fmt.Errorf("%s:%d: unsupported transaction record version %d", path, lineNo, record.Version)
-		}
-		if len(record.Events) == 0 {
-			return fmt.Errorf("%s:%d: transaction record contains no events", path, lineNo)
-		}
-		for i := range record.Events {
-			record.Events[i].Source = EventSource{
-				Path:             path,
-				Line:             lineNo,
-				TransactionIndex: i + 1,
-			}
-			result.events = append(result.events, record.Events[i])
-		}
+		result.events = append(result.events, events...)
 		return nil
 	}
 
@@ -301,24 +271,6 @@ func repositoryAppendEvents(path string, events []Event) error {
 		return err
 	}
 	return appendTransaction(path, data, systemRepositoryIO())
-}
-
-func marshalTransaction(events []Event) ([]byte, error) {
-	if len(events) == 0 {
-		return nil, nil
-	}
-	data, err := json.Marshal(transactionRecord{
-		Type:    transactionRecordType,
-		Version: 1,
-		Events:  events,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(data) > maxLogRecordBytes {
-		return nil, fmt.Errorf("transaction record is too long: %d bytes exceeds the %d-byte limit", len(data), maxLogRecordBytes)
-	}
-	return append(data, '\n'), nil
 }
 
 func writeEventsFile(path string, events []Event) error {

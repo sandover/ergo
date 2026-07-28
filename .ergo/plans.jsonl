@@ -575,3 +575,8 @@
 {"type":"message","ts":"2026-07-28T23:28:32.046436Z","data":{"task_id":"R3Y5K4","kind":"done","text":"Centralized initialization, coherent reads, validated batch updates, durable append/sync, and compaction behind Repository. Formal ownership grep, go test ./internal/ergo, go test ./cmd/ergo, and git diff --check all passed.","ts":"2026-07-28T23:28:32.046436Z"}}
 {"type":"unclaim","ts":"2026-07-28T23:28:32.046436Z","data":{"id":"R3Y5K4","ts":"2026-07-28T23:28:32.046436Z"}}
 {"type":"state","ts":"2026-07-28T23:28:32.046436Z","data":{"id":"R3Y5K4","state":"done","ts":"2026-07-28T23:28:32.046436Z"}}
+{"type":"claim","ts":"2026-07-28T23:28:35.377948Z","data":{"id":"WTJUKA","agent_id":"codex@local","ts":"2026-07-28T23:28:35.377948Z"}}
+{"type":"state","ts":"2026-07-28T23:28:35.377948Z","data":{"id":"WTJUKA","state":"doing","ts":"2026-07-28T23:28:35.377948Z"}}
+{"type":"message","ts":"2026-07-28T23:36:09.690484Z","data":{"task_id":"WTJUKA","kind":"done","text":"Separated event and log codecs, legacy normalization, pure clone-and-apply reduction, graph queries, and snapshot ownership. Exhaustiveness, purity, atomic rejection, replay equivalence, and both focused package suites pass.","ts":"2026-07-28T23:36:09.690484Z"}}
+{"type":"unclaim","ts":"2026-07-28T23:36:09.690484Z","data":{"id":"WTJUKA","ts":"2026-07-28T23:36:09.690484Z"}}
+{"type":"state","ts":"2026-07-28T23:36:09.690484Z","data":{"id":"WTJUKA","state":"done","ts":"2026-07-28T23:36:09.690484Z"}}
