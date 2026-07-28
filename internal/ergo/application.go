@@ -37,7 +37,7 @@ func (a *Application) CreateTask(request CreateTaskRequest) (CreateTaskOutcome, 
 	if err != nil {
 		return CreateTaskOutcome{}, classifyRepositoryError(err)
 	}
-	created, err := createTaskWithUpdates(dir, a.repository, request.EpicID, title, request.Body, nil, "")
+	created, err := createTask(dir, a.repository, request.EpicID, title, request.Body)
 	if err != nil {
 		return CreateTaskOutcome{}, classifyRepositoryError(err)
 	}

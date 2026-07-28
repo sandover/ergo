@@ -89,7 +89,7 @@ var newTaskCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if keys := ergo.LegacyCreationKeys(args[0]); len(keys) > 0 {
+		if keys := legacyCreationKeys(args[0]); len(keys) > 0 {
 			guidance := `creation JSON is not accepted; use ergo new task "<title>"`
 			if hasString(keys, "epic") {
 				guidance += " --epic <id>"
@@ -115,7 +115,7 @@ var newEpicCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if keys := ergo.LegacyCreationKeys(args[0]); len(keys) > 0 {
+		if keys := legacyCreationKeys(args[0]); len(keys) > 0 {
 			return errors.New(`creation JSON is not accepted; use ergo new epic "<title>" --file <path>`)
 		}
 		return ergo.RunNewEpic(args[0], epicTaskFile, globalOpts)

@@ -320,7 +320,7 @@ func writeAllWith(w *os.File, data []byte, write func(*os.File, []byte) (int, er
 	return nil
 }
 
-func createTaskWithUpdates(dir string, opts GlobalOptions, epicID string, title, body string, updates map[string]string, agentID string) (createOutput, error) {
+func createTask(dir string, opts RepositoryOptions, epicID string, title, body string) (createOutput, error) {
 	var repository Repository
 	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
 		return createOutput{}, err
@@ -373,59 +373,6 @@ func createTaskWithUpdates(dir string, opts GlobalOptions, epicID string, title,
 			return nil, err
 		}
 
-		newTask := &Task{
-			ID:        id,
-			UUID:      uuid,
-			EpicID:    epicID,
-			State:     stateTodo,
-			Title:     title,
-			Body:      body,
-			CreatedAt: now,
-			UpdatedAt: now,
-		}
-		events := []Event{event}
-		resultPath, hasPath := updates["result.path"]
-		resultSummary, hasSummary := updates["result.summary"]
-		if hasPath || hasSummary {
-			if !hasPath {
-				return nil, errors.New("result.summary requires result.path=")
-			}
-			if !hasSummary {
-				resultSummary = resultPath
-			}
-			working := cloneGraph(graph)
-			working.Tasks[id] = newTask
-			working.rebuildIndexes()
-			resultEvent, err := buildResultEvent(filepath.Dir(dir), working, id, resultSummary, resultPath, now)
-			if err != nil {
-				return nil, err
-			}
-			events = append(events, resultEvent)
-			delete(updates, "result.path")
-			delete(updates, "result.summary")
-		}
-
-		mutation := taskMutation{}
-		if state, ok := updates["state"]; ok {
-			mutation.State, mutation.StateSet = state, true
-			delete(updates, "state")
-		}
-		if claim, ok := updates["claim"]; ok {
-			mutation.Claim, mutation.ClaimSet = claim, true
-			delete(updates, "claim")
-		}
-		createEvents, _, err := buildMutationEvents(id, newTask, mutation, agentID, now)
-		if err != nil {
-			return nil, err
-		}
-		if len(updates) > 0 {
-			var unknown []string
-			for key := range updates {
-				unknown = append(unknown, key)
-			}
-			return nil, fmt.Errorf("unknown keys: %s", strings.Join(unknown, ", "))
-		}
-		events = append(events, createEvents...)
 		output = createOutput{
 			ID:        id,
 			UUID:      uuid,
@@ -435,7 +382,7 @@ func createTaskWithUpdates(dir string, opts GlobalOptions, epicID string, title,
 			Body:      payload.Body,
 			CreatedAt: createdAt,
 		}
-		return events, nil
+		return []Event{event}, nil
 	})
 	if err != nil {
 		return createOutput{}, err
