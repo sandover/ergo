@@ -592,3 +592,6 @@
 {"type":"message","ts":"2026-07-28T23:37:15.394582Z","data":{"task_id":"WTJUKA","kind":"done","text":"Removed the final reducer-era time helper reported by the domain-wave lint gate; package suites and full race-enabled CI pass.","ts":"2026-07-28T23:37:15.394582Z"}}
 {"type":"unclaim","ts":"2026-07-28T23:37:15.394582Z","data":{"id":"WTJUKA","ts":"2026-07-28T23:37:15.394582Z"}}
 {"type":"state","ts":"2026-07-28T23:37:15.394582Z","data":{"id":"WTJUKA","state":"done","ts":"2026-07-28T23:37:15.394582Z"}}
+{"type":"message","ts":"2026-07-28T23:37:20.38637Z","data":{"task_id":"N32CGA","kind":"done","text":"Canonical replay, pure transaction application, graph queries, deterministic compaction, repository-owned commands, and hardened result evidence passed focused integration tests plus formatting, lint, and the full race-enabled suite.","ts":"2026-07-28T23:37:20.38637Z"}}
+{"type":"unclaim","ts":"2026-07-28T23:37:20.38637Z","data":{"id":"N32CGA","ts":"2026-07-28T23:37:20.38637Z"}}
+{"type":"state","ts":"2026-07-28T23:37:20.38637Z","data":{"id":"N32CGA","state":"done","ts":"2026-07-28T23:37:20.38637Z"}}
