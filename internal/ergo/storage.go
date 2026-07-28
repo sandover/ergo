@@ -23,7 +23,23 @@ const (
 	backlogFileName   = "backlog.jsonl"
 	plansFileName     = "plans.jsonl"
 	oldEventsFileName = "events.jsonl"
+	maxLogRecordBytes = 10 * 1024 * 1024
 )
+
+const transactionRecordType = "transaction"
+
+type transactionRecord struct {
+	Type    string  `json:"type"`
+	Version int     `json:"version"`
+	Events  []Event `json:"events"`
+}
+
+type eventLogRead struct {
+	events         []Event
+	validBytes     int64
+	truncatedTail  bool
+	needsSeparator bool
+}
 
 func resolveErgoDir(start string) (string, error) {
 	current := start
@@ -100,16 +116,22 @@ func loadGraphLocked(dir string, opts GlobalOptions) (*Graph, error) {
 }
 
 func readEvents(path string) ([]Event, error) {
+	read, err := inspectEventLog(path)
+	if err != nil {
+		return nil, err
+	}
+	return read.events, nil
+}
+
+func inspectEventLog(path string) (eventLogRead, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
+			return eventLogRead{}, nil
 		}
-		return nil, err
+		return eventLogRead{}, err
 	}
 	defer file.Close()
-
-	const maxEventLineBytes = 10 * 1024 * 1024
 
 	endsWithNewline := false
 	if info, err := file.Stat(); err == nil && info.Size() > 0 {
@@ -119,9 +141,9 @@ func readEvents(path string) ([]Event, error) {
 		}
 	}
 
-	var events []Event
+	var result eventLogRead
 	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 0, 64*1024), maxEventLineBytes)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxLogRecordBytes)
 	var pending []byte
 	pendingNo := 0
 	currentNo := 0
@@ -131,11 +153,31 @@ func readEvents(path string) ([]Event, error) {
 		if len(trimmed) == 0 {
 			return nil
 		}
-		var event Event
-		if err := json.Unmarshal(trimmed, &event); err != nil {
+		var header struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(trimmed, &header); err != nil {
 			return formatEventsParseError(path, lineNo, trimmed, err)
 		}
-		events = append(events, event)
+		if header.Type != transactionRecordType {
+			var event Event
+			if err := json.Unmarshal(trimmed, &event); err != nil {
+				return formatEventsParseError(path, lineNo, trimmed, err)
+			}
+			result.events = append(result.events, event)
+			return nil
+		}
+		var record transactionRecord
+		if err := json.Unmarshal(trimmed, &record); err != nil {
+			return formatEventsParseError(path, lineNo, trimmed, err)
+		}
+		if record.Version != 1 {
+			return fmt.Errorf("%s:%d: unsupported transaction record version %d", path, lineNo, record.Version)
+		}
+		if len(record.Events) == 0 {
+			return fmt.Errorf("%s:%d: transaction record contains no events", path, lineNo)
+		}
+		result.events = append(result.events, record.Events...)
 		return nil
 	}
 
@@ -144,30 +186,39 @@ func readEvents(path string) ([]Event, error) {
 		line := append([]byte(nil), scanner.Bytes()...) // copy (scanner buffer is reused)
 		if pending != nil {
 			if err := processLine(pendingNo, pending); err != nil {
-				return nil, err
+				return eventLogRead{}, err
 			}
+			result.validBytes += int64(len(pending) + 1)
 		}
 		pending = line
 		pendingNo = currentNo
 	}
 	if err := scanner.Err(); err != nil {
 		if errors.Is(err, bufio.ErrTooLong) {
-			return nil, fmt.Errorf("%s: event line too long (> %d bytes); file may be corrupted (e.g. missing newlines)", path, maxEventLineBytes)
+			return eventLogRead{}, fmt.Errorf("%s: event record too long (> %d bytes); file may be corrupted (e.g. missing newlines)", path, maxLogRecordBytes)
 		}
-		return nil, err
+		return eventLogRead{}, err
 	}
 
 	if pending != nil {
-		// Tolerate a truncated final line (common after crashes or partial writes).
-		// Only ignore when the file does not end in '\n'.
 		if err := processLine(pendingNo, pending); err != nil {
-			if !endsWithNewline {
-				return events, nil
+			// Only malformed JSON in an unterminated final record is a
+			// recoverable interrupted write. A complete JSON value with an
+			// unsupported version or invalid semantics remains corruption.
+			if !endsWithNewline && !json.Valid(bytes.TrimSpace(pending)) {
+				result.truncatedTail = true
+				return result, nil
 			}
-			return nil, err
+			return eventLogRead{}, err
+		}
+		result.validBytes += int64(len(pending))
+		if endsWithNewline {
+			result.validBytes++
+		} else if len(pending) > 0 {
+			result.needsSeparator = true
 		}
 	}
-	return events, nil
+	return result, nil
 }
 
 func formatEventsParseError(path string, lineNo int, line []byte, cause error) error {
@@ -183,31 +234,29 @@ func formatEventsParseError(path string, lineNo int, line []byte, cause error) e
 }
 
 func appendEvents(path string, events []Event) error {
-	data, err := marshalEvents(events)
+	data, err := marshalTransaction(events)
 	if err != nil || len(data) == 0 {
 		return err
 	}
-	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	return writeAllWith(file, data, func(file *os.File, data []byte) (int, error) {
-		return file.Write(data)
-	})
+	return appendTransaction(path, data, systemRepositoryIO())
 }
 
-func marshalEvents(events []Event) ([]byte, error) {
-	var buf bytes.Buffer
-	for _, event := range events {
-		data, err := json.Marshal(event)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(data)
-		buf.WriteByte('\n')
+func marshalTransaction(events []Event) ([]byte, error) {
+	if len(events) == 0 {
+		return nil, nil
 	}
-	return buf.Bytes(), nil
+	data, err := json.Marshal(transactionRecord{
+		Type:    transactionRecordType,
+		Version: 1,
+		Events:  events,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxLogRecordBytes {
+		return nil, fmt.Errorf("transaction record is too long: %d bytes exceeds the %d-byte limit", len(data), maxLogRecordBytes)
+	}
+	return append(data, '\n'), nil
 }
 
 func writeEventsFile(path string, events []Event) error {
@@ -241,16 +290,6 @@ func replaceEventsAtomically(path string, events []Event) error {
 		return err
 	}
 	return syncDir(filepath.Dir(path))
-}
-
-func appendEventsAtomically(path string, existing, appended []Event) error {
-	if len(appended) == 0 {
-		return nil
-	}
-	merged := make([]Event, 0, len(existing)+len(appended))
-	merged = append(merged, existing...)
-	merged = append(merged, appended...)
-	return replaceEventsAtomically(path, merged)
 }
 
 func writeAll(w *os.File, data []byte) error {

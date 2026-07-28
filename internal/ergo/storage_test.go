@@ -3,6 +3,7 @@
 package ergo
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -277,7 +278,7 @@ func TestLoadGraph_WorksWithPlansJsonl(t *testing.T) {
 	}
 }
 
-func TestAppendEventsAtomically_AppendsAndReplays(t *testing.T) {
+func TestAppendTransactionPreservesLegacyEventsAndReplaysBatch(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, plansFileName)
 	now := time.Now().UTC()
@@ -306,8 +307,8 @@ func TestAppendEventsAtomically_AppendsAndReplays(t *testing.T) {
 	if err := writeEventsFile(path, initial); err != nil {
 		t.Fatalf("writeEventsFile initial: %v", err)
 	}
-	if err := appendEventsAtomically(path, initial, appended); err != nil {
-		t.Fatalf("appendEventsAtomically: %v", err)
+	if err := appendEvents(path, appended); err != nil {
+		t.Fatalf("appendEvents: %v", err)
 	}
 
 	events, err := readEvents(path)
@@ -325,66 +326,47 @@ func TestAppendEventsAtomically_AppendsAndReplays(t *testing.T) {
 	if graph.Tasks["T1"] == nil || graph.Tasks["T2"] == nil {
 		t.Fatalf("expected T1 and T2 after replay, got tasks: %v", len(graph.Tasks))
 	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[1], `"type":"transaction"`) {
+		t.Fatalf("log does not contain legacy event followed by one transaction: %s", data)
+	}
 }
 
-func TestAppendEventsAtomically_FailureLeavesOriginalFile(t *testing.T) {
+func TestAppendTransactionRepairsTruncatedTail(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, plansFileName)
-	now := time.Now().UTC()
-
-	initial := []Event{
-		mustNewEvent("new_task", now, NewTaskEvent{
-			ID:        "T1",
-			UUID:      "uuid-1",
-			State:     stateTodo,
-			Title:     "Task 1",
-			Body:      "Task 1 body",
-			CreatedAt: formatTime(now),
-		}),
+	legacy := `{"type":"noop","ts":"t","data":{}}` + "\n"
+	if err := os.WriteFile(path, []byte(legacy+`{"type":"transaction","version":1,"events":[`), 0644); err != nil {
+		t.Fatal(err)
 	}
-	appended := []Event{
-		mustNewEvent("new_task", now.Add(time.Second), NewTaskEvent{
-			ID:        "T2",
-			UUID:      "uuid-2",
-			State:     stateTodo,
-			Title:     "Task 2",
-			Body:      "Task 2 body",
-			CreatedAt: formatTime(now.Add(time.Second)),
-		}),
+	if err := appendEvents(path, []Event{{Type: "noop", TS: "later", Data: json.RawMessage(`{}`)}}); err != nil {
+		t.Fatal(err)
 	}
-
-	if err := writeEventsFile(path, initial); err != nil {
-		t.Fatalf("writeEventsFile initial: %v", err)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	tmpPath := path + ".tmp"
-	if err := os.Mkdir(tmpPath, 0755); err != nil {
-		t.Fatalf("create blocking temp directory: %v", err)
+	if strings.Contains(string(data), `"events":[{"type":"transaction"`) {
+		t.Fatalf("truncated bytes were concatenated with the new transaction: %s", data)
 	}
-
-	if err := appendEventsAtomically(path, initial, appended); err == nil {
-		t.Fatal("expected appendEventsAtomically to fail when its temp path is a directory")
-	}
-
-	if err := os.Remove(tmpPath); err != nil {
-		t.Fatalf("remove blocking temp directory: %v", err)
-	}
-
 	events, err := readEvents(path)
-	if err != nil {
-		t.Fatalf("readEvents: %v", err)
+	if err != nil || len(events) != 2 {
+		t.Fatalf("events=%d err=%v log=%s", len(events), err, data)
 	}
-	if len(events) != 1 {
-		t.Fatalf("expected original file to remain at 1 event, got %d", len(events))
+}
+
+func TestAppendTransactionRejectsTooLongRecordWithoutWriting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), plansFileName)
+	event := Event{Type: "body", Data: json.RawMessage(`{"body":"` + strings.Repeat("x", maxLogRecordBytes) + `"}`)}
+	err := appendEvents(path, []Event{event})
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("error = %v, want size-limit error", err)
 	}
-	graph, err := replayEvents(events)
-	if err != nil {
-		t.Fatalf("replayEvents: %v", err)
-	}
-	if graph.Tasks["T1"] == nil {
-		t.Fatal("expected T1 to remain after failed append")
-	}
-	if graph.Tasks["T2"] != nil {
-		t.Fatal("did not expect T2 after failed append")
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Fatalf("oversized transaction changed the log: %v", statErr)
 	}
 }

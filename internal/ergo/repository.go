@@ -119,19 +119,44 @@ func (r *Repository) load() (*Graph, error) {
 }
 
 func (r *Repository) append(events []Event) error {
-	data, err := marshalEvents(events)
+	data, err := marshalTransaction(events)
 	if err != nil || len(data) == 0 {
 		return err
 	}
-	file, err := r.io.openFile(r.eventsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	return appendTransaction(r.eventsPath, data, r.io)
+}
+
+func appendTransaction(path string, transaction []byte, io repositoryIO) error {
+	read, err := inspectEventLog(path)
+	if err != nil {
+		return err
+	}
+	file, err := io.openFile(path, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	if err := writeAllWith(file, data, r.io.write); err != nil {
+	if read.truncatedTail {
+		if err := file.Truncate(read.validBytes); err != nil {
+			return fmt.Errorf("repair incomplete transaction tail: %w", err)
+		}
+	}
+	if _, err := file.Seek(0, 2); err != nil {
 		return err
 	}
-	return r.io.postWrite()
+	if read.needsSeparator && !read.truncatedTail {
+		transaction = append([]byte{'\n'}, transaction...)
+	}
+	if err := writeAllWith(file, transaction, io.write); err != nil {
+		return err
+	}
+	if err := io.postWrite(); err != nil {
+		return err
+	}
+	if err := io.sync(file); err != nil {
+		return fmt.Errorf("sync transaction record: %w", err)
+	}
+	return nil
 }
 
 func selectEventsPath(dir string) (string, error) {

@@ -242,7 +242,7 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 			}
 		}
 
-		return appendEventsAtomically(eventsPath, events, newEvents)
+		return appendEvents(eventsPath, newEvents)
 	}); err != nil {
 		return err
 	}

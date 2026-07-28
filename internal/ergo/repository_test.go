@@ -149,13 +149,60 @@ func TestRepositoryIOCanInjectSyncFailure(t *testing.T) {
 	repository, path := newInjectedRepository(t, systemRepositoryIO())
 	injected := errors.New("injected sync failure")
 	repository.io.sync = func(*os.File) error { return injected }
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
+	now := time.Now().UTC()
+	err := repository.update(func(*Graph) ([]Event, error) {
+		return []Event{mustNewEvent("new_task", now, NewTaskEvent{
+			ID: "T1", UUID: "uuid-1", State: stateTodo, Title: "Task", CreatedAt: formatTime(now),
+		})}, nil
+	})
+	if !errors.Is(err, injected) {
+		t.Fatalf("sync error = %v, want injected failure", err)
+	}
+	if info, statErr := os.Stat(path); statErr != nil || info.Size() == 0 {
+		t.Fatalf("sync failure was not injected after the record write: info=%v err=%v", info, statErr)
+	}
+}
+
+func TestRepositoryUpdateRepairsPartialTransactionBeforeRecoveryAppend(t *testing.T) {
+	repository, path := newInjectedRepository(t, systemRepositoryIO())
+	injected := errors.New("injected interrupted write")
+	writes := 0
+	repository.io.write = func(file *os.File, data []byte) (int, error) {
+		writes++
+		if writes == 1 {
+			return file.Write(data[:len(data)/2])
+		}
+		return 0, injected
+	}
+	now := time.Now().UTC()
+	event := mustNewEvent("new_task", now, NewTaskEvent{
+		ID: "T1", UUID: "uuid-1", State: stateTodo, Title: "Task", CreatedAt: formatTime(now),
+	})
+	if err := repository.update(func(*Graph) ([]Event, error) {
+		return []Event{event}, nil
+	}); !errors.Is(err, injected) {
+		t.Fatalf("write error = %v, want injected failure", err)
+	}
+
+	repository.io = systemRepositoryIO()
+	if err := repository.update(func(graph *Graph) ([]Event, error) {
+		if len(graph.Tasks) != 0 {
+			t.Fatalf("partial transaction replayed: %#v", graph.Tasks)
+		}
+		return []Event{event}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
-	if err := repository.io.sync(file); !errors.Is(err, injected) {
-		t.Fatalf("sync error = %v, want injected failure", err)
+	if strings.Count(strings.TrimSpace(string(data)), "\n") != 0 {
+		t.Fatalf("repaired log should contain exactly one record: %s", data)
+	}
+	events, err := readEvents(path)
+	if err != nil || len(events) != 1 {
+		t.Fatalf("events=%d err=%v", len(events), err)
 	}
 }
 

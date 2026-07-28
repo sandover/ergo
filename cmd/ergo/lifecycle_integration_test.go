@@ -164,8 +164,8 @@ func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 		!strings.Contains(stdout, "Message: appended\n") || !strings.Contains(stdout, "Result: late.txt\n") {
 		t.Fatalf("late result failed: stdout=%s stderr=%s", stdout, stderr)
 	}
-	if got := countEventLines(t, dir); got != beforeLate+2 {
-		t.Fatalf("late result/message events = %d, want %d", got, beforeLate+2)
+	if got := countEventLines(t, dir); got != beforeLate+1 {
+		t.Fatalf("late result/message transaction records = %d, want %d", got, beforeLate+1)
 	}
 	shown = showTaskOutput(t, dir, id)
 	if strings.Count(shown, "(file://") != 2 || !strings.Contains(shown, "[late.txt](file://") {
@@ -311,21 +311,34 @@ func readLifecycleMessages(t *testing.T, dir, id string) []lifecycleMessageLog {
 	var messages []lifecycleMessageLog
 	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
 		var event struct {
-			Type string          `json:"type"`
-			Data json.RawMessage `json:"data"`
+			Type   string          `json:"type"`
+			Data   json.RawMessage `json:"data"`
+			Events []struct {
+				Type string          `json:"type"`
+				Data json.RawMessage `json:"data"`
+			} `json:"events"`
 		}
 		if err := json.Unmarshal([]byte(line), &event); err != nil {
 			t.Fatal(err)
 		}
-		if event.Type != "message" {
-			continue
+		events := event.Events
+		if event.Type != "transaction" {
+			events = append(events, struct {
+				Type string          `json:"type"`
+				Data json.RawMessage `json:"data"`
+			}{Type: event.Type, Data: event.Data})
 		}
-		var message lifecycleMessageLog
-		if err := json.Unmarshal(event.Data, &message); err != nil {
-			t.Fatal(err)
-		}
-		if message.TaskID == id {
-			messages = append(messages, message)
+		for _, inner := range events {
+			if inner.Type != "message" {
+				continue
+			}
+			var message lifecycleMessageLog
+			if err := json.Unmarshal(inner.Data, &message); err != nil {
+				t.Fatal(err)
+			}
+			if message.TaskID == id {
+				messages = append(messages, message)
+			}
 		}
 	}
 	return messages
