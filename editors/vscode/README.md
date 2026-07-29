@@ -1,100 +1,73 @@
 # Ergo Backlog
 
-Ergo Backlog makes a repository's dependency-aware Ergo backlog readable
-inside VS Code. Search tasks and epics, scan the active backlog, and open
-details without reading JSONL or leaving the editor.
+**See the work behind your code.**
 
-The extension is a Preview. It is intentionally read-only and delegates
-backlog interpretation to the installed Ergo CLI.
+Ergo Backlog turns a repository's dependency-aware [Ergo](https://github.com/sandover/ergo) backlog into a clear, navigable view inside VS Code. Find the next ready task, understand how work fits into an epic, and open readable details without inspecting JSONL or leaving the editor.
 
-## Requirements
+## What you can do
 
-- VS Code 1.95 or later
-- Ergo 4.2.0 or later in the extension host environment
-- A workspace containing an Ergo backlog
+- **Scan the active backlog.** See tasks grouped under their epics, with compact status and dependency cues.
+- **Focus on ready work.** Filter out blocked and in-progress tasks while keeping their epic context visible.
+- **Find anything quickly.** Search tasks and epics by title or six-character Ergo ID.
+- **Read task and epic details.** Open the selected item as a formatted Markdown preview in its own editor tab.
+- **Open the backlog naturally.** Select `.ergo/backlog.jsonl` in the Explorer to see the backlog view instead of the raw event log.
 
-Install Ergo on macOS:
+Ergo Backlog is read-only. Planning and lifecycle changes remain explicit CLI actions, while VS Code provides a comfortable place to browse and understand the current plan.
+
+## Get started
+
+1. Install [Ergo 4.2.0 or later](https://github.com/sandover/ergo).
+2. Open a folder that contains an Ergo backlog.
+3. Open the Command Palette and run **Ergo: Backlog**.
+
+Search for a task or epic and select it to open its details. You can also open `.ergo/backlog.jsonl` from the Explorer for a browsable overview of the whole backlog.
+
+### Install Ergo
+
+On macOS:
 
 ```sh
 brew install sandover/tap/ergo
 ```
 
-Windows and Linux archives are available from the
-[Ergo 4.2.0 GitHub Release](https://github.com/sandover/ergo/releases/tag/v4.2.0).
-Place `ergo` or `ergo.exe` on the extension host's `PATH`.
+On Windows and Linux, download the appropriate archive from the [latest Ergo release](https://github.com/sandover/ergo/releases/latest) and place `ergo.exe` or `ergo` on `PATH`.
 
-Remote, WSL, and development-container windows need Ergo installed in that
-environment. Set `ergo.executablePath` to an absolute executable path when VS
-Code should use a specific installation. The extension reports the attempted
-path and corrective installation guidance when Ergo is missing or older than
-4.2.0.
+Ergo Backlog uses the Ergo CLI from the VS Code extension host environment. Remote, WSL, SSH, and development-container windows therefore need Ergo installed in that environment.
 
-## Browse the backlog
+## How the backlog view works
 
-Run **Ergo: Backlog** from the Command Palette to open a searchable native
-picker. Search by title or six-character ID, select a task or epic, and inspect
-the exact readable `ergo show` document in VS Code's Markdown preview.
+The overview preserves the structure that helps you choose and understand work:
 
-Opening `.ergo/backlog.jsonl` presents a read-only backlog overview instead of
-raw JSONL. Filter the overview, expand an epic, and select any ID to open its
-details. Use **Reopen Editor With → Text Editor** when you specifically need
-the underlying event log.
+- Epics remain visible as stable landmarks.
+- Tasks appear beneath their epic or at the top level.
+- Status glyphs distinguish ready, blocked, active, and completed work.
+- The **Ready tasks only** filter narrows the task list without hiding its epic context.
+- Clicking an Ergo ID opens that task or epic in a readable detail tab.
 
-## Boundaries and privacy
+Use **Reopen Editor With → Text Editor** when you specifically want to inspect the underlying JSONL event log.
 
-The extension invokes the configured Ergo executable with argument arrays and
-without a shell. It does not parse or write the JSONL event log, mutate tasks,
-add telemetry, or send backlog content to an Ergo service. VS Code and
-installed extensions remain subject to their own privacy behavior.
+## Configure the Ergo executable
 
-The extension does not create, claim, complete, reorder, or otherwise change
-backlog work. Use the Ergo CLI for mutations.
+The extension normally resolves `ergo` from the extension host's `PATH`. To use a specific installation, set **Ergo: Executable Path** in VS Code Settings to an absolute path such as:
 
-## Support
-
-Report defects and feature requests in the
-[Ergo issue tracker](https://github.com/sandover/ergo/issues). Include VS Code,
-operating-system, extension, and `ergo --version` information. Do not attach a
-private backlog.
-
-## Remove the extension
-
-Find **Ergo Backlog** in the Extensions view and choose **Uninstall**. Removing
-the extension does not remove Ergo or change repository backlogs.
-
-## Develop and package
-
-Open `editors/vscode` as the VS Code workspace, run `npm ci`, and press `F5` to
-open an Extension Development Host.
-
-```sh
-npm test
-npm run package
+```text
+/opt/homebrew/bin/ergo
 ```
 
-The package command creates `ergo-backlog-0.1.0.vsix`. The repository CI runs
-the same locked build and test workflow on Linux, macOS, and Windows and proves
-the package on Linux.
+If Ergo is missing or older than 4.2.0, the extension reports the path it tried and explains how to install or select a compatible executable.
 
-## Maintainer smoke procedure
+## Read-only by design
 
-Create a disposable backlog with distinct work:
+Ergo Backlog asks the installed Ergo CLI to interpret the repository's event log. It does not parse or write `.ergo/backlog.jsonl`, mutate tasks, invoke commands through a shell, add telemetry, or send backlog content to an Ergo service.
 
-```sh
-scratch="$(mktemp -d)"
-ergo init "$scratch"
-epic="$(ergo --dir "$scratch" new task "Create one citation from text spanning pages")"
-ergo --dir "$scratch" new task "Define each page highlight" --epic "$epic"
-ergo --dir "$scratch" new task "Add support-safe diagnostics"
-code "$scratch"
-```
+Use the Ergo CLI to create, claim, complete, block, reorder, or otherwise change work.
 
-In the opened window:
+## Preview
 
-1. Open `.ergo/backlog.jsonl`, filter for `citation`, and open the epic child.
-2. Run **Ergo: Backlog**, search for a six-character ID, and open its preview.
-3. Compare the source view with
-   `ergo --color=never --dir <scratch> show <id>`.
-4. Confirm that a folder without `.ergo` reports a missing backlog.
-5. Configure a missing executable and an Ergo version older than 4.2.0 and
-   confirm that each produces distinct corrective guidance.
+Ergo Backlog is an early Preview focused on fast, dependable backlog reading. The current release provides the backlog overview, ready-work filter, task and epic search, and formatted detail previews.
+
+Found a problem or have an idea? Open an issue in the [Ergo issue tracker](https://github.com/sandover/ergo/issues). Include your operating system, VS Code version, extension version, and `ergo --version`. Do not attach a private backlog.
+
+## About Ergo
+
+[Ergo](https://github.com/sandover/ergo) is a fast, repository-local, dependency-aware backlog for coding agents and humans. It keeps tasks, epics, dependencies, and lifecycle history close to the code so the plan can travel with the repository.

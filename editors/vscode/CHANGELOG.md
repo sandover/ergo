@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.1
+
+- Rework the Marketplace page around product value, primary workflows, concise
+  setup guidance, and the extension's read-only trust model.
+
 ## 0.1.0
 
 - Browse an Ergo backlog through a searchable native task and epic picker.

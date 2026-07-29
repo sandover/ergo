@@ -2,7 +2,7 @@
   "name": "ergo-backlog",
   "displayName": "Ergo Backlog",
   "description": "Browse a dependency-aware Ergo backlog without leaving VS Code.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "sandover",
   "preview": true,
   "icon": "assets/icon.png",
@@ -82,7 +82,7 @@
     "build": "npm run clean && npm run compile",
     "test": "npm run build && node scripts/test.mjs",
     "vscode:prepublish": "npm run build",
-    "package": "vsce package --out ergo-backlog-0.1.0.vsix"
+    "package": "vsce package --out ergo-backlog-0.1.1.vsix"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
