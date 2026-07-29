@@ -58,11 +58,12 @@ test("renders a clickable searchable overview from realistic backlog data", () =
   assert.match(view.html, /data-id="EUDZOS">EUDZOS<\/button>/);
   assert.doesNotMatch(view.html, /EUDZOS · done/);
   assert.match(view.html, /\.row:hover, \.row:focus-within/);
-  assert.doesNotMatch(view.html, /border-bottom/);
   assert.doesNotMatch(view.html, /border-top/);
   assert.match(view.html, /vscode\.postMessage\(\{ type: "open", id: button\.dataset\.id \}\)/);
   assert.match(view.html, /search\.addEventListener\("input"/);
   assert.match(view.html, /<label class="ready-filter"><input id="readyOnly" type="checkbox">Ready only<\/label>/);
+  assert.match(view.html, /\.filters \{ border-bottom: 1px solid var\(--vscode-widget-border/);
+  assert.match(view.html, /main \{ margin-top: 28px; \}/);
   assert.match(view.html, /data-ready="true"/);
   assert.match(view.html, /data-ready="false"/);
   assert.match(view.html, /group\.tagName === "DETAILS"/);

@@ -41,12 +41,12 @@ export function renderBacklog(
     h1 { font-size: 22px; margin: 0; }
     h2 { color: var(--vscode-descriptionForeground); font-size: 11px; letter-spacing: .09em; margin: 34px 8px 14px; text-transform: uppercase; }
     .meta { color: var(--vscode-descriptionForeground); }
-    .filters { display: grid; gap: 10px; }
+    .filters { border-bottom: 1px solid var(--vscode-widget-border, color-mix(in srgb, var(--vscode-foreground) 14%, transparent)); display: grid; gap: 10px; padding-bottom: 18px; }
     input[type="search"] { background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, transparent); color: var(--vscode-input-foreground); font: inherit; padding: 7px 9px; width: 100%; }
     input[type="search"]:focus { border-color: var(--vscode-focusBorder); outline: none; }
     .ready-filter { align-items: center; cursor: pointer; display: inline-flex; gap: 7px; justify-self: start; }
     .ready-filter input { accent-color: var(--vscode-checkbox-background); cursor: pointer; margin: 0; }
-    main { margin-top: 22px; }
+    main { margin-top: 28px; }
     section { margin-bottom: 30px; }
     .row { align-items: center; border-radius: 3px; display: grid; gap: 12px; grid-template-columns: 18px minmax(0, 1fr) auto; padding: 6px 8px; }
     .row:hover, .row:focus-within { background: var(--vscode-list-hoverBackground); }
