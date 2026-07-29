@@ -186,3 +186,9 @@ func RenderShow(w io.Writer, outcome ShowOutcome) {
 	}
 	printTaskDocument(w, outcome.Task, outcome.Graph, outcome.ProjectDir)
 }
+
+// RenderShowBody writes the stored body without adding or removing bytes.
+func RenderShowBody(w io.Writer, outcome ShowBodyOutcome) error {
+	_, err := io.WriteString(w, outcome.Body)
+	return err
+}

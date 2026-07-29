@@ -122,7 +122,16 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	}
 
 	showCmd := &cobra.Command{Use: "show <id>", Short: "Show task details", Args: exactArgs(1, "usage: ergo show <id>")}
+	showCmd.Flags().Bool("body", false, "Write only the stored body")
 	showCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		bodyOnly, _ := cmd.Flags().GetBool("body")
+		if bodyOnly {
+			out, err := app().ShowBody(ergo.ShowBodyRequest{ID: args[0]})
+			if err != nil {
+				return err
+			}
+			return ergo.RenderShowBody(cmd.OutOrStdout(), out)
+		}
 		out, err := app().Show(ergo.ShowRequest{ID: args[0]})
 		if err == nil {
 			ergo.RenderShow(cmd.OutOrStdout(), out)

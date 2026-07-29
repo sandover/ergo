@@ -635,3 +635,10 @@
 {"type":"message","ts":"2026-07-29T00:09:37.081784Z","data":{"task_id":"5GRMXW","kind":"done","text":"Typed application operations, explicit render streams, fresh Cobra construction, public output/help compatibility, lint, and the full race-enabled suite all pass together.","ts":"2026-07-29T00:09:37.081784Z"}}
 {"type":"unclaim","ts":"2026-07-29T00:09:37.081784Z","data":{"id":"5GRMXW","ts":"2026-07-29T00:09:37.081784Z"}}
 {"type":"state","ts":"2026-07-29T00:09:37.081784Z","data":{"id":"5GRMXW","state":"done","ts":"2026-07-29T00:09:37.081784Z"}}
+{"type":"claim","ts":"2026-07-29T00:09:47.266011Z","data":{"id":"CDTR3O","agent_id":"codex@local","ts":"2026-07-29T00:09:47.266011Z"}}
+{"type":"state","ts":"2026-07-29T00:09:47.266011Z","data":{"id":"CDTR3O","state":"doing","ts":"2026-07-29T00:09:47.266011Z"}}
+{"type":"claim","ts":"2026-07-29T00:09:47.276139Z","data":{"id":"H4HW7L","agent_id":"codex@local","ts":"2026-07-29T00:09:47.276139Z"}}
+{"type":"state","ts":"2026-07-29T00:09:47.276139Z","data":{"id":"H4HW7L","state":"doing","ts":"2026-07-29T00:09:47.276139Z"}}
+{"type":"message","ts":"2026-07-29T00:15:32.414484Z","data":{"task_id":"H4HW7L","kind":"done","text":"Added typed show --body projection with exact byte-preserving rendering and propagated write failures. Leaf, epic, empty, newline, CLI round-trip, unknown/pruned, and unchanged show/claim contracts pass focused gates.","ts":"2026-07-29T00:15:32.414484Z"}}
+{"type":"unclaim","ts":"2026-07-29T00:15:32.414484Z","data":{"id":"H4HW7L","ts":"2026-07-29T00:15:32.414484Z"}}
+{"type":"state","ts":"2026-07-29T00:15:32.414484Z","data":{"id":"H4HW7L","state":"done","ts":"2026-07-29T00:15:32.414484Z"}}

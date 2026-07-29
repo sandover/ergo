@@ -77,6 +77,16 @@ type ShowOutcome struct {
 	ProjectDir string
 }
 
+// ShowBodyRequest selects the lossless body projection of one task or epic.
+type ShowBodyRequest struct {
+	ID string
+}
+
+// ShowBodyOutcome contains only the stored body bytes represented as text.
+type ShowBodyOutcome struct {
+	Body string
+}
+
 func (a *Application) Show(request ShowRequest) (ShowOutcome, error) {
 	id := strings.TrimSpace(request.ID)
 	if id == "" {
@@ -107,6 +117,29 @@ func (a *Application) Show(request ShowRequest) (ShowOutcome, error) {
 		Children:   children,
 		ProjectDir: repository.ProjectDir(),
 	}, nil
+}
+
+func (a *Application) ShowBody(request ShowBodyRequest) (ShowBodyOutcome, error) {
+	id := strings.TrimSpace(request.ID)
+	if id == "" {
+		return ShowBodyOutcome{}, classified(ErrorUsage, errors.New("usage: ergo show <id> --body"))
+	}
+	var repository Repository
+	if err := repository.Open(a.repository); err != nil {
+		return ShowBodyOutcome{}, classifyRepositoryError(err)
+	}
+	graph, err := repository.View()
+	if err != nil {
+		return ShowBodyOutcome{}, classifyRepositoryError(err)
+	}
+	if _, ok := graph.Tombstones[id]; ok {
+		return ShowBodyOutcome{}, classified(ErrorNotFound, prunedErr(id))
+	}
+	task := graph.Tasks[id]
+	if task == nil {
+		return ShowBodyOutcome{}, classified(ErrorNotFound, fmt.Errorf("unknown task id %s", id))
+	}
+	return ShowBodyOutcome{Body: task.Body}, nil
 }
 
 type LifecycleRequest struct {
