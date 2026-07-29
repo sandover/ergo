@@ -41,8 +41,13 @@ export function renderBacklog(
     h1 { font-size: 22px; margin: 0; }
     h2 { color: var(--vscode-descriptionForeground); font-size: 11px; letter-spacing: .09em; margin: 34px 8px 14px; text-transform: uppercase; }
     .meta { color: var(--vscode-descriptionForeground); }
+    .filters { align-items: center; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto; }
     input { background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, transparent); color: var(--vscode-input-foreground); font: inherit; padding: 7px 9px; width: 100%; }
     input:focus { border-color: var(--vscode-focusBorder); outline: none; }
+    button.filter { background: var(--vscode-button-secondaryBackground); border: 1px solid transparent; border-radius: 3px; color: var(--vscode-button-secondaryForeground); cursor: pointer; font: inherit; padding: 7px 11px; white-space: nowrap; }
+    button.filter:hover { background: var(--vscode-button-secondaryHoverBackground); }
+    button.filter[aria-pressed="true"] { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+    button.filter:focus { border-color: var(--vscode-focusBorder); outline: none; }
     main { margin-top: 22px; }
     section { margin-bottom: 30px; }
     .row { align-items: center; border-radius: 3px; display: grid; gap: 12px; grid-template-columns: 18px minmax(0, 1fr) auto; padding: 6px 8px; }
@@ -66,12 +71,16 @@ export function renderBacklog(
 </head>
 <body>
   <header><h1>Ergo backlog</h1></header>
-  <input id="search" type="search" aria-label="Search tasks" placeholder="Search by title or ID">
+  <div class="filters">
+    <input id="search" type="search" aria-label="Search tasks" placeholder="Search by title or ID">
+    <button id="readyOnly" class="filter" type="button" aria-pressed="false">Ready only</button>
+  </div>
   <main>${roots}${epicSections || (!roots ? '<p class="empty">No tasks found.</p>' : "")}</main>
   <p id="noMatches" class="empty" hidden>No matching tasks.</p>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const search = document.getElementById("search");
+    const readyOnly = document.getElementById("readyOnly");
     const groups = Array.from(document.querySelectorAll("section, details"));
     document.addEventListener("click", (event) => {
       const button = event.target.closest("button[data-id]");
@@ -81,22 +90,39 @@ export function renderBacklog(
         vscode.postMessage({ type: "open", id: button.dataset.id });
       }
     });
-    search.addEventListener("input", () => {
+    function applyFilters() {
       const query = search.value.trim().toLocaleLowerCase();
-      let matches = 0;
+      const onlyReady = readyOnly.getAttribute("aria-pressed") === "true";
+      let visibleItems = 0;
+      let visibleGroups = 0;
       for (const group of groups) {
         const rows = Array.from(group.querySelectorAll("[data-search]"));
         let groupMatches = 0;
         for (const row of rows) {
-          const visible = !query || row.dataset.search.includes(query);
+          const matchesQuery = !query || row.dataset.search.includes(query);
+          const matchesReady = !onlyReady || row.dataset.ready === "true";
+          const visible = matchesQuery && matchesReady;
           row.hidden = !visible;
           if (visible) groupMatches++;
         }
-        group.hidden = groupMatches === 0;
-        if (groupMatches && group.tagName === "DETAILS" && query) group.open = true;
-        matches += groupMatches;
+        if (group.tagName === "DETAILS") {
+          const epicMatches = !query || group.dataset.epicSearch.includes(query);
+          group.hidden = query && !epicMatches && groupMatches === 0;
+          if (!group.hidden) visibleGroups++;
+          if ((epicMatches || groupMatches) && query) group.open = true;
+        } else {
+          group.hidden = groupMatches === 0;
+          if (!group.hidden) visibleGroups++;
+        }
+        visibleItems += groupMatches;
       }
-      document.getElementById("noMatches").hidden = matches !== 0;
+      document.getElementById("noMatches").hidden = visibleItems !== 0 || visibleGroups !== 0;
+    }
+    search.addEventListener("input", applyFilters);
+    readyOnly.addEventListener("click", () => {
+      const pressed = readyOnly.getAttribute("aria-pressed") === "true";
+      readyOnly.setAttribute("aria-pressed", String(!pressed));
+      applyFilters();
     });
   </script>
 </body>
@@ -117,8 +143,7 @@ function renderEpic(epic: ErgoListItem, children: ErgoListItem[]): string {
       return count ? [`${count} ${state}`] : [];
     })
     .join(" · ");
-  const search = searchText([epic, ...children]);
-  return `<details open data-search="${search}">
+  return `<details open data-epic-search="${searchText([epic])}">
     <summary>
       <span class="epic-heading">
         <span class="epic-title">${text(epic.title)}</span>
@@ -132,7 +157,7 @@ function renderEpic(epic: ErgoListItem, children: ErgoListItem[]): string {
 
 function renderTask(item: ErgoListItem): string {
   const state = displayState(item);
-  return `<div class="row" data-search="${searchText([item])}">
+  return `<div class="row" data-search="${searchText([item])}" data-ready="${item.ready === true}">
     <span class="state" title="${attribute(state)}">${stateSymbol(state)}</span>
     <span>${text(item.title)}</span>
     <button class="item id" data-id="${attribute(item.id)}">${text(item.id)}</button>
