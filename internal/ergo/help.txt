@@ -19,7 +19,7 @@ completes when its children finish.
   init [dir]                                  initialize an Ergo backlog
   new task "<title>" [--epic <id>]            create a task; optional stdin sets its body
   new epic "<title>" --file <path>            create an epic and tasks; optional stdin sets epic body
-  list [--epic <id>] [--ready | --all]        list work
+  list [--epic <id>] [--ready | --all] [--json]  list work
   show <id> [--body]                          show a task or epic, or only its body
   claim [<id>] --agent <identity>             claim chosen or ready work
   done <id> [-m <text>] [--result <path>]     complete a task
@@ -33,6 +33,7 @@ completes when its children finish.
   sequence <A> <B> [<C>...]                   require A before B before C
   unsequence <A> <B> [<C>...]                 remove that order
   where                                       print the active .ergo path
+  info                                        print executable and active backlog information
   prune [--yes]                               preview or apply pruning
   compact                                     compact the event log
   quickstart                                  print the complete guide

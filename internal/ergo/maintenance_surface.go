@@ -264,3 +264,10 @@ func RunWhere(opts GlobalOptions, render RenderOptions) error {
 func RenderWhere(w io.Writer, outcome WhereOutcome) {
 	fmt.Fprintln(w, outcome.Path)
 }
+
+func RenderInfo(w io.Writer, outcome InfoOutcome) {
+	fmt.Fprintf(w, "Executable: %s\n", outcome.Executable)
+	fmt.Fprintf(w, "Version: %s\n", outcome.Version)
+	fmt.Fprintf(w, "Project: %s\n", outcome.Project)
+	fmt.Fprintf(w, "Backlog: %s\n", outcome.Backlog)
+}

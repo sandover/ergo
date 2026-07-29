@@ -21,7 +21,7 @@ import (
 var publicCommandPaths = []string{
 	"init", "new", "new task", "new epic", "list", "show", "claim", "done",
 	"block", "cancel", "release", "title", "body", "move", "sequence",
-	"unsequence", "where", "compact", "prune", "quickstart", "version",
+	"unsequence", "where", "info", "compact", "prune", "quickstart", "version",
 }
 
 func TestRootHelpIsTheFrontDoor(t *testing.T) {
@@ -43,7 +43,7 @@ func TestRootHelpIsTheFrontDoor(t *testing.T) {
 
 	for _, signature := range []string{
 		"init [dir]", `new task "<title>"`, `new epic "<title>" --file <path>`,
-		"list [--epic <id>]", "show <id> [--body]", "claim [<id>]", "done <id>",
+		"list [--epic <id>] [--ready | --all] [--json]", "show <id> [--body]", "claim [<id>]", "done <id>",
 		"block <id>", "cancel <id>", "release <id>", "title <id> <title>",
 		"body <id>", "move <id> <epic-id>", "sequence <A> <B>",
 		"unsequence <A> <B>", "where", "prune [--yes]", "compact",
@@ -99,7 +99,7 @@ func TestRootAndQuickstartCoverThePublicContract(t *testing.T) {
 	normalized := strings.Join(strings.Fields(combined), " ")
 	for _, flag := range []string{
 		"--agent", "--dir", "--color", "--help", "--version", "--file", "--epic",
-		"--ready", "--all", "--body", "-m", "--result", "--root", "--yes",
+		"--ready", "--all", "--json", "--body", "-m", "--result", "--root", "--yes",
 	} {
 		if !strings.Contains(combined, flag) {
 			t.Errorf("documentation system lacks flag %q", flag)
@@ -221,7 +221,7 @@ func TestCommandHelpRevealsOptionConstraints(t *testing.T) {
 	root := newManualTestRoot()
 	checks := map[string][]string{
 		"new epic": {`ergo new epic "<title>" --file <path>`},
-		"list":     {"--ready", "conflicts with --all", "--all", "conflicts with --ready"},
+		"list":     {"--ready", "conflicts with --all", "--all", "conflicts with --ready", "--json", "versioned JSON task listing"},
 		"claim":    {"--agent", "required"},
 		"show":     {"--body", "exact stored body", "byte-for-byte"},
 		"done":     {"-m, --message", "repeatable", "--result"},

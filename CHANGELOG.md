@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-07-29
+
 ### Added
 
 - Interactive output now uses color to make task state, structure, and next
@@ -15,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic mode respects `NO_COLOR` and `TERM=dumb` and keeps pipes and
   redirects plain. Full documents retain their plain-text structure, and
   `show --body` remains an exact, undecorated body projection.
+- `list --json` provides a small versioned task-picker projection for editor
+  integrations.
+- `info` reports the running executable, version, project root, and selected
+  backlog paths for installation and editor-integration diagnostics.
+- Status glyphs distinguish ready, waiting, doing, blocked, done, and canceled
+  work consistently in readable terminal output.
+- Ergo Backlog, a Preview VS Code extension, can browse a backlog and open the
+  existing `show` document in native Markdown preview.
 
 ## [4.1.0] - 2026-07-28
 

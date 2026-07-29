@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/sandover/ergo/internal/ergo"
 	"github.com/spf13/cobra"
@@ -110,12 +111,17 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	listCmd.Flags().String("epic", "", "Filter by epic ID")
 	listCmd.Flags().Bool("ready", false, "Show only ready tasks (conflicts with --all)")
 	listCmd.Flags().Bool("all", false, "Show all tasks, including canceled/done (conflicts with --ready)")
+	listCmd.Flags().Bool("json", false, "Write a versioned JSON task listing")
 	listCmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		epic, _ := cmd.Flags().GetString("epic")
 		ready, _ := cmd.Flags().GetBool("ready")
 		all, _ := cmd.Flags().GetBool("all")
+		jsonOutput, _ := cmd.Flags().GetBool("json")
 		out, err := app().List(ergo.ListRequest{EpicID: epic, ReadyOnly: ready, ShowAll: all})
 		if err == nil {
+			if jsonOutput {
+				return ergo.RenderListJSON(cmd.OutOrStdout(), out)
+			}
 			ergo.RenderList(cmd.OutOrStdout(), out, render(cmd).Color, render(cmd).Width)
 		}
 		return err
@@ -249,6 +255,18 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 		}
 		return err
 	}
+	infoCmd := &cobra.Command{Use: "info", Short: "Show executable and active backlog information", Args: noArgs("info")}
+	infoCmd.RunE = func(cmd *cobra.Command, _ []string) error {
+		executable, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		out, err := app().Info(ergo.InfoRequest{Executable: executable, Version: buildVersion})
+		if err == nil {
+			ergo.RenderInfo(cmd.OutOrStdout(), out)
+		}
+		return err
+	}
 	compactCmd := &cobra.Command{Use: "compact", Short: "Compact the event log", Args: noArgs("compact")}
 	compactCmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		out, err := app().Compact()
@@ -280,7 +298,7 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	root.AddCommand(initCmd, newCmd, listCmd, showCmd, claimCmd,
 		lifecycle("done", "Mark a task done"), lifecycle("block", "Mark a task blocked"), lifecycle("cancel", "Cancel a task"), lifecycle("release", "Return unfinished work to todo"),
 		titleCmd, bodyCmd, moveCmd, sequence("sequence", "link", "Enforce task order (A then B then C)"), sequence("unsequence", "unlink", "Remove task order (A then B then C)"),
-		whereCmd, compactCmd, pruneCmd, quickCmd, versionCmd)
+		whereCmd, infoCmd, compactCmd, pruneCmd, quickCmd, versionCmd)
 }
 
 func hasString(values []string, target string) bool {

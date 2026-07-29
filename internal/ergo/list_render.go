@@ -209,7 +209,7 @@ func stateIcon(task *Task, isReady, isEpic bool) string {
 		if isReady {
 			return iconReady
 		}
-		return iconBlocked
+		return iconWaiting
 	default:
 		return "?"
 	}

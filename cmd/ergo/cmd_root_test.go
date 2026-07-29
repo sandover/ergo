@@ -90,7 +90,6 @@ func TestCommandRunnerPreservesRemovedErrorsAndExitCodes(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "json", args: []string{"list", "--json"}, want: "--json is not accepted"},
 		{name: "summary", args: []string{"done", "ABCDEF", "--summary", "note"}, want: "use -m <message>"},
 		{name: "plan", args: []string{"plan"}, want: "use ergo new epic"},
 		{name: "set", args: []string{"set", "ABCDEF", "{}"}, want: "use claim, done, block"},

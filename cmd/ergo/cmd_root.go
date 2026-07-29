@@ -129,8 +129,6 @@ func (e *removedCommandError) Unwrap() error {
 func removedArgumentError(args []string) error {
 	for _, arg := range args {
 		switch {
-		case arg == "--json" || strings.HasPrefix(arg, "--json="):
-			return errors.New("--json is not accepted; Ergo prints readable text")
 		case arg == "--summary" || strings.HasPrefix(arg, "--summary="):
 			return errors.New("--summary is not accepted; use -m <message>")
 		}

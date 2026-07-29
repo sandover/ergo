@@ -1,4 +1,4 @@
-# Local ergo state
+# Local Ergo state
 /.ergo/
 /.scratch/
 /.gemini-clipboard/
@@ -17,10 +17,13 @@ coverage.html
 # Dependencies
 /.gocache/
 /vendor/
+/editors/vscode/node_modules/
 
 # Release artifacts
 /dist/
 /build/
+/editors/vscode/out/
+/editors/vscode/*.vsix
 
 # Temporary files
 /tmp/

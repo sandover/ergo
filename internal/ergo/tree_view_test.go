@@ -399,7 +399,7 @@ func TestFormatTreeLineTruncation(t *testing.T) {
 		"",                             // prefix
 		"├",                            // connector
 		true,                           // showConnector
-		"◐",                            // icon
+		"↻",                            // icon
 		task.ID,                        // id
 		"Test task",                    // title
 		[]string{"@" + task.ClaimedBy}, // annotations

@@ -28,9 +28,10 @@ const (
 const (
 	iconDone     = "✓"
 	iconReady    = "○"
-	iconDoing    = "◐"
-	iconBlocked  = "·"
-	iconCanceled = "✗"
+	iconWaiting  = "◷"
+	iconDoing    = "↻"
+	iconBlocked  = "!"
+	iconCanceled = "–"
 	iconError    = "⚠"
 	iconEpic     = "◈"
 )

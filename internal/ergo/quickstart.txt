@@ -38,9 +38,12 @@ cannot be nested.
   {{CMD}}ergo init{{RESET}}
   {{CMD}}ergo init path/to/repo{{RESET}}
   {{CMD}}ergo where{{RESET}}
+  {{CMD}}ergo info{{RESET}}
 
 Ergo discovers `.ergo` by walking upward from the current directory or from
-`--dir <path>`.
+`--dir <path>`. `where` prints the active `.ergo` directory. `info` reports the
+running executable and version together with the active project and backlog
+paths.
 
   {{CMD}}ergo list{{RESET}}                 active work; omits done and canceled
   {{CMD}}ergo list --ready{{RESET}}         tasks available to claim
@@ -49,6 +52,15 @@ Ergo discovers `.ergo` by walking upward from the current directory or from
   {{CMD}}ergo show ABCDEF{{RESET}}          inspect one task or epic
 
 `--ready` and `--all` conflict.
+
+Editor integrations can request the same filtered items without depending on
+terminal layout:
+
+  {{CMD}}ergo list --all --json{{RESET}}
+
+This writes one versioned JSON document containing an ordered `items` array.
+It is a small task-picker projection, not a complete graph export. Normal
+`list` output remains the human-readable view.
 
 `show` normally produces a complete task document. For a leaf, that document
 combines stored fields with synthesized metadata and relationships. For an epic,

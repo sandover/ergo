@@ -276,6 +276,14 @@ tree. Show and claim render YAML front matter followed by Markdown.
 including an empty body or trailing newlines. Focused mutations render concise
 receipts.
 
+Editor integrations use two narrow CLI projections rather than depending on
+terminal presentation or reading the event log. `list --json` applies normal
+filters and ordering, then emits versioned task and epic identity, lifecycle,
+readiness, and placement fields. `info` reports executable, version, project,
+metadata directory, and selected log paths for diagnostics. Because `info`
+uses normal repository discovery, integrations probe compatibility with
+`--version` before a project has been established.
+
 Compatibility `Run*` wrappers remain package-internal for older callers and
 tests. The production Cobra path uses typed application operations and
 renderers directly.

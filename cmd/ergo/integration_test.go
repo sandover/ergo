@@ -8,6 +8,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -688,7 +689,7 @@ func TestNewEpicRejectsLegacyCreationJSON(t *testing.T) {
 
 func TestParentCommandsRejectUnexpectedArguments(t *testing.T) {
 	dir := setupErgo(t)
-	for _, args := range [][]string{{"list", "extra"}, {"quickstart", "extra"}, {"version", "extra"}, {"new", "extra"}} {
+	for _, args := range [][]string{{"list", "extra"}, {"info", "extra"}, {"quickstart", "extra"}, {"version", "extra"}, {"new", "extra"}} {
 		_, stderr, code := runErgo(t, dir, "", args...)
 		if code == 0 {
 			t.Fatalf("%v accepted unexpected arguments; stderr=%q", args, stderr)
@@ -734,6 +735,20 @@ func TestPathAndCreationConfirmations(t *testing.T) {
 	stdout, stderr, code = runErgo(t, dir, "", "where")
 	if code != 0 || strings.TrimSpace(stdout) != wantPath || stderr != "" {
 		t.Fatalf("where: code=%d stdout=%q stderr=%q want=%q", code, stdout, stderr, wantPath)
+	}
+	stdout, stderr, code = runErgo(t, dir, "", "info")
+	for _, want := range []string{
+		"Executable: ",
+		"Version: dev\n",
+		"Project: " + dir + "\n",
+		"Backlog: " + filepath.Join(wantPath, "backlog.jsonl") + "\n",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("info output %q lacks %q", stdout, want)
+		}
+	}
+	if code != 0 || stderr != "" {
+		t.Fatalf("info: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	stdout, stderr, code = runNewTask(t, dir, "Confirmed task")
 	if code != 0 || len(strings.TrimSpace(stdout)) != 6 || stderr != "" {
@@ -948,13 +963,42 @@ func TestBlockKeepsBody(t *testing.T) {
 	}
 }
 
-func TestRemovedJSONFlagExplainsMigration(t *testing.T) {
+func TestListJSONEmptyAndPopulated(t *testing.T) {
 	dir := setupErgo(t)
-	for _, args := range [][]string{{"--json", "list"}, {"list", "--json"}} {
-		stdout, stderr, code := runErgo(t, dir, "", args...)
-		if code == 0 || stdout != "" || !strings.Contains(stderr, "--json is not accepted; Ergo prints readable text") {
-			t.Fatalf("args=%v code=%d stdout=%q stderr=%q", args, code, stdout, stderr)
-		}
+
+	stdout, stderr, code := runErgo(t, dir, "", "list", "--json")
+	if code != 0 || stderr != "" || stdout != "{\"version\":1,\"items\":[]}\n" {
+		t.Fatalf("empty list: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+
+	epicOutput, _, _ := runNewTask(t, dir, "Epic")
+	epicID := strings.TrimSpace(epicOutput)
+	taskOutput, _, _ := runNewTask(t, dir, "Task", "--epic", epicID)
+	taskID := strings.TrimSpace(taskOutput)
+
+	stdout, stderr, code = runErgo(t, dir, "", "--color=always", "list", "--all", "--json")
+	if code != 0 || stderr != "" || !strings.HasSuffix(stdout, "\n") || strings.Contains(stdout, "\x1b") {
+		t.Fatalf("populated list: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	var document struct {
+		Version int `json:"version"`
+		Items   []struct {
+			ID     string `json:"id"`
+			Kind   string `json:"kind"`
+			State  string `json:"state"`
+			Ready  *bool  `json:"ready"`
+			EpicID string `json:"epic_id"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &document); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if document.Version != 1 || len(document.Items) != 2 ||
+		document.Items[0].ID != epicID || document.Items[0].Kind != "epic" ||
+		document.Items[1].ID != taskID || document.Items[1].Kind != "task" ||
+		document.Items[1].State != "todo" || document.Items[1].Ready == nil ||
+		!*document.Items[1].Ready || document.Items[1].EpicID != epicID {
+		t.Fatalf("document = %#v", document)
 	}
 }
 

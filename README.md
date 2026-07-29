@@ -112,9 +112,17 @@ ergo list
 ergo list --ready
 ergo list --epic ABCDEF
 ergo show ABCDEF
+ergo info
 ```
 
 ![Example output of ergo list](docs/img/ergo-list-screenshot.jpg)
+
+The Preview extension under
+[`editors/vscode`](editors/vscode/README.md) adds **Ergo: Backlog** to VS Code.
+It uses Ergo 4.2.0 or later to search tasks and epics, opens the selected
+`ergo show` document in native Markdown preview, and turns
+`.ergo/backlog.jsonl` into a read-only backlog overview. The CLI remains the
+application boundary; the extension does not parse or mutate the event log.
 
 Claim a known task or the oldest ready task:
 

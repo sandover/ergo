@@ -36,7 +36,7 @@ or canceled. Epics cannot be nested.
 init [dir]
 new task "<title>" [--epic <id>]
 new epic "<title>" --file <path>
-list [--epic <id>] [--ready | --all]
+list [--epic <id>] [--ready | --all] [--json]
 show <id> [--body]
 claim [<id>] --agent <identity>
 done <id> [-m <message>] [--result <path>]
@@ -50,6 +50,7 @@ move <id> --root
 sequence <A> <B> [<C>...]
 unsequence <A> <B> [<C>...]
 where
+info
 prune [--yes]
 compact
 quickstart
@@ -167,6 +168,9 @@ any color mode.
 - focused writes print tangible resulting values or explicit no-op facts.
 - `init` reports whether it initialized, repaired, or found a graph and prints
   its resolved absolute `.ergo` path.
+- `where` prints the resolved `.ergo` path. `info` prints the running
+  executable and version together with the resolved project, `.ergo`, and
+  selected backlog paths.
 - `compact` reports its resolved log path, source record count, and resulting
   snapshot record count.
 - prune prints a preview or applied summary.
@@ -174,6 +178,35 @@ any color mode.
 Default list omits done and canceled work. `--all` includes it. `--ready` selects
 ready leaves and conflicts with `--all`. `--epic <id>` selects one epic and its
 children.
+
+`list --json` applies the same filters and semantic order, then writes one
+newline-terminated JSON document. Version 1 has this shape:
+
+```json
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "ABCDEF",
+      "title": "Add login",
+      "kind": "task",
+      "state": "todo",
+      "ready": true,
+      "epic_id": "GHIJKL"
+    }
+  ]
+}
+```
+
+Every item has `id`, `title`, and `kind`. Task items also have `state` and
+`ready`; child tasks have `epic_id`. Fields that do not apply are omitted.
+This projection intentionally excludes task bodies, graph relationships,
+terminal layout, summary text, icons, and ANSI decoration.
+
+`info` uses ordinary repository discovery from the current directory or
+`--dir`. It therefore reports the standard missing-backlog error outside an
+Ergo project; integrations probe executable compatibility with `--version`
+before requesting repository diagnostics.
 
 Success exits zero. Failure exits nonzero and writes an actionable message to
 stderr. Unsupported commands or flags and reserved creation JSON produce
