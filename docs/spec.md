@@ -37,7 +37,7 @@ init [dir]
 new task "<title>" [--epic <id>]
 new epic "<title>" --file <path>
 list [--epic <id>] [--ready | --all]
-show <id>
+show <id> [--body]
 claim [<id>] --agent <identity>
 done <id> [-m <message>] [--result <path>]
 block <id> [-m <message>] [--result <path>]
@@ -138,11 +138,17 @@ dependencies assigned to its epic.
 
 ## Read output
 
-Ergo has one readable output mode.
+Ergo prints readable text.
 
 - `list` prints a compact tree with state icons, terse `@agent` ownership, and
   actionable blocker names or counts.
-- `show` prints YAML front matter followed by Markdown content and relationships.
+- `show <id>` prints a synthesized document: YAML front matter followed by
+  Markdown content and relationships. A leaf document includes its task
+  relationships. An epic document includes its children.
+- `show <id> --body` projects only the stored body of either a leaf or an epic.
+  The projection is byte-preserving: it adds no formatting or final newline,
+  preserves every stored trailing newline, and emits zero bytes for an empty
+  body.
 - `claim` prints the leaf task document followed by exact lifecycle commands.
 - focused writes print tangible resulting values or explicit no-op facts.
 - `init` reports whether it initialized, repaired, or found a graph and prints

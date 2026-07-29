@@ -20,7 +20,7 @@ completes when its children finish.
   new task "<title>" [--epic <id>]            create a task; optional stdin sets its body
   new epic "<title>" --file <path>            create an epic and tasks; optional stdin sets epic body
   list [--epic <id>] [--ready | --all]        list work
-  show <id>                                   show a task or epic
+  show <id> [--body]                          show a task or epic, or only its body
   claim [<id>] --agent <identity>             claim chosen or ready work
   done <id> [-m <text>] [--result <path>]     complete a task
   block <id> [-m <text>] [--result <path>]    record an impediment

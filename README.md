@@ -133,6 +133,19 @@ ergo move ABCDEF GHIJKL
 ergo move ABCDEF --root
 ```
 
+For a lossless body edit, project the stored body to a temporary file before
+writing it back:
+
+```sh
+tmp=$(mktemp) || exit
+trap 'rm -f "$tmp"' 0
+ergo show ABCDEF --body >"$tmp" || exit
+${EDITOR:-vi} "$tmp" || exit
+ergo body ABCDEF <"$tmp"
+```
+
+`ergo quickstart` explains the full projection and empty-body semantics.
+
 ## Storage
 
 ```text

@@ -122,7 +122,7 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	}
 
 	showCmd := &cobra.Command{Use: "show <id>", Short: "Show task details", Args: exactArgs(1, "usage: ergo show <id>")}
-	showCmd.Flags().Bool("body", false, "Write only the stored body")
+	showCmd.Flags().Bool("body", false, "Write only the exact stored body, byte-for-byte")
 	showCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		bodyOnly, _ := cmd.Flags().GetBool("body")
 		if bodyOnly {

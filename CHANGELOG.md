@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ergo show <id> --body` writes the exact stored body for a task or epic,
+  enabling lossless read-edit-write workflows.
+
 ## [4.0.0] - 2026-07-26
 
 Ergo 4 presents work as a dependency-aware backlog and makes its common

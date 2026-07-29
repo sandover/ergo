@@ -645,3 +645,8 @@
 {"type":"message","ts":"2026-07-29T00:15:41.814907Z","data":{"task_id":"CDTR3O","kind":"done","text":"Updated benchmarks and performance setup to current title/stdin/agent contracts, exact setup verification, loud helper failures, current claim parsing, and honest untimed evidence. Performance tests, all benchmarks, concurrent claims, and race checks pass.","ts":"2026-07-29T00:15:41.814907Z"}}
 {"type":"unclaim","ts":"2026-07-29T00:15:41.814907Z","data":{"id":"CDTR3O","ts":"2026-07-29T00:15:41.814907Z"}}
 {"type":"state","ts":"2026-07-29T00:15:41.814907Z","data":{"id":"CDTR3O","state":"done","ts":"2026-07-29T00:15:41.814907Z"}}
+{"type":"claim","ts":"2026-07-29T00:15:53.429111Z","data":{"id":"DHKFQD","agent_id":"codex@local","ts":"2026-07-29T00:15:53.429111Z"}}
+{"type":"state","ts":"2026-07-29T00:15:53.429111Z","data":{"id":"DHKFQD","state":"doing","ts":"2026-07-29T00:15:53.429111Z"}}
+{"type":"message","ts":"2026-07-29T00:19:11.028402Z","data":{"task_id":"DHKFQD","kind":"done","text":"Documented exact show --body semantics and a guarded temporary-file edit workflow across the two-layer manual, generated option help, spec, README, and changelog. Semantic manual/help/body tests pass.","ts":"2026-07-29T00:19:11.028402Z"}}
+{"type":"unclaim","ts":"2026-07-29T00:19:11.028402Z","data":{"id":"DHKFQD","ts":"2026-07-29T00:19:11.028402Z"}}
+{"type":"state","ts":"2026-07-29T00:19:11.028402Z","data":{"id":"DHKFQD","state":"done","ts":"2026-07-29T00:19:11.028402Z"}}

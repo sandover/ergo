@@ -50,6 +50,28 @@ Ergo discovers `.ergo` by walking upward from the current directory or from
 
 `--ready` and `--all` conflict.
 
+`show` normally produces a complete task document. For a leaf, that document
+combines stored fields with synthesized metadata and relationships. For an epic,
+it also describes the epic's children. Use `--body` when only the stored body is
+wanted:
+
+  {{CMD}}ergo show ABCDEF --body{{RESET}}
+
+The body projection works for leaves and epics. It writes the literal stored
+body without headings, metadata, relationships, or other formatting. It adds
+and removes no bytes: an empty body produces no output, a body without a final
+newline remains without one, and existing trailing newlines remain intact.
+
+Use a temporary file when reading, editing, and replacing a body. Checking
+`show` before invoking `body` prevents a failed read from becoming an empty-body
+write:
+
+  {{CMD}}tmp=$(mktemp) || exit{{RESET}}
+  {{CMD}}trap 'rm -f "$tmp"' 0{{RESET}}
+  {{CMD}}ergo show ABCDEF --body >"$tmp" || exit{{RESET}}
+  {{CMD}}${EDITOR:-vi} "$tmp" || exit{{RESET}}
+  {{CMD}}ergo body ABCDEF <"$tmp"{{RESET}}
+
 {{HEADER}}4. CREATE AND ORGANIZE{{RESET}}
 
 Create an unclaimed todo task with a positional title:

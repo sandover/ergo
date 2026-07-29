@@ -43,7 +43,7 @@ func TestRootHelpIsTheFrontDoor(t *testing.T) {
 
 	for _, signature := range []string{
 		"init [dir]", `new task "<title>"`, `new epic "<title>" --file <path>`,
-		"list [--epic <id>]", "show <id>", "claim [<id>]", "done <id>",
+		"list [--epic <id>]", "show <id> [--body]", "claim [<id>]", "done <id>",
 		"block <id>", "cancel <id>", "release <id>", "title <id> <title>",
 		"body <id>", "move <id> <epic-id>", "sequence <A> <B>",
 		"unsequence <A> <B>", "where", "prune [--yes]", "compact",
@@ -99,7 +99,7 @@ func TestRootAndQuickstartCoverThePublicContract(t *testing.T) {
 	normalized := strings.Join(strings.Fields(combined), " ")
 	for _, flag := range []string{
 		"--agent", "--dir", "--help", "--version", "--file", "--epic",
-		"--ready", "--all", "-m", "--result", "--root", "--yes",
+		"--ready", "--all", "--body", "-m", "--result", "--root", "--yes",
 	} {
 		if !strings.Contains(combined, flag) {
 			t.Errorf("documentation system lacks flag %q", flag)
@@ -168,6 +168,7 @@ func TestCommandHelpRevealsOptionConstraints(t *testing.T) {
 		"new epic": {`ergo new epic "<title>" --file <path>`},
 		"list":     {"--ready", "conflicts with --all", "--all", "conflicts with --ready"},
 		"claim":    {"--agent", "required"},
+		"show":     {"--body", "exact stored body", "byte-for-byte"},
 		"done":     {"-m, --message", "repeatable", "--result"},
 		"move":     {"ergo move <id> <epic-id> | ergo move <id> --root"},
 		"prune":    {"--yes", "default is dry-run"},
@@ -177,6 +178,62 @@ func TestCommandHelpRevealsOptionConstraints(t *testing.T) {
 		for _, fact := range facts {
 			if !strings.Contains(help, fact) {
 				t.Errorf("%s help lacks option constraint %q:\n%s", path, fact, help)
+			}
+		}
+	}
+}
+
+func TestShowBodyDocumentationHasClearOwnership(t *testing.T) {
+	rootHelp := ergo.UsageText(false)
+	if !strings.Contains(rootHelp, "show <id> [--body]") {
+		t.Fatal("root command inventory does not expose the body projection")
+	}
+	for _, detail := range []string{"trailing newline", "temporary file", "synthesized metadata"} {
+		if strings.Contains(rootHelp, detail) {
+			t.Errorf("root help owns detailed show semantics %q", detail)
+		}
+	}
+
+	commandHelp := renderCommandHelp(t, findCommand(t, newManualTestRoot(), "show"))
+	for _, fact := range []string{"--body", "exact stored body", "byte-for-byte"} {
+		if !strings.Contains(commandHelp, fact) {
+			t.Errorf("generated show help lacks option fact %q:\n%s", fact, commandHelp)
+		}
+	}
+	if strings.Contains(commandHelp, "mktemp") {
+		t.Fatal("generated show help contains operating-guide prose")
+	}
+
+	quickstart := ergo.QuickstartText(false)
+	normalized := strings.Join(strings.Fields(quickstart), " ")
+	for _, concept := range []string{
+		"leaf", "epic", "literal stored body", "empty body produces no output",
+		"without a final newline", "trailing newlines remain intact",
+	} {
+		if !strings.Contains(normalized, concept) {
+			t.Errorf("quickstart lacks body-projection concept %q", concept)
+		}
+	}
+	assertOrdered(t, "safe body edit", quickstart,
+		"tmp=$(mktemp) || exit", `ergo show ABCDEF --body >"$tmp" || exit`,
+		`${EDITOR:-vi} "$tmp" || exit`, `ergo body ABCDEF <"$tmp"`)
+
+	repositoryRoot := filepath.Join("..", "..")
+	surfaces := map[string][]string{
+		"README.md": {"lossless body edit", "ergo show ABCDEF --body", `ergo body ABCDEF <"$tmp"`},
+		"docs/spec.md": {"synthesized document", "projects only the stored body",
+			"byte-preserving", "emits zero bytes for an empty body"},
+		"CHANGELOG.md": {"show <id> --body", "lossless read-edit-write"},
+	}
+	for name, concepts := range surfaces {
+		data, err := os.ReadFile(filepath.Join(repositoryRoot, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := strings.Join(strings.Fields(string(data)), " ")
+		for _, concept := range concepts {
+			if !strings.Contains(text, concept) {
+				t.Errorf("%s lacks body-projection concept %q", name, concept)
 			}
 		}
 	}
