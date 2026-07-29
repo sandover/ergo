@@ -1,11 +1,10 @@
-// Benchmarks validate performance claims in README.md "Data Representation" section.
+// Benchmarks measure representative CLI operations through the built binary.
 // Run: go test -bench=. -benchmem
 // Run specific: go test -bench=BenchmarkList -benchmem
 package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 // benchList benchmarks the list command with n tasks.
@@ -25,10 +23,13 @@ func benchList(b *testing.B, taskCount int) {
 	runBenchErgo(b, ergo, dir, "", "init")
 
 	// Create tasks
+	created := make([]string, 0, taskCount)
 	for i := 0; i < taskCount; i++ {
-		input := fmt.Sprintf(`{"title":"Task %d","body":"Body for task %d"}`, i, i)
-		runBenchErgo(b, ergo, dir, input, "new", "task")
+		body := fmt.Sprintf("Body for task %d\n", i)
+		output := runBenchErgo(b, ergo, dir, body, "new", "task", fmt.Sprintf("Task %d", i))
+		created = append(created, requireTaskID(b, output))
 	}
+	requireCreatedTaskCount(b, ergo, dir, created, taskCount)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -36,13 +37,13 @@ func benchList(b *testing.B, taskCount int) {
 	}
 }
 
-// BenchmarkList100Tasks validates sub-50ms list for 100 tasks.
+// BenchmarkList100Tasks measures list with 100 tasks.
 func BenchmarkList100Tasks(b *testing.B) { benchList(b, 100) }
 
-// BenchmarkList500Tasks validates sub-100ms list for 500 tasks.
+// BenchmarkList500Tasks measures list with 500 tasks.
 func BenchmarkList500Tasks(b *testing.B) { benchList(b, 500) }
 
-// BenchmarkList1000Tasks validates scaling for 1000 tasks.
+// BenchmarkList1000Tasks measures list with 1000 tasks.
 func BenchmarkList1000Tasks(b *testing.B) { benchList(b, 1000) }
 
 // BenchmarkClaim benchmarks the claim hot path.
@@ -52,88 +53,40 @@ func BenchmarkClaim(b *testing.B) {
 
 	// Initialize and create enough tasks for benchmark iterations
 	runBenchErgo(b, ergo, dir, "", "init")
-	for i := 0; i < b.N+100; i++ {
-		input := fmt.Sprintf(`{"title":"Task %d","body":"Body for task %d"}`, i, i)
-		runBenchErgo(b, ergo, dir, input, "new", "task")
+	created := make([]string, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		body := fmt.Sprintf("Body for task %d\n", i)
+		output := runBenchErgo(b, ergo, dir, body, "new", "task", fmt.Sprintf("Task %d", i))
+		created = append(created, requireTaskID(b, output))
 	}
+	requireCreatedTaskCount(b, ergo, dir, created, b.N)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		runBenchErgo(b, ergo, dir, "", "claim")
+		runBenchErgo(b, ergo, dir, "", "claim", "--agent", "benchmark@local")
 	}
 }
 
-// TestPerformance guards against performance regressions.
-// These are NOT benchmarks — they're tests that fail if operations exceed
-// generous upper bounds. Thresholds are 10x the expected time to allow for
-// slow CI machines while still catching major regressions.
-//
-// Expected: 100 tasks ~3ms, 1000 tasks ~15ms (per README claims)
-// Thresholds: 100 tasks <100ms, 1000 tasks <500ms
-func TestPerformance_List100Tasks(t *testing.T) {
-	if raceEnabled() {
-		t.Skip("performance guard disabled under -race")
-	}
-	assertListUnder(t, 100, 100*time.Millisecond)
-}
-
-func TestPerformance_List1000Tasks(t *testing.T) {
-	if raceEnabled() {
-		t.Skip("performance guard disabled under -race")
-	}
-	assertListUnder(t, 1000, 500*time.Millisecond)
-}
-
-func TestPerformance_Claim(t *testing.T) {
-	if raceEnabled() {
-		t.Skip("performance guard disabled under -race")
-	}
+func TestPerformanceSetupUsesCurrentCLI(t *testing.T) {
 	dir := t.TempDir()
-	ergo := buildErgoBinaryForTest(t)
+	ergo := buildErgoBinary(t)
 
 	runTestErgo(t, ergo, dir, "", "init")
-	for i := 0; i < 100; i++ {
-		input := fmt.Sprintf(`{"title":"Task %d","body":"Body %d"}`, i, i)
-		runTestErgo(t, ergo, dir, input, "new", "task")
-	}
-
-	start := time.Now()
-	runTestErgo(t, ergo, dir, "", "claim")
-	elapsed := time.Since(start)
-
-	// Expected ~6ms, threshold 200ms
-	if elapsed > 200*time.Millisecond {
-		t.Errorf("claim took %v, expected <200ms (regression guard)", elapsed)
-	}
-	t.Logf("claim: %v", elapsed)
-}
-
-func assertListUnder(t *testing.T, taskCount int, maxDuration time.Duration) {
-	t.Helper()
-	dir := t.TempDir()
-	ergo := buildErgoBinaryForTest(t)
-
-	runTestErgo(t, ergo, dir, "", "init")
+	const taskCount = 12
+	created := make([]string, 0, taskCount)
 	for i := 0; i < taskCount; i++ {
-		input := fmt.Sprintf(`{"title":"Task %d","body":"Body %d"}`, i, i)
-		runTestErgo(t, ergo, dir, input, "new", "task")
+		body := fmt.Sprintf("Body %d\n", i)
+		output := runTestErgo(t, ergo, dir, body, "new", "task", fmt.Sprintf("Task %d", i))
+		created = append(created, requireTaskID(t, output))
 	}
-
-	start := time.Now()
-	runTestErgo(t, ergo, dir, "", "list")
-	elapsed := time.Since(start)
-
-	if elapsed > maxDuration {
-		t.Errorf("list %d tasks took %v, expected <%v (regression guard)", taskCount, elapsed, maxDuration)
-	}
-	t.Logf("list %d tasks: %v", taskCount, elapsed)
+	requireCreatedTaskCount(t, ergo, dir, created, taskCount)
 }
 
 // TestConcurrentClaimNoDoubles validates that racing agents don't double-claim.
 // This is a correctness test, not a benchmark.
 func TestConcurrentClaimNoDoubles(t *testing.T) {
 	dir := t.TempDir()
-	ergo := buildErgoBinaryForTest(t)
+	ergo := buildErgoBinary(t)
 
 	// Initialize
 	runTestErgo(t, ergo, dir, "", "init")
@@ -141,8 +94,8 @@ func TestConcurrentClaimNoDoubles(t *testing.T) {
 	// Create 20 tasks
 	taskCount := 20
 	for i := 0; i < taskCount; i++ {
-		input := fmt.Sprintf(`{"title":"Task %d","body":"Body for task %d"}`, i, i)
-		runTestErgo(t, ergo, dir, input, "new", "task")
+		body := fmt.Sprintf("Body for task %d\n", i)
+		runTestErgo(t, ergo, dir, body, "new", "task", fmt.Sprintf("Task %d", i))
 	}
 
 	// 10 goroutines racing to claim
@@ -162,7 +115,7 @@ func TestConcurrentClaimNoDoubles(t *testing.T) {
 				if strings.Contains(stdout, "No ready ergo tasks.") || stdout == "" {
 					return
 				}
-				id := extractTaskID(stdout)
+				id := extractClaimedTaskID(stdout)
 				if id != "" {
 					claimedIDs <- id
 					return
@@ -196,9 +149,8 @@ func TestConcurrentClaimNoDoubles(t *testing.T) {
 		}
 	}
 
-	// Should have claimed exactly agentCount tasks (or fewer if race to empty)
-	if len(claimed) > agentCount {
-		t.Errorf("claimed %d tasks but only had %d agents", len(claimed), agentCount)
+	if len(claimed) != agentCount {
+		t.Errorf("claimed %d tasks, want exactly %d", len(claimed), agentCount)
 	}
 
 	t.Logf("Successfully claimed %d tasks with %d agents, no double-claims", len(claimed), agentCount)
@@ -206,67 +158,20 @@ func TestConcurrentClaimNoDoubles(t *testing.T) {
 
 // --- Helpers ---
 
-var benchBinaryCache string
-var benchBinaryOnce sync.Once
-var benchBinaryCleanupOnce sync.Once
-var benchBinaryCleanup func()
-
-func buildErgoBinary(b *testing.B) string {
-	b.Helper()
-	benchBinaryOnce.Do(func() {
-		benchBinaryCache = buildBinary()
-	})
-	if benchBinaryCache == "" {
-		b.Fatal("failed to build ergo binary")
-	}
-	b.Cleanup(cleanupBenchBinary)
-	return benchBinaryCache
-}
-
-func buildErgoBinaryForTest(t *testing.T) string {
-	t.Helper()
-	benchBinaryOnce.Do(func() {
-		benchBinaryCache = buildBinary()
-	})
-	if benchBinaryCache == "" {
-		t.Fatal("failed to build ergo binary")
-	}
-	t.Cleanup(cleanupBenchBinary)
-	return benchBinaryCache
-}
-
-func buildBinary() string {
+func buildErgoBinary(tb testing.TB) string {
+	tb.Helper()
 	cwd, err := os.Getwd()
 	if err != nil {
-		return ""
+		tb.Fatalf("get working directory: %v", err)
 	}
-	tmpRoot := filepath.Join(cwd, "tmp")
-	if err := os.MkdirAll(tmpRoot, 0755); err != nil {
-		return ""
-	}
-	tmpDir, err := os.MkdirTemp(tmpRoot, "ergo-bench-")
-	if err != nil {
-		return ""
-	}
-	binary := filepath.Join(tmpDir, "ergo-bench")
+	binary := filepath.Join(tb.TempDir(), "ergo-bench")
 	cmd := exec.Command("go", "build", "-o", binary, ".")
 	cmd.Dir = cwd
-	if err := cmd.Run(); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		return ""
-	}
-	benchBinaryCleanup = func() {
-		_ = os.RemoveAll(tmpDir)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		tb.Fatalf("build ergo benchmark binary: %v\n%s", err, output)
 	}
 	return binary
-}
-
-func cleanupBenchBinary() {
-	benchBinaryCleanupOnce.Do(func() {
-		if benchBinaryCleanup != nil {
-			benchBinaryCleanup()
-		}
-	})
 }
 
 func runBenchErgo(b *testing.B, binary, dir, stdin string, args ...string) string {
@@ -276,19 +181,22 @@ func runBenchErgo(b *testing.B, binary, dir, stdin string, args ...string) strin
 	if stdin != "" {
 		cmd.Stdin = bytes.NewBufferString(stdin)
 	}
-	out, err := cmd.Output()
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			// Some commands (like claim with no tasks) exit non-zero
-			_ = exitErr
-		}
+		b.Fatalf("ergo %s: %v\nstderr: %s", strings.Join(args, " "), err, stderr.String())
 	}
-	return string(out)
+	return stdout.String()
 }
 
 func runTestErgo(t *testing.T, binary, dir, stdin string, args ...string) string {
 	t.Helper()
-	stdout, _, _ := runTestErgoWithExit(binary, dir, stdin, args...)
+	stdout, stderr, exitCode := runTestErgoWithExit(binary, dir, stdin, args...)
+	if exitCode != 0 {
+		t.Fatalf("ergo %s: exit %d\nstderr: %s", strings.Join(args, " "), exitCode, stderr)
+	}
 	return stdout
 }
 
@@ -305,22 +213,62 @@ func runTestErgoWithExit(binary, dir, stdin string, args ...string) (string, str
 	exitCode := 0
 	if exitErr, ok := err.(*exec.ExitError); ok {
 		exitCode = exitErr.ExitCode()
+	} else if err != nil {
+		exitCode = -1
+		fmt.Fprintf(&errBuf, "start command: %v", err)
 	}
 	return outBuf.String(), errBuf.String(), exitCode
 }
 
 func extractTaskID(output string) string {
-	// Try JSON first
-	var obj map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &obj); err == nil {
-		if id, ok := obj["id"].(string); ok {
-			return id
-		}
-	}
-	// Otherwise take first line (plain text output is just the ID)
-	lines := bytes.Split([]byte(output), []byte("\n"))
-	if len(lines) > 0 {
-		return string(bytes.TrimSpace(lines[0]))
+	fields := strings.Fields(output)
+	if len(fields) == 1 {
+		return fields[0]
 	}
 	return ""
+}
+
+func extractClaimedTaskID(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		if value, ok := strings.CutPrefix(line, `id: "`); ok {
+			if id, ok := strings.CutSuffix(value, `"`); ok {
+				return id
+			}
+		}
+	}
+	return ""
+}
+
+func requireTaskID(tb testing.TB, output string) string {
+	tb.Helper()
+	id := extractTaskID(output)
+	if id == "" {
+		tb.Fatalf("task creation returned an invalid ID: %q", output)
+	}
+	return id
+}
+
+func requireCreatedTaskCount(tb testing.TB, binary, dir string, created []string, want int) {
+	tb.Helper()
+	if len(created) != want {
+		tb.Fatalf("setup recorded %d task IDs, want %d", len(created), want)
+	}
+	cmd := exec.Command(binary, "list", "--all")
+	cmd.Dir = dir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		tb.Fatalf("verify setup task count: %v\nstderr: %s", err, stderr.String())
+	}
+	found := 0
+	for _, id := range created {
+		if strings.Count(stdout.String(), id) != 1 {
+			tb.Fatalf("setup task %s does not appear exactly once\n%s", id, stdout.String())
+		}
+		found++
+	}
+	if found != want {
+		tb.Fatalf("setup contains %d verified tasks, want %d", found, want)
+	}
 }

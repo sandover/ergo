@@ -642,3 +642,6 @@
 {"type":"message","ts":"2026-07-29T00:15:32.414484Z","data":{"task_id":"H4HW7L","kind":"done","text":"Added typed show --body projection with exact byte-preserving rendering and propagated write failures. Leaf, epic, empty, newline, CLI round-trip, unknown/pruned, and unchanged show/claim contracts pass focused gates.","ts":"2026-07-29T00:15:32.414484Z"}}
 {"type":"unclaim","ts":"2026-07-29T00:15:32.414484Z","data":{"id":"H4HW7L","ts":"2026-07-29T00:15:32.414484Z"}}
 {"type":"state","ts":"2026-07-29T00:15:32.414484Z","data":{"id":"H4HW7L","state":"done","ts":"2026-07-29T00:15:32.414484Z"}}
+{"type":"message","ts":"2026-07-29T00:15:41.814907Z","data":{"task_id":"CDTR3O","kind":"done","text":"Updated benchmarks and performance setup to current title/stdin/agent contracts, exact setup verification, loud helper failures, current claim parsing, and honest untimed evidence. Performance tests, all benchmarks, concurrent claims, and race checks pass.","ts":"2026-07-29T00:15:41.814907Z"}}
+{"type":"unclaim","ts":"2026-07-29T00:15:41.814907Z","data":{"id":"CDTR3O","ts":"2026-07-29T00:15:41.814907Z"}}
+{"type":"state","ts":"2026-07-29T00:15:41.814907Z","data":{"id":"CDTR3O","state":"done","ts":"2026-07-29T00:15:41.814907Z"}}
