@@ -41,13 +41,11 @@ export function renderBacklog(
     h1 { font-size: 22px; margin: 0; }
     h2 { color: var(--vscode-descriptionForeground); font-size: 11px; letter-spacing: .09em; margin: 34px 8px 14px; text-transform: uppercase; }
     .meta { color: var(--vscode-descriptionForeground); }
-    .filters { align-items: center; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) auto; }
-    input { background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, transparent); color: var(--vscode-input-foreground); font: inherit; padding: 7px 9px; width: 100%; }
-    input:focus { border-color: var(--vscode-focusBorder); outline: none; }
-    button.filter { background: var(--vscode-button-secondaryBackground); border: 1px solid transparent; border-radius: 3px; color: var(--vscode-button-secondaryForeground); cursor: pointer; font: inherit; padding: 7px 11px; white-space: nowrap; }
-    button.filter:hover { background: var(--vscode-button-secondaryHoverBackground); }
-    button.filter[aria-pressed="true"] { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
-    button.filter:focus { border-color: var(--vscode-focusBorder); outline: none; }
+    .filters { display: grid; gap: 10px; }
+    input[type="search"] { background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, transparent); color: var(--vscode-input-foreground); font: inherit; padding: 7px 9px; width: 100%; }
+    input[type="search"]:focus { border-color: var(--vscode-focusBorder); outline: none; }
+    .ready-filter { align-items: center; cursor: pointer; display: inline-flex; gap: 7px; justify-self: start; }
+    .ready-filter input { accent-color: var(--vscode-checkbox-background); cursor: pointer; margin: 0; }
     main { margin-top: 22px; }
     section { margin-bottom: 30px; }
     .row { align-items: center; border-radius: 3px; display: grid; gap: 12px; grid-template-columns: 18px minmax(0, 1fr) auto; padding: 6px 8px; }
@@ -73,7 +71,7 @@ export function renderBacklog(
   <header><h1>Ergo backlog</h1></header>
   <div class="filters">
     <input id="search" type="search" aria-label="Search tasks" placeholder="Search by title or ID">
-    <button id="readyOnly" class="filter" type="button" aria-pressed="false">Ready only</button>
+    <label class="ready-filter"><input id="readyOnly" type="checkbox">Ready only</label>
   </div>
   <main>${roots}${epicSections || (!roots ? '<p class="empty">No tasks found.</p>' : "")}</main>
   <p id="noMatches" class="empty" hidden>No matching tasks.</p>
@@ -92,7 +90,7 @@ export function renderBacklog(
     });
     function applyFilters() {
       const query = search.value.trim().toLocaleLowerCase();
-      const onlyReady = readyOnly.getAttribute("aria-pressed") === "true";
+      const onlyReady = readyOnly.checked;
       let visibleItems = 0;
       let visibleGroups = 0;
       for (const group of groups) {
@@ -119,11 +117,7 @@ export function renderBacklog(
       document.getElementById("noMatches").hidden = visibleItems !== 0 || visibleGroups !== 0;
     }
     search.addEventListener("input", applyFilters);
-    readyOnly.addEventListener("click", () => {
-      const pressed = readyOnly.getAttribute("aria-pressed") === "true";
-      readyOnly.setAttribute("aria-pressed", String(!pressed));
-      applyFilters();
-    });
+    readyOnly.addEventListener("change", applyFilters);
   </script>
 </body>
 </html>`;

@@ -62,12 +62,13 @@ test("renders a clickable searchable overview from realistic backlog data", () =
   assert.doesNotMatch(view.html, /border-top/);
   assert.match(view.html, /vscode\.postMessage\(\{ type: "open", id: button\.dataset\.id \}\)/);
   assert.match(view.html, /search\.addEventListener\("input"/);
-  assert.match(view.html, /id="readyOnly"[^>]+aria-pressed="false">Ready only<\/button>/);
+  assert.match(view.html, /<label class="ready-filter"><input id="readyOnly" type="checkbox">Ready only<\/label>/);
   assert.match(view.html, /data-ready="true"/);
   assert.match(view.html, /data-ready="false"/);
   assert.match(view.html, /group\.tagName === "DETAILS"/);
   assert.match(view.html, /group\.hidden = query && !epicMatches && groupMatches === 0/);
-  assert.match(view.html, /readyOnly\.addEventListener\("click"/);
+  assert.match(view.html, /const onlyReady = readyOnly\.checked/);
+  assert.match(view.html, /readyOnly\.addEventListener\("change", applyFilters\)/);
   assert.deepEqual([...view.itemIds], ["CCKOC2", "BQM4Y5", "OKOKSE", "RKSARF", "EUDZOS"]);
 });
 
