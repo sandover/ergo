@@ -153,8 +153,8 @@ Ergo prints readable text.
 - focused writes print tangible resulting values or explicit no-op facts.
 - `init` reports whether it initialized, repaired, or found a graph and prints
   its resolved absolute `.ergo` path.
-- `compact` reports its resolved event-log path, before and after event counts,
-  and the number removed.
+- `compact` reports its resolved log path, source record count, and resulting
+  snapshot record count.
 - prune prints a preview or applied summary.
 
 Default list omits done and canceled work. `--all` includes it. `--ready` selects
@@ -175,11 +175,11 @@ The active repository contains:
 └── lock
 ```
 
-The JSONL file is an append-only event log. New repositories use
-`.ergo/backlog.jsonl`. Existing repositories with `.ergo/plans.jsonl` or
-`.ergo/events.jsonl` continue to use that file in place. If more than one exists,
-selection order is `backlog.jsonl`, `plans.jsonl`, then `events.jsonl`. Opening a
-backlog does not rename or rewrite its event log.
+The JSONL file contains transaction records and, after compaction, a snapshot
+block. New repositories use `.ergo/backlog.jsonl`. Existing repositories with
+`.ergo/plans.jsonl` or `.ergo/events.jsonl` continue to use that file in place.
+Exactly one supported log may exist; opening fails if more than one is present.
+Opening a backlog does not rename or rewrite its selected log.
 
 Replay constructs current tasks, epics, dependencies, messages, results,
 metadata, and tombstones. It accepts every stored event shape supported by the
@@ -190,10 +190,12 @@ Prune is logical deletion. Without `--yes`, it is a dry-run. With `--yes`, it
 tombstones done and canceled leaves, then epics left empty. Pruned IDs cannot be
 read, changed, or used as dependency targets and no longer block dependents.
 
-Compact rewrites the event log to a lossless representation of current state and
-can remove pruned history. It does not change the current backlog.
+Compact replaces the selected log with a deterministic snapshot block of
+current live state. It removes superseded records and pruned history without
+changing the current backlog.
 
-Reads and writes acquire `.ergo/lock`. A mutation validates and appends its full
-event batch while holding the lock. List and show return coherent snapshots.
-Oldest-ready selection and claim occur under the same lock, so concurrent agents
-cannot claim the same task.
+Repository views and updates acquire `.ergo/lock`. An update loads the current
+graph, validates its full event batch on an isolated copy, and appends the batch
+as one transaction record while holding the lock. List and show use coherent
+views. Oldest-ready selection and claim occur in one update, so concurrent
+agents cannot claim the same task.

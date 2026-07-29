@@ -13,7 +13,7 @@ direct commands. Humans see the same backlog. A repository lock keeps concurrent
 claims and mutations safe.
 
 Ergo is deliberately small: tasks, epics, dependencies, lifecycle state, and
-results. Its append-only event log is plain, git-friendly JSONL.
+results. Its transaction and snapshot records are plain, git-friendly JSONL.
 
 Inspired by [beads (bd)](https://github.com/steveyegge/beads), with a smaller
 command and storage model.
@@ -150,13 +150,16 @@ ergo body ABCDEF <"$tmp"
 
 ```text
 .ergo/
-├── backlog.jsonl  # append-only event log
+├── backlog.jsonl  # transactions and compacted snapshots
 └── lock           # write and coherent-read serialization
 ```
 
-Each command replays the event log into memory. Mutations validate and append
-their complete event batch under the lock. Ready-task selection and claim happen
-under that same lock, so concurrent agents cannot claim the same task.
+New repositories use `backlog.jsonl`; an existing `plans.jsonl` or
+`events.jsonl` remains in place. Exactly one supported log may exist. Repository
+reads load a coherent graph under the lock. Mutations validate their complete
+event batch and append it as one transaction record under that same lock.
+Ready-task selection and claim are one locked update, so concurrent agents
+cannot claim the same task.
 
 Run `ergo --help` for the front door and `ergo quickstart` for the complete
 guide. Each command also supports `--help` for syntax and options.

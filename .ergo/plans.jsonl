@@ -657,3 +657,6 @@
 {"type":"message","ts":"2026-07-29T00:22:38.358879Z","data":{"task_id":"H4HW7L","kind":"done","text":"Applied final lint cleanup to body projection tests; focused body suites and full race-enabled CI pass.","ts":"2026-07-29T00:22:38.358879Z"}}
 {"type":"unclaim","ts":"2026-07-29T00:22:38.358879Z","data":{"id":"H4HW7L","ts":"2026-07-29T00:22:38.358879Z"}}
 {"type":"state","ts":"2026-07-29T00:22:38.358879Z","data":{"id":"H4HW7L","state":"done","ts":"2026-07-29T00:22:38.358879Z"}}
+{"type":"message","ts":"2026-07-29T00:22:49.67139Z","data":{"task_id":"KCLR3I","kind":"done","text":"Rebuilt architecture.md as a freestanding current-state model and aligned README/spec storage contracts. Manual tests, focused architecture suites, stale-claim audit, lint, and full race-enabled CI pass; fresh-reader review found no required prior context.","ts":"2026-07-29T00:22:49.67139Z"}}
+{"type":"unclaim","ts":"2026-07-29T00:22:49.67139Z","data":{"id":"KCLR3I","ts":"2026-07-29T00:22:49.67139Z"}}
+{"type":"state","ts":"2026-07-29T00:22:49.67139Z","data":{"id":"KCLR3I","state":"done","ts":"2026-07-29T00:22:49.67139Z"}}
