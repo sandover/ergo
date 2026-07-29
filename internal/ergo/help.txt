@@ -40,6 +40,7 @@ completes when its children finish.
 
 {{HEADER}}GLOBAL FLAGS{{RESET}}
   --dir <path>        start discovery at this path or .ergo directory
+  --color <mode>      color output: auto, always, or never (default auto)
   -h, --help          print help
   -V, --version       print the build version
 

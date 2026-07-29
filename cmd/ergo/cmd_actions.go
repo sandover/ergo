@@ -9,12 +9,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func commandRender(cmd *cobra.Command, streams Streams) ergo.RenderOptions {
+func commandRender(cmd *cobra.Command, streams Streams, color colorMode) ergo.RenderOptions {
 	width := streams.Width
 	if width <= 0 {
 		width = 80
 	}
-	return ergo.RenderOptions{Writer: cmd.OutOrStdout(), Color: streams.StdoutTerminal, Width: width}
+	return ergo.RenderOptions{Writer: cmd.OutOrStdout(), Color: resolveColor(color, streams), Width: width}
 }
 
 func commandInput(cmd *cobra.Command, streams Streams, required bool, id string) (string, error) {
@@ -28,9 +28,9 @@ func commandInput(cmd *cobra.Command, streams Streams, required bool, id string)
 	return string(body), err
 }
 
-func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, options *ergo.RepositoryOptions, buildVersion string) {
+func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, options *ergo.RepositoryOptions, color *colorMode, buildVersion string) {
 	app := func() *ergo.Application { return base.WithRepository(*options) }
-	render := func(cmd *cobra.Command) ergo.RenderOptions { return commandRender(cmd, streams) }
+	render := func(cmd *cobra.Command) ergo.RenderOptions { return commandRender(cmd, streams, *color) }
 
 	initCmd := &cobra.Command{Use: "init [dir]", Short: "Initialize an Ergo graph", Args: cobra.MaximumNArgs(1)}
 	initCmd.Args = func(_ *cobra.Command, args []string) error {

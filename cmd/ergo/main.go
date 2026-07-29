@@ -39,6 +39,13 @@ func processStreams() Streams {
 		Err:            os.Stderr,
 		StdinTerminal:  stdinTerminal,
 		StdoutTerminal: stdoutTerminal,
+		NoColor:        envPresent("NO_COLOR"),
+		Term:           os.Getenv("TERM"),
 		Width:          width,
 	}
+}
+
+func envPresent(name string) bool {
+	_, present := os.LookupEnv(name)
+	return present
 }
