@@ -18,6 +18,28 @@ func NewApplication(options RepositoryOptions) *Application {
 	return &Application{repository: options}
 }
 
+// WithRepository returns an independent application bound to repository
+// options owned by one CLI command tree.
+func (a *Application) WithRepository(options RepositoryOptions) *Application {
+	application := *a
+	if options.StartDir != "" {
+		application.repository = options
+	}
+	return &application
+}
+
+type VersionRequest struct {
+	Version string
+}
+
+type VersionOutcome struct {
+	Version string
+}
+
+func (a *Application) Version(request VersionRequest) VersionOutcome {
+	return VersionOutcome{Version: request.Version}
+}
+
 type CreateTaskRequest struct {
 	Title  string
 	EpicID string

@@ -79,6 +79,17 @@ func TestApplicationClaimIdentityIsRequestScoped(t *testing.T) {
 	}
 }
 
+func TestApplicationWithRepositoryPreservesBaseWhenNoOverrideIsSet(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := InitializeRepository(dir); err != nil {
+		t.Fatal(err)
+	}
+	app := NewApplication(RepositoryOptions{StartDir: dir}).WithRepository(RepositoryOptions{})
+	if _, err := app.CreateTask(CreateTaskRequest{Title: "Uses base repository"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestApplicationErrorKinds(t *testing.T) {
 	app := newTestApplication(t)
 	_, err := app.CreateTask(CreateTaskRequest{})

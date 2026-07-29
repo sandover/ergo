@@ -2,6 +2,7 @@ package ergo
 
 import (
 	"errors"
+	"os"
 	"strings"
 )
 
@@ -28,6 +29,10 @@ func (a *Application) CreateEpic(request CreateEpicRequest) (CreateEpicOutcome, 
 	}
 	tasks, err := ParseEpicFile(request.FilePath)
 	if err != nil {
+		var pathError *os.PathError
+		if errors.As(err, &pathError) {
+			return CreateEpicOutcome{}, classifyRepositoryError(err)
+		}
 		return CreateEpicOutcome{}, classified(ErrorUsage, err)
 	}
 	dir, err := ergoDir(a.repository)

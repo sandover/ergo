@@ -15,6 +15,9 @@ type SequenceOutcome struct {
 }
 
 func (a *Application) Sequence(request SequenceRequest) (SequenceOutcome, error) {
+	if request.Command == "sequence" && len(request.IDs) > 0 && request.IDs[0] == "rm" {
+		return SequenceOutcome{}, classified(ErrorUsage, errors.New("sequence rm is not accepted; use ergo unsequence <A> <B> [<C>...]"))
+	}
 	usage := fmt.Sprintf("usage: ergo %s <A> <B> [<C>...]", request.Command)
 	if len(request.IDs) < 2 {
 		return SequenceOutcome{}, classified(ErrorUsage, errors.New(usage))
