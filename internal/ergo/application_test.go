@@ -30,7 +30,7 @@ func TestApplicationCreateAndShow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shown, err := app.Show(ShowRequest{ID: created.ID})
+	shown, err := app.Show(ShowRequest(created))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,8 +72,8 @@ func TestApplicationClaimIdentityIsRequestScoped(t *testing.T) {
 	if _, err := app.Claim(ClaimRequest{ID: second.ID, AgentID: "two@host"}); err != nil {
 		t.Fatal(err)
 	}
-	firstShown, _ := app.Show(ShowRequest{ID: first.ID})
-	secondShown, _ := app.Show(ShowRequest{ID: second.ID})
+	firstShown, _ := app.Show(ShowRequest(first))
+	secondShown, _ := app.Show(ShowRequest(second))
 	if firstShown.Task.ClaimedBy != "one@host" || secondShown.Task.ClaimedBy != "two@host" {
 		t.Fatalf("claims = %q, %q", firstShown.Task.ClaimedBy, secondShown.Task.ClaimedBy)
 	}

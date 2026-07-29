@@ -37,7 +37,7 @@ type VersionOutcome struct {
 }
 
 func (a *Application) Version(request VersionRequest) VersionOutcome {
-	return VersionOutcome{Version: request.Version}
+	return VersionOutcome(request)
 }
 
 type CreateTaskRequest struct {

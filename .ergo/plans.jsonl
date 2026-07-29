@@ -620,3 +620,15 @@
 {"type":"message","ts":"2026-07-29T00:08:50.217528Z","data":{"task_id":"PN4YAX","kind":"done","text":"Replaced global Cobra state with fresh local construction, immutable repository binding, injected streams/capabilities, structural removed-command errors, and a non-exiting runner; main is the sole process boundary. Focused and full cmd suites plus isolation audits pass.","ts":"2026-07-29T00:08:50.217528Z"}}
 {"type":"unclaim","ts":"2026-07-29T00:08:50.217528Z","data":{"id":"PN4YAX","ts":"2026-07-29T00:08:50.217528Z"}}
 {"type":"state","ts":"2026-07-29T00:08:50.217528Z","data":{"id":"PN4YAX","state":"done","ts":"2026-07-29T00:08:50.217528Z"}}
+{"type":"claim","ts":"2026-07-29T00:08:50.259362Z","data":{"id":"5GRMXW","agent_id":"codex@local","ts":"2026-07-29T00:08:50.259362Z"}}
+{"type":"state","ts":"2026-07-29T00:08:50.259362Z","data":{"id":"5GRMXW","state":"doing","ts":"2026-07-29T00:08:50.259362Z"}}
+{"type":"claim","ts":"2026-07-29T00:09:10.455104Z","data":{"id":"EE376O","agent_id":"codex@local","ts":"2026-07-29T00:09:10.455104Z"}}
+{"type":"state","ts":"2026-07-29T00:09:10.455104Z","data":{"id":"EE376O","state":"doing","ts":"2026-07-29T00:09:10.455104Z"}}
+{"type":"claim","ts":"2026-07-29T00:09:10.466201Z","data":{"id":"PN4YAX","agent_id":"codex@local","ts":"2026-07-29T00:09:10.466201Z"}}
+{"type":"state","ts":"2026-07-29T00:09:10.466201Z","data":{"id":"PN4YAX","state":"doing","ts":"2026-07-29T00:09:10.466201Z"}}
+{"type":"message","ts":"2026-07-29T00:09:37.037198Z","data":{"task_id":"EE376O","kind":"done","text":"Applied the application-wave lint cleanup; focused application tests and full race-enabled CI pass.","ts":"2026-07-29T00:09:37.037198Z"}}
+{"type":"unclaim","ts":"2026-07-29T00:09:37.037198Z","data":{"id":"EE376O","ts":"2026-07-29T00:09:37.037198Z"}}
+{"type":"state","ts":"2026-07-29T00:09:37.037198Z","data":{"id":"EE376O","state":"done","ts":"2026-07-29T00:09:37.037198Z"}}
+{"type":"message","ts":"2026-07-29T00:09:37.046766Z","data":{"task_id":"PN4YAX","kind":"done","text":"Revalidated fresh command construction after the shared application lint cleanup; focused CLI tests and full race-enabled CI pass.","ts":"2026-07-29T00:09:37.046766Z"}}
+{"type":"unclaim","ts":"2026-07-29T00:09:37.046766Z","data":{"id":"PN4YAX","ts":"2026-07-29T00:09:37.046766Z"}}
+{"type":"state","ts":"2026-07-29T00:09:37.046766Z","data":{"id":"PN4YAX","state":"done","ts":"2026-07-29T00:09:37.046766Z"}}
