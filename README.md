@@ -41,6 +41,30 @@ The repository also ships an
 [Ergo feature-planning skill](skills/ergo-feature-planning/SKILL.md) for shaping
 and executing larger backlogs.
 
+## Browse in VS Code
+
+[Ergo Backlog](https://marketplace.visualstudio.com/items?itemName=sandover.ergo-backlog)
+gives humans a clear, read-only view of the same repository backlog used by
+coding agents. Open `.ergo/backlog.jsonl` to scan active work, see which tasks
+are ready or waiting, and follow the structure of an epic without reading the
+event log.
+
+![An Ergo backlog open in VS Code](docs/img/ergo-vscode-backlog.png)
+
+Run **Ergo: Backlog** from the Command Palette to find a task or epic by title
+or six-character ID:
+
+![Searching an Ergo backlog from the VS Code Command Palette](docs/img/ergo-vscode-search.png)
+
+Select an item to open its state, dependencies, and body as a readable Markdown
+preview:
+
+![A dependency-aware Ergo task open in VS Code](docs/img/ergo-vscode-task.png)
+
+Install the CLI first, then
+[install Ergo Backlog from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=sandover.ergo-backlog).
+The extension requires Ergo 4.2.0 or later and is available as a Preview.
+
 ## Start
 
 ```sh
@@ -116,20 +140,6 @@ ergo info
 ```
 
 ![Example output of ergo list](docs/img/ergo-list-screenshot.jpg)
-
-## Ergo Backlog for VS Code
-
-The [Ergo Backlog Preview extension](https://marketplace.visualstudio.com/items?itemName=sandover.ergo-backlog)
-under
-[`editors/vscode`](editors/vscode/README.md) adds **Ergo: Backlog** to VS Code.
-It uses Ergo 4.2.0 or later to search tasks and epics, opens the selected
-`ergo show` document in native Markdown preview, and turns
-`.ergo/backlog.jsonl` into a read-only backlog overview. The CLI remains the
-application boundary; the extension does not parse or mutate the event log.
-
-Install the CLI first, then install **Ergo Backlog** from the VS Code
-Marketplace. The extension is in Preview while its browsing workflow and
-cross-platform installation path are evaluated.
 
 Claim a known task or the oldest ready task:
 
