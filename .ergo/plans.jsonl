@@ -650,3 +650,10 @@
 {"type":"message","ts":"2026-07-29T00:19:11.028402Z","data":{"task_id":"DHKFQD","kind":"done","text":"Documented exact show --body semantics and a guarded temporary-file edit workflow across the two-layer manual, generated option help, spec, README, and changelog. Semantic manual/help/body tests pass.","ts":"2026-07-29T00:19:11.028402Z"}}
 {"type":"unclaim","ts":"2026-07-29T00:19:11.028402Z","data":{"id":"DHKFQD","ts":"2026-07-29T00:19:11.028402Z"}}
 {"type":"state","ts":"2026-07-29T00:19:11.028402Z","data":{"id":"DHKFQD","state":"done","ts":"2026-07-29T00:19:11.028402Z"}}
+{"type":"claim","ts":"2026-07-29T00:19:11.061426Z","data":{"id":"KCLR3I","agent_id":"codex@local","ts":"2026-07-29T00:19:11.061426Z"}}
+{"type":"state","ts":"2026-07-29T00:19:11.061426Z","data":{"id":"KCLR3I","state":"doing","ts":"2026-07-29T00:19:11.061426Z"}}
+{"type":"claim","ts":"2026-07-29T00:22:10.903953Z","data":{"id":"H4HW7L","agent_id":"codex@local","ts":"2026-07-29T00:22:10.903953Z"}}
+{"type":"state","ts":"2026-07-29T00:22:10.903953Z","data":{"id":"H4HW7L","state":"doing","ts":"2026-07-29T00:22:10.903953Z"}}
+{"type":"message","ts":"2026-07-29T00:22:38.358879Z","data":{"task_id":"H4HW7L","kind":"done","text":"Applied final lint cleanup to body projection tests; focused body suites and full race-enabled CI pass.","ts":"2026-07-29T00:22:38.358879Z"}}
+{"type":"unclaim","ts":"2026-07-29T00:22:38.358879Z","data":{"id":"H4HW7L","ts":"2026-07-29T00:22:38.358879Z"}}
+{"type":"state","ts":"2026-07-29T00:22:38.358879Z","data":{"id":"H4HW7L","state":"done","ts":"2026-07-29T00:22:38.358879Z"}}

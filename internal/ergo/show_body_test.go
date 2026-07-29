@@ -40,7 +40,7 @@ func TestApplicationShowBodyLeafRoundTripIsLossless(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			projected, err := app.ShowBody(ShowBodyRequest{ID: created.ID})
+			projected, err := app.ShowBody(ShowBodyRequest(created))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -51,7 +51,7 @@ func TestApplicationShowBodyLeafRoundTripIsLossless(t *testing.T) {
 			if _, err := app.UpdateBody(UpdateBodyRequest{ID: created.ID, Body: pipe.Bytes()}); err != nil {
 				t.Fatal(err)
 			}
-			roundTripped, err := app.ShowBody(ShowBodyRequest{ID: created.ID})
+			roundTripped, err := app.ShowBody(ShowBodyRequest(created))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -73,7 +73,7 @@ func TestApplicationShowBodyEpicOmitsChildren(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	outcome, err := app.ShowBody(ShowBodyRequest{ID: epic.ID})
+	outcome, err := app.ShowBody(ShowBodyRequest(epic))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestApplicationShowBodyUnknownAndPrunedFailures(t *testing.T) {
 	if _, err := app.Prune(PruneRequest{Confirm: true}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = app.ShowBody(ShowBodyRequest{ID: created.ID})
+	_, err = app.ShowBody(ShowBodyRequest(created))
 	requireApplicationError(t, err, ErrorNotFound)
 }
 
