@@ -7,10 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-07-28
+
+Ergo 4.1 makes backlogs much harder to damage under crashes and concurrent
+work. It also gives agents a lossless way to read and edit task bodies. Existing
+Ergo 1 through 4 backlogs open in place without migration.
+
 ### Added
 
-- `ergo show <id> --body` writes the exact stored body for a task or epic,
-  enabling lossless read-edit-write workflows.
+- `ergo show <id> --body` prints only the exact stored body for a task or epic.
+  This enables lossless read-edit-write workflows without parsing the formatted
+  `show` document or changing whitespace.
+
+### Improved
+
+- A command's changes are now validated, written, synced, and replayed as one
+  transaction. A crash can no longer leave other agents observing half of a
+  multi-step update.
+- Ergo repairs only an interrupted final write. Complete malformed or unknown
+  records now stop with the exact file and line instead of being mistaken for
+  valid backlog history.
+- `compact` now writes a deterministic, integrity-checked snapshot. Tasks,
+  epics, dependencies, messages, results, and readable legacy lifecycle states
+  survive the shorter log.
+- Result attachments now resolve and verify project-contained regular files
+  before recording consistent file and Git evidence, including in Git
+  worktrees.
+- Reads, mutations, claims, dependency changes, creation, pruning, and
+  compaction now share one repository boundary. This removes divergent storage
+  paths and makes future changes safer to implement.
+- CLI commands, application outcomes, rendering, and process I/O now have
+  explicit boundaries. Repeated in-process execution is reliable while the
+  readable command-line contract stays unchanged.
+
+### Compatibility
+
+- Existing `backlog.jsonl`, `plans.jsonl`, and `events.jsonl` repositories
+  continue using their current filename and open without migration.
+- Released Ergo 1 through 4 logs are covered by immutable compatibility
+  fixtures. Historical messages, results, `error`, and claimed-blocked states
+  remain readable and survive compaction.
+- Existing command workflows require no changes. Once Ergo 4.1 writes a
+  transaction or snapshot record, older Ergo versions may no longer be able to
+  read that log.
 
 ## [4.0.0] - 2026-07-26
 
@@ -560,7 +599,8 @@ read that log.
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v4.0.0...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v4.1.0...HEAD
+[4.1.0]: https://github.com/sandover/ergo/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/sandover/ergo/compare/v3.0.0...v4.0.0
 [3.0.0]: https://github.com/sandover/ergo/compare/v2.0.1...v3.0.0
 [2.0.1]: https://github.com/sandover/ergo/compare/v2.0.0...v2.0.1
