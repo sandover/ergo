@@ -10,7 +10,7 @@ import (
 
 func TestRenderClaimNoReadyOutcome(t *testing.T) {
 	var output bytes.Buffer
-	RenderClaim(&output, ClaimOutcome{NoReady: true})
+	RenderClaim(&output, ClaimOutcome{NoReady: true}, false)
 	if got, want := output.String(), "No ready ergo tasks.\n"; got != want {
 		t.Fatalf("RenderClaim() = %q, want %q", got, want)
 	}

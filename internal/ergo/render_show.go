@@ -11,63 +11,65 @@ type frontMatterField struct {
 	key   string
 	value string
 	raw   bool
+	style string
 }
 
 // printTaskDocument renders the complete leaf representation used by show and claim.
-func printTaskDocument(w io.Writer, task *Task, graph *Graph, repoDir string) {
+func printTaskDocument(w io.Writer, task *Task, graph *Graph, repoDir string, useColor bool) {
 	fields := []frontMatterField{
-		{key: "id", value: task.ID},
+		{key: "id", value: task.ID, style: colorCyan},
 		{key: "title", value: task.Title},
-		{key: "state", value: task.State},
+		{key: "state", value: task.State, style: stateColor(task)},
 	}
 	if task.EpicID != "" {
-		fields = append(fields, frontMatterField{key: "parent", value: task.EpicID})
+		fields = append(fields, frontMatterField{key: "parent", value: task.EpicID, style: colorCyan})
 	}
 	if task.ClaimedBy != "" {
 		fields = append(fields, frontMatterField{key: "claimed_by", value: task.ClaimedBy})
 		if claimedAt := claimedAtForTask(task); claimedAt != "" {
-			fields = append(fields, frontMatterField{key: "claimed_at", value: claimedAt})
+			fields = append(fields, frontMatterField{key: "claimed_at", value: claimedAt, style: colorDim})
 		}
 	}
 	fields = append(fields,
-		frontMatterField{key: "created_at", value: formatTime(task.CreatedAt)},
-		frontMatterField{key: "updated_at", value: formatTime(task.UpdatedAt)},
+		frontMatterField{key: "created_at", value: formatTime(task.CreatedAt), style: colorDim},
+		frontMatterField{key: "updated_at", value: formatTime(task.UpdatedAt), style: colorDim},
 	)
-	writeShowFrontMatter(w, fields)
+	writeShowFrontMatter(w, fields, useColor)
 
-	fmt.Fprintf(w, "# %s\n\n", showTitle(task.Title, task.ID))
+	writeMarkdownHeading(w, "# ", showTitle(task.Title, task.ID), useColor)
 	if task.Body != "" {
 		printMarkdownBody(w, task.Body)
 		fmt.Fprintln(w)
 	}
 
-	printTaskDependenciesMarkdown(w, task, graph, "## Dependencies")
-	printTaskMessagesMarkdown(w, task.Messages, "## Messages")
-	printTaskResultsMarkdown(w, task.Results, repoDir, "## Results")
+	printTaskDependenciesMarkdown(w, task, graph, "## Dependencies", useColor)
+	printTaskMessagesMarkdown(w, task.Messages, "## Messages", useColor)
+	printTaskResultsMarkdown(w, task.Results, repoDir, "## Results", useColor)
 }
 
 // printContainerDocument renders a container and the complete details of each child.
-func printContainerDocument(w io.Writer, epic *Task, children []*Task, graph *Graph, repoDir string) {
+func printContainerDocument(w io.Writer, epic *Task, children []*Task, graph *Graph, repoDir string, useColor bool) {
 	writeShowFrontMatter(w, []frontMatterField{
 		{key: "epic", value: "true", raw: true},
-		{key: "id", value: epic.ID},
+		{key: "id", value: epic.ID, style: colorCyan},
 		{key: "title", value: epic.Title},
-		{key: "created_at", value: formatTime(epic.CreatedAt)},
-		{key: "updated_at", value: formatTime(epic.UpdatedAt)},
-	})
+		{key: "created_at", value: formatTime(epic.CreatedAt), style: colorDim},
+		{key: "updated_at", value: formatTime(epic.UpdatedAt), style: colorDim},
+	}, useColor)
 
-	fmt.Fprintf(w, "# %s\n\n", showTitle(epic.Title, epic.ID))
+	writeMarkdownHeading(w, "# ", showTitle(epic.Title, epic.ID), useColor)
 	if epic.Body != "" {
 		printMarkdownBody(w, epic.Body)
 		fmt.Fprintln(w)
 	}
-	printTaskDependenciesMarkdown(w, epic, graph, "## Dependencies")
+	printTaskDependenciesMarkdown(w, epic, graph, "## Dependencies", useColor)
 
-	fmt.Fprintln(w, "## Tasks")
+	writeGeneratedLine(w, "## Tasks", colorBold+colorCyan, useColor)
 	fmt.Fprintln(w)
 	for index, child := range children {
-		fmt.Fprintf(w, "### %s - %s\n\n", child.ID, showTitle(child.Title, child.ID))
-		fmt.Fprintf(w, "- state: %s\n", child.State)
+		writeChildHeading(w, child, useColor)
+		fmt.Fprint(w, "- state: ")
+		writeGeneratedLine(w, child.State, stateColor(child), useColor)
 		if child.ClaimedBy != "" {
 			fmt.Fprintf(w, "- claimed by: %s\n", child.ClaimedBy)
 		}
@@ -77,26 +79,53 @@ func printContainerDocument(w io.Writer, epic *Task, children []*Task, graph *Gr
 			printMarkdownBody(w, child.Body)
 			fmt.Fprintln(w)
 		}
-		printTaskDependenciesMarkdown(w, child, graph, "#### Dependencies")
-		printTaskMessagesMarkdown(w, child.Messages, "#### Messages")
-		printTaskResultsMarkdown(w, child.Results, repoDir, "#### Results")
+		printTaskDependenciesMarkdown(w, child, graph, "#### Dependencies", useColor)
+		printTaskMessagesMarkdown(w, child.Messages, "#### Messages", useColor)
+		printTaskResultsMarkdown(w, child.Results, repoDir, "#### Results", useColor)
 		if index < len(children)-1 {
 			fmt.Fprintln(w)
 		}
 	}
 }
 
-func writeShowFrontMatter(w io.Writer, fields []frontMatterField) {
-	fmt.Fprintln(w, "---")
+func writeShowFrontMatter(w io.Writer, fields []frontMatterField, useColor bool) {
+	writeGeneratedLine(w, "---", colorDim, useColor)
 	for _, field := range fields {
+		writeGenerated(w, field.key, colorCyan, useColor)
 		if field.raw {
-			fmt.Fprintf(w, "%s: %s\n", field.key, field.value)
+			fmt.Fprint(w, ": ")
+			writeGeneratedLine(w, field.value, field.style, useColor)
 			continue
 		}
-		fmt.Fprintf(w, "%s: %s\n", field.key, yamlString(field.value))
+		fmt.Fprint(w, ": ")
+		writeGeneratedLine(w, yamlString(field.value), field.style, useColor)
 	}
-	fmt.Fprintln(w, "---")
+	writeGeneratedLine(w, "---", colorDim, useColor)
 	fmt.Fprintln(w)
+}
+
+func writeGenerated(w io.Writer, text, style string, useColor bool) {
+	if useColor && style != "" {
+		fmt.Fprint(w, style, text, colorReset)
+		return
+	}
+	fmt.Fprint(w, text)
+}
+
+func writeGeneratedLine(w io.Writer, text, style string, useColor bool) {
+	writeGenerated(w, text, style, useColor)
+	fmt.Fprintln(w)
+}
+
+func writeMarkdownHeading(w io.Writer, marker, title string, useColor bool) {
+	writeGenerated(w, marker, colorBold+colorCyan, useColor)
+	fmt.Fprintf(w, "%s\n\n", title)
+}
+
+func writeChildHeading(w io.Writer, child *Task, useColor bool) {
+	writeGenerated(w, "### ", colorBold+colorCyan, useColor)
+	writeGenerated(w, child.ID, colorCyan, useColor)
+	fmt.Fprintf(w, " - %s\n\n", showTitle(child.Title, child.ID))
 }
 
 func yamlString(value string) string {
@@ -117,22 +146,30 @@ func printMarkdownBody(w io.Writer, body string) {
 	}
 }
 
-func printTaskDependenciesMarkdown(w io.Writer, task *Task, graph *Graph, heading string) {
+func printTaskDependenciesMarkdown(w io.Writer, task *Task, graph *Graph, heading string, useColor bool) {
 	dependencies := graph.Dependencies(task.ID)
 	dependents := graph.Dependents(task.ID)
 	if len(dependencies) == 0 && len(dependents) == 0 {
 		return
 	}
-	fmt.Fprintln(w, heading)
+	writeGeneratedLine(w, heading, colorBold+colorCyan, useColor)
 	for _, id := range dependencies {
-		fmt.Fprintf(w, "- depends on `%s`", id)
+		fmt.Fprint(w, "- ")
+		writeGenerated(w, "depends on", colorDim, useColor)
+		fmt.Fprint(w, " `")
+		writeGenerated(w, id, colorCyan, useColor)
+		fmt.Fprint(w, "`")
 		if dep := graph.Tasks[id]; dep != nil && dep.Title != "" {
 			fmt.Fprintf(w, ": %s", dep.Title)
 		}
 		fmt.Fprintln(w)
 	}
 	for _, id := range dependents {
-		fmt.Fprintf(w, "- blocks `%s`", id)
+		fmt.Fprint(w, "- ")
+		writeGenerated(w, "blocks", colorDim, useColor)
+		fmt.Fprint(w, " `")
+		writeGenerated(w, id, colorCyan, useColor)
+		fmt.Fprint(w, "`")
 		if dependent := graph.Tasks[id]; dependent != nil && dependent.Title != "" {
 			fmt.Fprintf(w, ": %s", dependent.Title)
 		}
@@ -141,27 +178,32 @@ func printTaskDependenciesMarkdown(w io.Writer, task *Task, graph *Graph, headin
 	fmt.Fprintln(w)
 }
 
-func printTaskMessagesMarkdown(w io.Writer, messages []Message, heading string) {
+func printTaskMessagesMarkdown(w io.Writer, messages []Message, heading string, useColor bool) {
 	if len(messages) == 0 {
 		return
 	}
-	fmt.Fprintln(w, heading)
+	writeGeneratedLine(w, heading, colorBold+colorCyan, useColor)
 	fmt.Fprintln(w)
 	for _, message := range messages {
-		fmt.Fprintf(w, "**%s - %s**\n\n", message.Kind, formatTime(message.CreatedAt))
+		fmt.Fprintf(w, "**%s - ", message.Kind)
+		writeGenerated(w, formatTime(message.CreatedAt), colorDim, useColor)
+		fmt.Fprintln(w, "**")
+		fmt.Fprintln(w)
 		printMarkdownBody(w, message.Text)
 		fmt.Fprintln(w)
 	}
 }
 
-func printTaskResultsMarkdown(w io.Writer, results []Result, repoDir string, heading string) {
+func printTaskResultsMarkdown(w io.Writer, results []Result, repoDir string, heading string, useColor bool) {
 	if len(results) == 0 {
 		return
 	}
-	fmt.Fprintln(w, heading)
+	writeGeneratedLine(w, heading, colorBold+colorCyan, useColor)
 	for _, result := range results {
 		fileURL := deriveFileURL(result.Path, repoDir)
-		fmt.Fprintf(w, "- [%s](%s)", result.Path, fileURL)
+		fmt.Fprintf(w, "- [%s](", result.Path)
+		writeGenerated(w, fileURL, colorCyan, useColor)
+		fmt.Fprint(w, ")")
 		if result.Summary != "" && result.Summary != result.Path {
 			fmt.Fprintf(w, ": %s", result.Summary)
 		}
@@ -175,16 +217,16 @@ func RunShow(id string, opts GlobalOptions, render RenderOptions) error {
 	if err != nil {
 		return err
 	}
-	RenderShow(render.writer(), outcome)
+	RenderShow(render.writer(), outcome, render.Color)
 	return nil
 }
 
-func RenderShow(w io.Writer, outcome ShowOutcome) {
+func RenderShow(w io.Writer, outcome ShowOutcome, useColor bool) {
 	if outcome.Graph.IsEpic(outcome.Task.ID) {
-		printContainerDocument(w, outcome.Task, outcome.Children, outcome.Graph, outcome.ProjectDir)
+		printContainerDocument(w, outcome.Task, outcome.Children, outcome.Graph, outcome.ProjectDir, useColor)
 		return
 	}
-	printTaskDocument(w, outcome.Task, outcome.Graph, outcome.ProjectDir)
+	printTaskDocument(w, outcome.Task, outcome.Graph, outcome.ProjectDir, useColor)
 }
 
 // RenderShowBody writes the stored body without adding or removing bytes.

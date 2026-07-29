@@ -35,7 +35,7 @@ func TestRenderShowPreservesStructuredDocument(t *testing.T) {
 		Deps:  map[string]map[string]struct{}{task.ID: {}},
 	}
 	var output bytes.Buffer
-	RenderShow(&output, ShowOutcome{Graph: graph, Task: task, ProjectDir: "/project"})
+	RenderShow(&output, ShowOutcome{Graph: graph, Task: task, ProjectDir: "/project"}, false)
 	text := output.String()
 	for _, fragment := range []string{"---\n", `id: "ABC123"`, `title: "Structured task"`, "# Structured task"} {
 		if !strings.Contains(text, fragment) {

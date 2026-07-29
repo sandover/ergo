@@ -108,7 +108,7 @@ func TestRenderClaimContractUnaffectedByBodyProjection(t *testing.T) {
 		Deps:  map[string]map[string]struct{}{task.ID: {}},
 	}
 	var output bytes.Buffer
-	RenderClaim(&output, ClaimOutcome{Graph: graph, Task: task, ProjectDir: "/project"})
+	RenderClaim(&output, ClaimOutcome{Graph: graph, Task: task, ProjectDir: "/project"}, false)
 	text := output.String()
 	for _, want := range []string{
 		`id: "ABC123"`, `claimed_by: "agent"`, "# Claimed", "## Next",

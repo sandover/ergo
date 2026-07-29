@@ -134,7 +134,7 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 		}
 		out, err := app().Show(ergo.ShowRequest{ID: args[0]})
 		if err == nil {
-			ergo.RenderShow(cmd.OutOrStdout(), out)
+			ergo.RenderShow(cmd.OutOrStdout(), out, render(cmd).Color)
 		}
 		return err
 	}
@@ -155,7 +155,7 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 		}
 		out, err := app().Claim(ergo.ClaimRequest{ID: id, AgentID: agent})
 		if err == nil {
-			ergo.RenderClaim(cmd.OutOrStdout(), out)
+			ergo.RenderClaim(cmd.OutOrStdout(), out, render(cmd).Color)
 		}
 		return err
 	}

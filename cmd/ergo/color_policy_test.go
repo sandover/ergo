@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -9,6 +10,10 @@ import (
 )
 
 const ansiEscape = "\x1b["
+const colorGreenForTest = "\x1b[32m"
+const colorResetForTest = "\x1b[0m"
+
+var ansiColorPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func TestColorAutoResolution(t *testing.T) {
 	tests := []struct {
@@ -116,6 +121,44 @@ func TestColorPolicyAppliesToListAndPrune(t *testing.T) {
 				t.Fatalf("never: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 			}
 		})
+	}
+}
+
+func TestColorPolicyAppliesToShowAndClaimDocuments(t *testing.T) {
+	dir := setupErgo(t)
+	body := "Literal {{CYAN}} body\n\n# User heading\n"
+	stdout, stderr, code := runNewTaskWithBody(t, dir, body, "Colored document")
+	if code != 0 {
+		t.Fatalf("create: code=%d stderr=%q", code, stderr)
+	}
+	id := strings.TrimSpace(stdout)
+
+	plain, stderr, code := runErgo(t, dir, "", "--color=never", "show", id)
+	if code != 0 || stderr != "" || strings.Contains(plain, ansiEscape) {
+		t.Fatalf("plain show: code=%d stdout=%q stderr=%q", code, plain, stderr)
+	}
+	colored, stderr, code := runErgo(t, dir, "", "--color=always", "show", id)
+	if code != 0 || stderr != "" || !strings.Contains(colored, ansiEscape) {
+		t.Fatalf("colored show: code=%d stdout=%q stderr=%q", code, colored, stderr)
+	}
+	if got := ansiColorPattern.ReplaceAllString(colored, ""); got != plain {
+		t.Fatalf("stripped colored show differs from plain\ncolored: %q\nplain:   %q", got, plain)
+	}
+	if !strings.Contains(colored, body) {
+		t.Fatalf("show changed user-authored body:\n%s", colored)
+	}
+
+	claimed, stderr, code := runErgo(t, dir, "", "--color=always", "claim", id, "--agent", "agent@test")
+	if code != 0 || stderr != "" || !strings.Contains(claimed, ansiEscape) {
+		t.Fatalf("colored claim: code=%d stdout=%q stderr=%q", code, claimed, stderr)
+	}
+	for _, command := range []string{"ergo done " + id, "ergo block " + id, "ergo cancel " + id, "ergo release " + id} {
+		if !strings.Contains(claimed, colorGreenForTest+command+colorResetForTest) {
+			t.Fatalf("claim command is not styled %q:\n%s", command, claimed)
+		}
+	}
+	if !strings.Contains(claimed, body) {
+		t.Fatalf("claim changed user-authored body:\n%s", claimed)
 	}
 }
 

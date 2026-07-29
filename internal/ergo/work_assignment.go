@@ -10,7 +10,7 @@ func RunClaim(id, agentID string, opts GlobalOptions, render RenderOptions) erro
 	if err != nil {
 		return err
 	}
-	RenderClaim(render.writer(), outcome)
+	RenderClaim(render.writer(), outcome, render.Color)
 	return nil
 }
 
@@ -19,11 +19,11 @@ func RunClaimOldestReady(agentID string, opts GlobalOptions, render RenderOption
 	if err != nil {
 		return err
 	}
-	RenderClaim(render.writer(), outcome)
+	RenderClaim(render.writer(), outcome, render.Color)
 	return nil
 }
 
-func RenderClaim(w io.Writer, outcome ClaimOutcome) {
+func RenderClaim(w io.Writer, outcome ClaimOutcome, useColor bool) {
 	if outcome.NoReady {
 		fmt.Fprintln(w, "No ready ergo tasks.")
 		return
@@ -39,13 +39,19 @@ func RenderClaim(w io.Writer, outcome ClaimOutcome) {
 		"cancel":  "ergo cancel " + id,
 		"release": "ergo release " + id,
 	}
-	printTaskDocument(w, task, graph, repoDir)
-	fmt.Fprintln(w, "## Next")
+	printTaskDocument(w, task, graph, repoDir, useColor)
+	writeGeneratedLine(w, "## Next", colorBold+colorCyan, useColor)
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "- `"+next["done"]+"`")
-	fmt.Fprintln(w, "- `"+next["block"]+"`")
-	fmt.Fprintln(w, "- `"+next["cancel"]+"`")
-	fmt.Fprintln(w, "- `"+next["release"]+"`")
+	writeNextCommand(w, next["done"], useColor)
+	writeNextCommand(w, next["block"], useColor)
+	writeNextCommand(w, next["cancel"], useColor)
+	writeNextCommand(w, next["release"], useColor)
+}
+
+func writeNextCommand(w io.Writer, command string, useColor bool) {
+	fmt.Fprint(w, "- `")
+	writeGenerated(w, command, colorGreen, useColor)
+	fmt.Fprintln(w, "`")
 }
 
 type sequenceEdge struct {
