@@ -11,6 +11,9 @@ permissions:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    env:
+      GOCACHE: ${{ github.workspace }}/.release-cache/go-build
+      GOMODCACHE: ${{ github.workspace }}/.release-cache/go-mod
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,7 +21,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
+      - name: Restore cross-target Go cache
+        id: release-cache
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        with:
+          path: |
+            .release-cache/go-build
+            .release-cache/go-mod
+          key: release-go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            release-go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}-
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
@@ -26,3 +40,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+      - name: Save cross-target Go cache
+        if: success() && steps.release-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: |
+            .release-cache/go-build
+            .release-cache/go-mod
+          key: ${{ steps.release-cache.outputs.cache-primary-key }}

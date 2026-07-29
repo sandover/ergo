@@ -14,11 +14,13 @@ import (
 )
 
 func TestLifecycleCommandsFromEveryState(t *testing.T) {
+	t.Parallel()
 	verbs := map[string]string{"done": "done", "block": "blocked", "cancel": "canceled"}
 	sources := []string{"todo", "doing", "blocked", "done", "canceled", "error"}
 	for verb, target := range verbs {
 		for _, source := range sources {
 			t.Run(verb+"-from-"+source, func(t *testing.T) {
+				t.Parallel()
 				dir := setupErgo(t)
 				id := createLifecycleTask(t, dir)
 				putLifecycleTaskInState(t, dir, id, source)
@@ -39,8 +41,10 @@ func TestLifecycleCommandsFromEveryState(t *testing.T) {
 }
 
 func TestReleaseLifecycleStates(t *testing.T) {
+	t.Parallel()
 	for _, source := range []string{"todo", "doing", "blocked", "error"} {
 		t.Run(source, func(t *testing.T) {
+			t.Parallel()
 			dir := setupErgo(t)
 			id := createLifecycleTask(t, dir)
 			putLifecycleTaskInState(t, dir, id, source)
@@ -55,6 +59,7 @@ func TestReleaseLifecycleStates(t *testing.T) {
 	}
 	for _, source := range []string{"done", "canceled"} {
 		t.Run("reject-"+source, func(t *testing.T) {
+			t.Parallel()
 			dir := setupErgo(t)
 			id := createLifecycleTask(t, dir)
 			putLifecycleTaskInState(t, dir, id, source)
@@ -67,6 +72,7 @@ func TestReleaseLifecycleStates(t *testing.T) {
 }
 
 func TestLifecycleReceiptNamesClaimChangesAndNewlyReadyWork(t *testing.T) {
+	t.Parallel()
 	dir := setupErgo(t)
 	first := createLifecycleTask(t, dir)
 	stdout, stderr, code := runNewTask(t, dir, "Second task")
@@ -95,10 +101,12 @@ func TestLifecycleReceiptNamesClaimChangesAndNewlyReadyWork(t *testing.T) {
 }
 
 func TestLifecycleMessageCardinality(t *testing.T) {
+	t.Parallel()
 	for _, verb := range []string{"done", "block", "cancel", "release"} {
 		for _, messages := range [][]string{nil, {"one note"}, {"first note", "second note"}} {
 			name := verb + "-" + string(rune('0'+len(messages)))
 			t.Run(name, func(t *testing.T) {
+				t.Parallel()
 				dir := setupErgo(t)
 				id := createLifecycleTask(t, dir)
 				args := []string{verb, id}
@@ -124,6 +132,7 @@ func TestLifecycleMessageCardinality(t *testing.T) {
 }
 
 func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
+	t.Parallel()
 	dir := setupErgo(t)
 	id := createLifecycleTask(t, dir)
 	if _, stderr, code := runErgo(t, dir, "original body\n", "body", id); code != 0 {
@@ -200,6 +209,7 @@ func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 }
 
 func TestClaimResumesEverySpecificState(t *testing.T) {
+	t.Parallel()
 	for _, source := range []string{"todo", "blocked", "done", "canceled", "error"} {
 		t.Run(source, func(t *testing.T) {
 			dir := setupErgo(t)
@@ -223,6 +233,7 @@ func TestClaimResumesEverySpecificState(t *testing.T) {
 }
 
 func TestClaimIsIdempotentForOwnerAndConflictsForOthers(t *testing.T) {
+	t.Parallel()
 	dir := setupErgo(t)
 	id := createLifecycleTask(t, dir)
 	_, stderr, code := runErgo(t, dir, "", "claim", id, "--agent", "owner@local")
@@ -244,6 +255,7 @@ func TestClaimIsIdempotentForOwnerAndConflictsForOthers(t *testing.T) {
 }
 
 func TestClaimDoneTaskReusesOriginalID(t *testing.T) {
+	t.Parallel()
 	dir := setupErgo(t)
 	id := createLifecycleTask(t, dir)
 	_, stderr, code := runErgo(t, dir, "", "done", id)

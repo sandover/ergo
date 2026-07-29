@@ -6,9 +6,7 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -17,7 +15,7 @@ import (
 // benchList benchmarks the list command with n tasks.
 func benchList(b *testing.B, taskCount int) {
 	dir := b.TempDir()
-	ergo := buildErgoBinary(b)
+	ergo := ergoBinary
 
 	// Initialize
 	runBenchErgo(b, ergo, dir, "", "init")
@@ -49,7 +47,7 @@ func BenchmarkList1000Tasks(b *testing.B) { benchList(b, 1000) }
 // BenchmarkClaim benchmarks the claim hot path.
 func BenchmarkClaim(b *testing.B) {
 	dir := b.TempDir()
-	ergo := buildErgoBinary(b)
+	ergo := ergoBinary
 
 	// Initialize and create enough tasks for benchmark iterations
 	runBenchErgo(b, ergo, dir, "", "init")
@@ -68,8 +66,9 @@ func BenchmarkClaim(b *testing.B) {
 }
 
 func TestPerformanceSetupUsesCurrentCLI(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
-	ergo := buildErgoBinary(t)
+	ergo := ergoBinary
 
 	runTestErgo(t, ergo, dir, "", "init")
 	const taskCount = 12
@@ -85,8 +84,9 @@ func TestPerformanceSetupUsesCurrentCLI(t *testing.T) {
 // TestConcurrentClaimNoDoubles validates that racing agents don't double-claim.
 // This is a correctness test, not a benchmark.
 func TestConcurrentClaimNoDoubles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
-	ergo := buildErgoBinary(t)
+	ergo := ergoBinary
 
 	// Initialize
 	runTestErgo(t, ergo, dir, "", "init")
@@ -157,22 +157,6 @@ func TestConcurrentClaimNoDoubles(t *testing.T) {
 }
 
 // --- Helpers ---
-
-func buildErgoBinary(tb testing.TB) string {
-	tb.Helper()
-	cwd, err := os.Getwd()
-	if err != nil {
-		tb.Fatalf("get working directory: %v", err)
-	}
-	binary := filepath.Join(tb.TempDir(), "ergo-bench")
-	cmd := exec.Command("go", "build", "-o", binary, ".")
-	cmd.Dir = cwd
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		tb.Fatalf("build ergo benchmark binary: %v\n%s", err, output)
-	}
-	return binary
-}
 
 func runBenchErgo(b *testing.B, binary, dir, stdin string, args ...string) string {
 	b.Helper()

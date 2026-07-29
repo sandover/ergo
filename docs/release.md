@@ -11,7 +11,12 @@ in `ergo --help`, `ergo quickstart`, and `docs/spec.md`.
 - Run `task ci`.
 - Run `task build` and smoke `./bin/ergo --help`, quickstart, readable output, and one lifecycle loop.
 - Run `goreleaser check`.
-- Run `goreleaser release --snapshot --clean` and inspect every configured target.
+- During preparation, run `goreleaser build --snapshot --clean --single-target` to check the current host build after relevant changes.
+- Run `goreleaser release --snapshot --clean` on the final release candidate and inspect all six configured archives.
+
+Run the full snapshot earlier when `.goreleaser.yaml`, the Go version, dependencies,
+or platform-specific code changes. The final full snapshot is required before
+every publication.
 
 For a version candidate, inject the same linker variable as GoReleaser:
 

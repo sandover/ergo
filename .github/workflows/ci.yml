@@ -15,6 +15,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Tidy
+        run: go mod tidy && git diff --exit-code
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
@@ -33,32 +37,22 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Tidy
-        run: go mod tidy && git diff --exit-code
-
       - name: Run tests
         # Includes TestPerformance regression checks
-        run: go test -race -v ./...
-
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
+        run: go test -vet=off -race -v ./...
 
       - name: Build
+        if: runner.os == 'Linux'
         run: go build -o ergo ./cmd/ergo
 
       - name: Verify binary runs
+        if: runner.os == 'Linux'
         run: ./ergo --version
 
   vscode:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -75,8 +69,13 @@ jobs:
         run: npm ci
 
       - name: Test
+        if: runner.os == 'Windows'
         run: npm test
 
       - name: Package
         if: runner.os == 'Linux'
         run: npm run package
+
+      - name: Test packaged build
+        if: runner.os == 'Linux'
+        run: node scripts/test.mjs

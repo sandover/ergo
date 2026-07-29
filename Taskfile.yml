@@ -63,6 +63,13 @@ tasks:
       - printf '%s\n' "[test] go test -race ./..."
       - go test -race ./...
 
+  test-fast:
+    desc: Run the full test suite without the race detector for fast iteration
+    silent: true
+    cmds:
+      - printf '%s\n' "[test-fast] go test ./..."
+      - go test ./...
+
   cover:
     desc: Run race-enabled tests and print total code coverage
     silent: true
