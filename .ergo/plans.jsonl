@@ -617,3 +617,6 @@
 {"type":"message","ts":"2026-07-29T00:08:30.787113Z","data":{"task_id":"FU3TDQ","kind":"done","text":"Closed review gaps: typed version outcome, complete no-ready renderer, application-owned removed-sequence validation, correct epic file error classification, and repository-owned bulk/sequence persistence. Focused regressions and go test ./... pass.","ts":"2026-07-29T00:08:30.787113Z"}}
 {"type":"unclaim","ts":"2026-07-29T00:08:30.787113Z","data":{"id":"FU3TDQ","ts":"2026-07-29T00:08:30.787113Z"}}
 {"type":"state","ts":"2026-07-29T00:08:30.787113Z","data":{"id":"FU3TDQ","state":"done","ts":"2026-07-29T00:08:30.787113Z"}}
+{"type":"message","ts":"2026-07-29T00:08:50.217528Z","data":{"task_id":"PN4YAX","kind":"done","text":"Replaced global Cobra state with fresh local construction, immutable repository binding, injected streams/capabilities, structural removed-command errors, and a non-exiting runner; main is the sole process boundary. Focused and full cmd suites plus isolation audits pass.","ts":"2026-07-29T00:08:50.217528Z"}}
+{"type":"unclaim","ts":"2026-07-29T00:08:50.217528Z","data":{"id":"PN4YAX","ts":"2026-07-29T00:08:50.217528Z"}}
+{"type":"state","ts":"2026-07-29T00:08:50.217528Z","data":{"id":"PN4YAX","state":"done","ts":"2026-07-29T00:08:50.217528Z"}}

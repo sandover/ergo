@@ -56,7 +56,8 @@ func TestRootHelpIsTheFrontDoor(t *testing.T) {
 }
 
 func TestRegisteredCommandInventoryIsExact(t *testing.T) {
-	got := registeredCommandPaths(rootCmd)
+	root := newManualTestRoot()
+	got := registeredCommandPaths(root)
 	want := append([]string(nil), publicCommandPaths...)
 	sort.Strings(got)
 	sort.Strings(want)
@@ -71,9 +72,10 @@ func TestRegisteredCommandInventoryIsExact(t *testing.T) {
 }
 
 func TestEveryPublicCommandHasSyntaxAndInputOnlyHelp(t *testing.T) {
+	root := newManualTestRoot()
 	rootHelp := ergo.UsageText(false)
 	for _, path := range publicCommandPaths {
-		command := findCommand(t, path)
+		command := findCommand(t, root, path)
 		help := renderCommandHelp(t, command)
 		if help == rootHelp {
 			t.Errorf("%s repeats root help", path)
@@ -115,12 +117,13 @@ func TestRootAndQuickstartCoverThePublicContract(t *testing.T) {
 }
 
 func TestReaderJourneyHasNoDeadEnd(t *testing.T) {
+	commandRoot := newManualTestRoot()
 	root := ergo.UsageText(false)
 	if !strings.Contains(root, `new task "<title>"`) ||
 		!strings.Contains(root, "ergo quickstart") {
 		t.Fatal("root help does not orient a fresh reader toward the manual")
 	}
-	taskHelp := renderCommandHelp(t, newTaskCmd)
+	taskHelp := renderCommandHelp(t, findCommand(t, commandRoot, "new task"))
 	if !strings.Contains(taskHelp, `ergo new task "<title>"`) ||
 		!strings.Contains(taskHelp, "--epic") ||
 		!strings.Contains(taskHelp, "Optional piped stdin becomes the initial task body") {
@@ -139,19 +142,20 @@ func TestReaderJourneyHasNoDeadEnd(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "use -m <message>") {
 		t.Fatalf("deliberate error is not recoverable: %v", err)
 	}
-	if !strings.Contains(renderCommandHelp(t, findCommand(t, "done")), "-m, --message") {
+	if !strings.Contains(renderCommandHelp(t, findCommand(t, commandRoot, "done")), "-m, --message") {
 		t.Fatal("done help does not let the reader continue after the error")
 	}
 }
 
 func TestCommandsWithStdinInputsRevealThemInHelp(t *testing.T) {
+	root := newManualTestRoot()
 	expected := map[string]string{
 		"new task": "Optional piped stdin becomes the initial task body; no pipe creates an empty body.",
 		"new epic": "Optional piped stdin becomes the epic body; --file supplies the child tasks.",
 		"body":     "Piped stdin is required and replaces the body; an empty pipe clears it.",
 	}
 	for path, input := range expected {
-		help := renderCommandHelp(t, findCommand(t, path))
+		help := renderCommandHelp(t, findCommand(t, root, path))
 		if !strings.Contains(help, "\nInput:\n  "+input+"\n") {
 			t.Errorf("%s help lacks exact stdin contract:\n%s", path, help)
 		}
@@ -159,6 +163,7 @@ func TestCommandsWithStdinInputsRevealThemInHelp(t *testing.T) {
 }
 
 func TestCommandHelpRevealsOptionConstraints(t *testing.T) {
+	root := newManualTestRoot()
 	checks := map[string][]string{
 		"new epic": {`ergo new epic "<title>" --file <path>`},
 		"list":     {"--ready", "conflicts with --all", "--all", "conflicts with --ready"},
@@ -168,7 +173,7 @@ func TestCommandHelpRevealsOptionConstraints(t *testing.T) {
 		"prune":    {"--yes", "default is dry-run"},
 	}
 	for path, facts := range checks {
-		help := renderCommandHelp(t, findCommand(t, path))
+		help := renderCommandHelp(t, findCommand(t, root, path))
 		for _, fact := range facts {
 			if !strings.Contains(help, fact) {
 				t.Errorf("%s help lacks option constraint %q:\n%s", path, fact, help)
@@ -178,17 +183,18 @@ func TestCommandHelpRevealsOptionConstraints(t *testing.T) {
 }
 
 func TestAgentFlagBelongsOnlyToClaim(t *testing.T) {
-	if rootCmd.PersistentFlags().Lookup("agent") != nil {
+	root := newManualTestRoot()
+	if root.PersistentFlags().Lookup("agent") != nil {
 		t.Fatal("--agent remains a global flag")
 	}
-	if claimCmd.Flags().Lookup("agent") == nil {
+	if findCommand(t, root, "claim").Flags().Lookup("agent") == nil {
 		t.Fatal("claim lacks --agent")
 	}
 	for _, path := range publicCommandPaths {
 		if path == "claim" {
 			continue
 		}
-		if strings.Contains(renderCommandHelp(t, findCommand(t, path)), "--agent") {
+		if strings.Contains(renderCommandHelp(t, findCommand(t, root, path)), "--agent") {
 			t.Errorf("%s help exposes --agent", path)
 		}
 	}
@@ -233,9 +239,17 @@ func registeredCommandPaths(command *cobra.Command) []string {
 	return paths
 }
 
-func findCommand(t *testing.T, path string) *cobra.Command {
+func newManualTestRoot() *cobra.Command {
+	return NewRootCommand(
+		ergo.NewApplication(ergo.RepositoryOptions{}),
+		Streams{In: strings.NewReader(""), Out: &bytes.Buffer{}, Err: &bytes.Buffer{}, StdinTerminal: true, Width: 80},
+		"test",
+	)
+}
+
+func findCommand(t *testing.T, root *cobra.Command, path string) *cobra.Command {
 	t.Helper()
-	command := rootCmd
+	command := root
 	for _, part := range strings.Fields(path) {
 		next, _, err := command.Find([]string{part})
 		if err != nil || next == command {

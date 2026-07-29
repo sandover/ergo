@@ -18,6 +18,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sandover/ergo/internal/ergo"
 )
 
 var ergoBinary string
@@ -696,7 +698,12 @@ func TestParentCommandsRejectUnexpectedArguments(t *testing.T) {
 
 func TestCommandRegistrationMatchesV4(t *testing.T) {
 	registered := map[string]bool{}
-	for _, command := range rootCmd.Commands() {
+	root := NewRootCommand(
+		ergo.NewApplication(ergo.RepositoryOptions{}),
+		Streams{In: strings.NewReader(""), Out: &bytes.Buffer{}, Err: &bytes.Buffer{}, StdinTerminal: true, Width: 80},
+		"test",
+	)
+	for _, command := range root.Commands() {
 		registered[command.Name()] = true
 	}
 	for _, name := range []string{"claim", "done", "block", "cancel", "release", "title", "body", "move", "sequence", "unsequence"} {

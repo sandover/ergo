@@ -1,67 +1,85 @@
-// Purpose: Define the root command and global flags for the ergo CLI.
-// Exports: none (package-private root command helpers).
-// Role: CLI configuration and help plumbing.
-// Invariants: Help text is sourced from internal/ergo UsageText.
-// Notes: Global flags must match help/quickstart documentation.
 package main
 
 import (
 	"errors"
 	"fmt"
-	"os"
+	"io"
 	"strings"
 
 	"github.com/sandover/ergo/internal/ergo"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
-)
-
-var (
-	// Root command flags
-	globalOpts ergo.GlobalOptions
 )
 
 const commandInputHelp = "ergo_command_input"
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "ergo",
-	Short: "A dependency-aware backlog for coding agents.",
-	Long: `Ergo manages a repository-local backlog shared by agents and humans.
-Tasks and dependencies persist across sessions and remain safe under
-concurrent work.`,
-	SilenceUsage:  true, // Don't print usage on every error
-	SilenceErrors: true, // We handle errors in main
+type Streams struct {
+	In             io.Reader
+	Out            io.Writer
+	Err            io.Writer
+	StdinTerminal  bool
+	StdoutTerminal bool
+	Width          int
 }
 
-func init() {
-	// Global flags
-	rootCmd.PersistentFlags().StringVar(&globalOpts.StartDir, "dir", "", "Run in a specific directory")
-
-	// Set the version to enable --version flag
-	rootCmd.Version = version
-
-	// Override default help to use our custom text
-	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
-		if cmd != rootCmd {
-			fmt.Fprint(cmd.OutOrStdout(), cmd.UsageString())
-			if input := cmd.Annotations[commandInputHelp]; input != "" {
-				fmt.Fprintf(cmd.OutOrStdout(), "\nInput:\n  %s\n", input)
+func NewRootCommand(app *ergo.Application, streams Streams, buildVersion string) *cobra.Command {
+	if app == nil {
+		panic("NewRootCommand requires an application")
+	}
+	if streams.In == nil || streams.Out == nil || streams.Err == nil {
+		panic("NewRootCommand requires input, output, and error streams")
+	}
+	options := ergo.RepositoryOptions{}
+	root := &cobra.Command{
+		Use: "ergo", Short: "A dependency-aware backlog for coding agents.",
+		Long:         "Ergo manages a repository-local backlog shared by agents and humans.\nTasks and dependencies persist across sessions and remain safe under\nconcurrent work.",
+		SilenceUsage: true, SilenceErrors: true, Version: buildVersion,
+	}
+	root.SetIn(streams.In)
+	root.SetOut(streams.Out)
+	root.SetErr(streams.Err)
+	root.PersistentFlags().StringVar(&options.StartDir, "dir", "", "Run in a specific directory")
+	root.SetHelpFunc(func(cmd *cobra.Command, _ []string) {
+		if cmd == root {
+			usage := ergo.UsageText(streams.StdoutTerminal)
+			fmt.Fprint(cmd.OutOrStdout(), usage)
+			if !strings.HasSuffix(usage, "\n") {
+				fmt.Fprintln(cmd.OutOrStdout())
 			}
 			return
 		}
-		isTTY := term.IsTerminal(int(os.Stdout.Fd()))
-		fmt.Println(ergo.UsageText(isTTY))
+		fmt.Fprint(cmd.OutOrStdout(), cmd.UsageString())
+		if input := cmd.Annotations[commandInputHelp]; input != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "\nInput:\n  %s\n", input)
+		}
 	})
+	addCommands(root, app, streams, &options, buildVersion)
+	return root
 }
 
-func execute() {
-	if err := removedArgumentError(os.Args[1:]); err != nil {
-		exitErr(err, &globalOpts)
+func runCommand(root *cobra.Command, args []string, streams Streams) int {
+	if err := removedArgumentError(args); err != nil {
+		writeCLIError(streams.Err, err, args)
+		return 1
 	}
-	if err := rootCmd.Execute(); err != nil {
-		exitErr(err, &globalOpts)
+	root.SetArgs(args)
+	if err := root.Execute(); err != nil {
+		writeCLIError(streams.Err, err, args)
+		return 1
 	}
+	return 0
+}
+
+type removedCommandError struct {
+	command string
+	err     error
+}
+
+func (e *removedCommandError) Error() string {
+	return e.err.Error()
+}
+
+func (e *removedCommandError) Unwrap() error {
+	return e.err
 }
 
 func removedArgumentError(args []string) error {
@@ -73,8 +91,14 @@ func removedArgumentError(args []string) error {
 			return errors.New("--summary is not accepted; use -m <message>")
 		}
 	}
-	if rootInvocation(args) == "plan" {
+	switch command := rootInvocation(args); command {
+	case "plan":
 		return errors.New(`plan is not accepted; use ergo new epic "<title>" --file <path>`)
+	case "set", "reopen":
+		return &removedCommandError{
+			command: command,
+			err:     fmt.Errorf("unknown command %q for %q", command, "ergo"),
+		}
 	}
 	return nil
 }

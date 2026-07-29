@@ -1,8 +1,3 @@
-// Purpose: Provide CLI error formatting, hints, and version output.
-// Exports: none (package-private helpers).
-// Role: Shared error/exit utilities for the cmd package.
-// Invariants: exitErr always exits with code 1 after printing.
-// Notes: Hints depend on error classification and global options.
 package main
 
 import (
@@ -16,30 +11,28 @@ import (
 	"github.com/sandover/ergo/internal/ergo"
 )
 
-func printVersion() {
-	fmt.Println("ergo " + version)
-}
-
-func exitErr(err error, opts *ergo.GlobalOptions) {
-	fmt.Fprintln(os.Stderr, "error:", err)
-	if handled := writeApplicationErrorHint(os.Stderr, err, os.Args[1:]); handled {
-		// Classified application errors never fall through to text matching.
-	} else if strings.Contains(err.Error(), `unknown command "set"`) {
-		fmt.Fprintln(os.Stderr, "hint: use claim, done, block, cancel, release, title, body, or move")
-	} else if strings.Contains(err.Error(), `unknown command "reopen"`) {
-		fmt.Fprintln(os.Stderr, "hint: use claim <id> --agent <identity> to resume closed work")
+func writeCLIError(w io.Writer, err error, args []string) {
+	fmt.Fprintln(w, "error:", err)
+	var removed *removedCommandError
+	if handled := writeApplicationErrorHint(w, err, args); handled {
+	} else if errors.As(err, &removed) {
+		switch removed.command {
+		case "set":
+			fmt.Fprintln(w, "hint: use claim, done, block, cancel, release, title, body, or move")
+		case "reopen":
+			fmt.Fprintln(w, "hint: use claim <id> --agent <identity> to resume closed work")
+		}
 	} else if strings.HasPrefix(err.Error(), "usage:") {
-		fmt.Fprintf(os.Stderr, "hint: run `%s --help`\n", helpInvocation(os.Args[1:]))
+		fmt.Fprintf(w, "hint: run `%s --help`\n", helpInvocation(args))
 	} else if errors.Is(err, ergo.ErrNoErgoDir) {
-		fmt.Fprintln(os.Stderr, "hint: run `ergo init` or target an existing graph with `ergo --dir <path>`")
+		fmt.Fprintln(w, "hint: run `ergo init` or target an existing graph with `ergo --dir <path>`")
 	} else if isPermissionError(err) {
-		fmt.Fprintln(os.Stderr, "hint: permission error accessing .ergo/; check repo permissions (ergo needs read/write)")
+		fmt.Fprintln(w, "hint: permission error accessing .ergo/; check repo permissions (ergo needs read/write)")
 	} else if strings.Contains(err.Error(), ".ergo") && strings.Contains(err.Error(), "exists but is not a directory") {
-		fmt.Fprintln(os.Stderr, "hint: .ergo must be a directory; delete/rename the file and run `ergo init`")
+		fmt.Fprintln(w, "hint: .ergo must be a directory; delete/rename the file and run `ergo init`")
 	} else if errors.Is(err, ergo.ErrLockBusy) {
-		fmt.Fprintln(os.Stderr, "hint: another ergo process is still running; try again in a moment")
+		fmt.Fprintln(w, "hint: another ergo process is still running; try again in a moment")
 	}
-	os.Exit(1)
 }
 
 func writeApplicationErrorHint(w io.Writer, err error, args []string) bool {
@@ -56,20 +49,23 @@ func writeApplicationErrorHint(w io.Writer, err error, args []string) bool {
 		}
 	case ergo.ErrorBusy:
 		fmt.Fprintln(w, "hint: another ergo process is still running; try again in a moment")
+	case ergo.ErrorInternal:
+		if isPermissionError(err) {
+			fmt.Fprintln(w, "hint: permission error accessing .ergo/; check repo permissions (ergo needs read/write)")
+		}
 	}
 	return true
 }
 
 func helpInvocation(args []string) string {
-	path := "ergo"
-	skipValue := false
+	path, skip := "ergo", false
 	for _, arg := range args {
-		if skipValue {
-			skipValue = false
+		if skip {
+			skip = false
 			continue
 		}
 		if arg == "--dir" || arg == "--agent" {
-			skipValue = true
+			skip = true
 			continue
 		}
 		if strings.HasPrefix(arg, "-") {
@@ -87,8 +83,6 @@ func isPermissionError(err error) bool {
 	if err == nil {
 		return false
 	}
-	if os.IsPermission(err) || errors.Is(err, os.ErrPermission) {
-		return true
-	}
-	return errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES)
+	return os.IsPermission(err) || errors.Is(err, os.ErrPermission) ||
+		errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES)
 }
