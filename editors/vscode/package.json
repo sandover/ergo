@@ -1,0 +1,73 @@
+{
+  "name": "ergo",
+  "displayName": "Ergo",
+  "description": "Browse an Ergo backlog from VS Code.",
+  "version": "0.0.1",
+  "publisher": "sandover",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sandover/ergo.git",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onCommand:ergo.listTasks",
+    "onCustomEditor:ergo.backlog"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ergo.listTasks",
+        "title": "Backlog",
+        "category": "Ergo"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "ergo.backlog",
+        "displayName": "Ergo Backlog",
+        "selector": [
+          {
+            "filenamePattern": "**/.ergo/backlog.jsonl"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "configuration": {
+      "title": "Ergo",
+      "properties": {
+        "ergo.executablePath": {
+          "type": "string",
+          "default": "ergo",
+          "scope": "machine-overridable",
+          "description": "Path to the Ergo CLI executable. The default resolves ergo from the VS Code extension host's PATH."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "compile": "tsc -p tsconfig.json",
+    "build": "npm run clean && npm run compile",
+    "test": "npm run build && node scripts/test.mjs",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --out ergo-0.0.1.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^3.9.2",
+    "typescript": "^7.0.2"
+  }
+}
