@@ -172,7 +172,26 @@ Self-dependencies, cycles, and edges between an epic and its child fail. A
 dependency on an epic completes when all its children are done or canceled.
 Children also inherit dependencies assigned to their epic.
 
-{{HEADER}}8. MAINTENANCE AND CONCURRENCY{{RESET}}
+{{HEADER}}8. TERMINAL PRESENTATION{{RESET}}
+
+Ergo uses color to make interactive output easier to scan. The default
+`--color=auto` mode adds color when stdout is a terminal and keeps redirected or
+piped output plain. It also keeps output plain when `NO_COLOR` is present in the
+environment or `TERM=dumb`.
+
+Choose an explicit mode when the destination alone should decide:
+
+  {{CMD}}ergo --color=always list --ready{{RESET}}   include color when piping to a capable viewer
+  {{CMD}}ergo --color=never show ABCDEF{{RESET}}     suppress color in terminal output
+
+`always` and `never` override terminal detection, `NO_COLOR`, and `TERM`.
+Color decorates generated presentation only; removing Ergo's ANSI decoration
+from a colored task document produces the same text as `--color=never`.
+User-authored bodies are never decorated. `show --body` always writes the
+literal stored bytes without adding ANSI decoration, even with
+`--color=always`.
+
+{{HEADER}}9. MAINTENANCE AND CONCURRENCY{{RESET}}
 
   {{CMD}}ergo prune{{RESET}}        preview removable closed work
   {{CMD}}ergo prune --yes{{RESET}}  remove it from the current backlog

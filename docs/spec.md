@@ -56,8 +56,9 @@ quickstart
 version
 ```
 
-Global flags are `--dir <path>`, `--help`, and `--version`. `--agent` belongs
-to `claim`.
+Global flags are `--dir <path>`, `--color <mode>`, `--help`, and `--version`.
+The color modes are `auto`, `always`, and `never`; the default is `auto`.
+`--agent` belongs to `claim`.
 
 ## Creation
 
@@ -139,6 +140,19 @@ dependencies assigned to its epic.
 ## Read output
 
 Ergo prints readable text.
+
+Color is presentation metadata carried by ANSI escape sequences. It does not
+change the semantic text of output. `--color=auto` enables color only when
+stdout is a terminal, `NO_COLOR` is absent, and `TERM` is not `dumb`.
+`--color=always` enables color regardless of those conditions, and
+`--color=never` disables it. Consequently, pipes and redirects are plain by
+default.
+
+Removing Ergo-added ANSI decoration from a colored `show` or `claim` document
+yields the exact `--color=never` document. Color sequences decorate only
+synthesized presentation; stored task and epic bodies remain literal.
+`show --body` emits the exact stored bytes without adding ANSI decoration in
+any color mode.
 
 - `list` prints a compact tree with state icons, terse `@agent` ownership, and
   actionable blocker names or counts.

@@ -53,6 +53,17 @@ ergo claim ABCDEF --agent model@host
 ergo done ABCDEF -m "Implemented and verified"
 ```
 
+Interactive output is colored automatically; pipes and redirects stay plain.
+Force color for a capable viewer or suppress it explicitly:
+
+```sh
+ergo --color=always list --ready | less -R
+ergo --color=never show ABCDEF
+```
+
+Ergo also honors `NO_COLOR` and `TERM=dumb`. `ergo quickstart` describes the
+complete presentation policy.
+
 Use a concise title. Pipe longer context into the initial body:
 
 ```sh

@@ -98,7 +98,7 @@ func TestRootAndQuickstartCoverThePublicContract(t *testing.T) {
 	combined := ergo.UsageText(false) + "\n" + ergo.QuickstartText(false)
 	normalized := strings.Join(strings.Fields(combined), " ")
 	for _, flag := range []string{
-		"--agent", "--dir", "--help", "--version", "--file", "--epic",
+		"--agent", "--dir", "--color", "--help", "--version", "--file", "--epic",
 		"--ready", "--all", "--body", "-m", "--result", "--root", "--yes",
 	} {
 		if !strings.Contains(combined, flag) {
@@ -112,6 +112,61 @@ func TestRootAndQuickstartCoverThePublicContract(t *testing.T) {
 	} {
 		if !strings.Contains(normalized, boundary) {
 			t.Errorf("documentation system lacks boundary %q", boundary)
+		}
+	}
+}
+
+func TestColorDocumentationHasClearOwnership(t *testing.T) {
+	rootHelp := ergo.UsageText(false)
+	if !strings.Contains(rootHelp, "--color <mode>") {
+		t.Fatal("root help does not expose the color flag")
+	}
+	for _, detail := range []string{"NO_COLOR", "TERM=dumb", "ANSI", "redirect"} {
+		if strings.Contains(rootHelp, detail) {
+			t.Errorf("root help owns detailed color guidance %q", detail)
+		}
+	}
+
+	root := newManualTestRoot()
+	for _, path := range []string{"list", "show", "claim"} {
+		help := renderCommandHelp(t, findCommand(t, root, path))
+		for _, fact := range []string{"--color mode", "auto, always, or never", "(default auto)"} {
+			if !strings.Contains(help, fact) {
+				t.Errorf("%s help lacks generated color option fact %q:\n%s", path, fact, help)
+			}
+		}
+	}
+
+	quickstart := strings.Join(strings.Fields(ergo.QuickstartText(false)), " ")
+	for _, concept := range []string{
+		"--color=auto", "stdout is a terminal", "redirected or piped output plain",
+		"NO_COLOR", "TERM=dumb", "--color=always", "--color=never",
+		"override terminal detection", "removing Ergo's ANSI decoration",
+		"User-authored bodies are never decorated", "without adding ANSI decoration",
+	} {
+		if !strings.Contains(quickstart, concept) {
+			t.Errorf("quickstart lacks color concept %q", concept)
+		}
+	}
+
+	repositoryRoot := filepath.Join("..", "..")
+	surfaces := map[string][]string{
+		"README.md": {"--color=always", "--color=never", "NO_COLOR", "TERM=dumb"},
+		"docs/spec.md": {"Color is presentation metadata", "stdout is a terminal",
+			"Removing Ergo-added ANSI decoration", "without adding ANSI decoration"},
+		"CHANGELOG.md": {"easier to scan", "--color=auto|always|never",
+			"keeps pipes and redirects plain", "exact, undecorated body projection"},
+	}
+	for name, concepts := range surfaces {
+		data, err := os.ReadFile(filepath.Join(repositoryRoot, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := strings.Join(strings.Fields(string(data)), " ")
+		for _, concept := range concepts {
+			if !strings.Contains(text, concept) {
+				t.Errorf("%s lacks color concept %q", name, concept)
+			}
 		}
 	}
 }

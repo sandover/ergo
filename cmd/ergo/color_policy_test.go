@@ -36,6 +36,84 @@ func TestColorAutoResolution(t *testing.T) {
 	}
 }
 
+func TestColorModesAcrossTerminalAndRedirectedStreams(t *testing.T) {
+	tests := []struct {
+		mode     colorMode
+		terminal bool
+		want     bool
+	}{
+		{mode: colorModeAuto, terminal: true, want: true},
+		{mode: colorModeAuto, terminal: false, want: false},
+		{mode: colorModeAlways, terminal: true, want: true},
+		{mode: colorModeAlways, terminal: false, want: true},
+		{mode: colorModeNever, terminal: true, want: false},
+		{mode: colorModeNever, terminal: false, want: false},
+	}
+	for _, test := range tests {
+		name := string(test.mode) + "/redirected"
+		if test.terminal {
+			name = string(test.mode) + "/terminal"
+		}
+		t.Run(name, func(t *testing.T) {
+			if got := resolveColor(test.mode, Streams{StdoutTerminal: test.terminal}); got != test.want {
+				t.Fatalf("resolveColor(%s, terminal=%v) = %v, want %v",
+					test.mode, test.terminal, got, test.want)
+			}
+		})
+	}
+}
+
+func TestShowColorModesAcrossTerminalAndRedirectedStreams(t *testing.T) {
+	dir := setupErgo(t)
+	stdout, stderr, code := runNewTaskWithBody(t, dir, "Literal body\n", "Color matrix")
+	if code != 0 {
+		t.Fatalf("create: code=%d stderr=%q", code, stderr)
+	}
+	id := strings.TrimSpace(stdout)
+	plain, stderr, code := runRootForColorTestInDir(t, dir, Streams{}, "--color=never", "show", id)
+	if code != 0 || stderr != "" {
+		t.Fatalf("plain baseline: code=%d stderr=%q", code, stderr)
+	}
+
+	tests := []struct {
+		name    string
+		mode    string
+		streams Streams
+		colored bool
+	}{
+		{name: "auto terminal", mode: "auto", streams: Streams{StdoutTerminal: true}, colored: true},
+		{name: "auto redirected", mode: "auto"},
+		{name: "always terminal", mode: "always", streams: Streams{StdoutTerminal: true}, colored: true},
+		{name: "always redirected", mode: "always", colored: true},
+		{name: "never terminal", mode: "never", streams: Streams{StdoutTerminal: true}},
+		{name: "never redirected", mode: "never"},
+		{name: "auto NO_COLOR", mode: "auto", streams: Streams{StdoutTerminal: true, NoColor: true}},
+		{name: "auto TERM dumb", mode: "auto", streams: Streams{StdoutTerminal: true, Term: "dumb"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, stderr, code := runRootForColorTestInDir(
+				t, dir, test.streams, "--color="+test.mode, "show", id,
+			)
+			if code != 0 || stderr != "" {
+				t.Fatalf("code=%d stderr=%q", code, stderr)
+			}
+			if test.colored {
+				if !strings.Contains(got, ansiEscape) {
+					t.Fatalf("colored output contains no ANSI: %q", got)
+				}
+				if stripped := ansiColorPattern.ReplaceAllString(got, ""); stripped != plain {
+					t.Fatalf("stripped output differs from plain\nstripped: %q\nplain:    %q", stripped, plain)
+				}
+				return
+			}
+			if got != plain {
+				t.Fatalf("plain output differs from baseline\ngot:  %q\nwant: %q", got, plain)
+			}
+		})
+	}
+}
+
 func TestColorExplicitModeOverridesEnvironmentAndTerminal(t *testing.T) {
 	disabled := Streams{StdoutTerminal: false, NoColor: true, Term: "dumb"}
 	if !resolveColor(colorModeAlways, disabled) {
@@ -65,6 +143,24 @@ func TestColorPolicyAppliesToRootHelpAndQuickstart(t *testing.T) {
 			stdout, stderr, code = runRootForColorTest(t, Streams{StdoutTerminal: true}, append([]string{"--color=never"}, command...)...)
 			if code != 0 || stderr != "" || strings.Contains(stdout, ansiEscape) {
 				t.Fatalf("never: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+			}
+		})
+	}
+}
+
+func TestColorAutoHonorsEnvironmentSuppression(t *testing.T) {
+	tests := []struct {
+		name    string
+		streams Streams
+	}{
+		{name: "NO_COLOR", streams: Streams{StdoutTerminal: true, NoColor: true}},
+		{name: "TERM dumb", streams: Streams{StdoutTerminal: true, Term: "dumb"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stdout, stderr, code := runRootForColorTest(t, test.streams, "quickstart")
+			if code != 0 || stderr != "" || strings.Contains(stdout, ansiEscape) {
+				t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
 			}
 		})
 	}
@@ -124,6 +220,27 @@ func TestColorPolicyAppliesToListAndPrune(t *testing.T) {
 	}
 }
 
+func TestRedirectedOutputIsPlainByDefault(t *testing.T) {
+	dir := setupErgo(t)
+	stdout, stderr, code := runNewTask(t, dir, "Redirected task")
+	if code != 0 {
+		t.Fatalf("create: code=%d stderr=%q", code, stderr)
+	}
+	id := strings.TrimSpace(stdout)
+	for _, command := range [][]string{
+		{"list"},
+		{"show", id},
+		{"claim", id, "--agent", "agent@test"},
+	} {
+		t.Run(command[0], func(t *testing.T) {
+			stdout, stderr, code := runErgo(t, dir, "", command...)
+			if code != 0 || stderr != "" || strings.Contains(stdout, ansiEscape) {
+				t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+			}
+		})
+	}
+}
+
 func TestColorPolicyAppliesToShowAndClaimDocuments(t *testing.T) {
 	dir := setupErgo(t)
 	body := "Literal {{CYAN}} body\n\n# User heading\n"
@@ -148,9 +265,16 @@ func TestColorPolicyAppliesToShowAndClaimDocuments(t *testing.T) {
 		t.Fatalf("show changed user-authored body:\n%s", colored)
 	}
 
+	plainClaim, stderr, code := runErgo(t, dir, "", "--color=never", "claim", id, "--agent", "agent@test")
+	if code != 0 || stderr != "" || strings.Contains(plainClaim, ansiEscape) {
+		t.Fatalf("plain claim: code=%d stdout=%q stderr=%q", code, plainClaim, stderr)
+	}
 	claimed, stderr, code := runErgo(t, dir, "", "--color=always", "claim", id, "--agent", "agent@test")
 	if code != 0 || stderr != "" || !strings.Contains(claimed, ansiEscape) {
 		t.Fatalf("colored claim: code=%d stdout=%q stderr=%q", code, claimed, stderr)
+	}
+	if got := ansiColorPattern.ReplaceAllString(claimed, ""); got != plainClaim {
+		t.Fatalf("stripped colored claim differs from plain\ncolored: %q\nplain:   %q", got, plainClaim)
 	}
 	for _, command := range []string{"ergo done " + id, "ergo block " + id, "ergo cancel " + id, "ergo release " + id} {
 		if !strings.Contains(claimed, colorGreenForTest+command+colorResetForTest) {
@@ -163,6 +287,10 @@ func TestColorPolicyAppliesToShowAndClaimDocuments(t *testing.T) {
 }
 
 func runRootForColorTest(t *testing.T, capabilities Streams, args ...string) (string, string, int) {
+	return runRootForColorTestInDir(t, "", capabilities, args...)
+}
+
+func runRootForColorTestInDir(t *testing.T, dir string, capabilities Streams, args ...string) (string, string, int) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	streams := Streams{
@@ -175,7 +303,7 @@ func runRootForColorTest(t *testing.T, capabilities Streams, args ...string) (st
 		Term:           capabilities.Term,
 		Width:          80,
 	}
-	root := NewRootCommand(ergo.NewApplication(ergo.RepositoryOptions{}), streams, "test")
+	root := NewRootCommand(ergo.NewApplication(ergo.RepositoryOptions{StartDir: dir}), streams, "test")
 	code := runCommand(root, args, streams)
 	return stdout.String(), stderr.String(), code
 }

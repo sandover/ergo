@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Interactive output now uses color to make task state, structure, and next
+  actions easier to scan. The global `--color=auto|always|never` option provides
+  predictable control.
+- Automatic mode respects `NO_COLOR` and `TERM=dumb` and keeps pipes and
+  redirects plain. Full documents retain their plain-text structure, and
+  `show --body` remains an exact, undecorated body projection.
+
 ## [4.1.0] - 2026-07-28
 
 Ergo 4.1 makes backlogs much harder to damage under crashes and concurrent
