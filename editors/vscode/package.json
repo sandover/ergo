@@ -1,20 +1,40 @@
 {
-  "name": "ergo",
-  "displayName": "Ergo",
-  "description": "Browse an Ergo backlog from VS Code.",
-  "version": "0.0.1",
+  "name": "ergo-backlog",
+  "displayName": "Ergo Backlog",
+  "description": "Browse a dependency-aware Ergo backlog without leaving VS Code.",
+  "version": "0.1.0",
   "publisher": "sandover",
+  "preview": true,
+  "icon": "assets/icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/sandover/ergo.git",
     "directory": "editors/vscode"
   },
+  "homepage": "https://github.com/sandover/ergo#ergo-backlog-for-vs-code",
+  "bugs": {
+    "url": "https://github.com/sandover/ergo/issues"
+  },
   "engines": {
     "vscode": "^1.95.0"
   },
   "categories": [
     "Other"
+  ],
+  "keywords": [
+    "backlog",
+    "task management",
+    "dependencies",
+    "dependency graph",
+    "epics",
+    "coding agents",
+    "AI agents",
+    "agentic development",
+    "project planning",
+    "repository-local",
+    "JSONL",
+    "developer tools"
   ],
   "extensionKind": [
     "workspace"
@@ -62,7 +82,7 @@
     "build": "npm run clean && npm run compile",
     "test": "npm run build && node scripts/test.mjs",
     "vscode:prepublish": "npm run build",
-    "package": "vsce package --out ergo-0.0.1.vsix"
+    "package": "vsce package --out ergo-backlog-0.1.0.vsix"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",

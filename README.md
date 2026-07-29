@@ -117,12 +117,19 @@ ergo info
 
 ![Example output of ergo list](docs/img/ergo-list-screenshot.jpg)
 
-The Preview extension under
+## Ergo Backlog for VS Code
+
+The [Ergo Backlog Preview extension](https://marketplace.visualstudio.com/items?itemName=sandover.ergo-backlog)
+under
 [`editors/vscode`](editors/vscode/README.md) adds **Ergo: Backlog** to VS Code.
 It uses Ergo 4.2.0 or later to search tasks and epics, opens the selected
 `ergo show` document in native Markdown preview, and turns
 `.ergo/backlog.jsonl` into a read-only backlog overview. The CLI remains the
 application boundary; the extension does not parse or mutate the event log.
+
+Install the CLI first, then install **Ergo Backlog** from the VS Code
+Marketplace. The extension is in Preview while its browsing workflow and
+cross-platform installation path are evaluated.
 
 Claim a known task or the oldest ready task:
 

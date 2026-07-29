@@ -3,6 +3,7 @@ node_modules/**
 scripts/**
 src/**
 test/**
+assets/source/**
 out/test/**
 out/**/*.map
 tsconfig.json

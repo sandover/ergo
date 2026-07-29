@@ -1,100 +1,100 @@
-# Ergo for VS Code
+# Ergo Backlog
 
-This experimental extension provides two read-only ways to browse an Ergo
-backlog:
+Ergo Backlog makes a repository's dependency-aware Ergo backlog readable
+inside VS Code. Search tasks and epics, scan the active backlog, and open
+details without reading JSONL or leaving the editor.
 
-- Click `.ergo/backlog.jsonl` to open a searchable backlog overview. Expand or
-  collapse epics, then click any epic or task to open its details.
-- Run **Ergo: Backlog** from the Command Palette to select an epic or task
-  from a compact native picker.
-
-Both entry points open the existing `ergo show` document in VS Code's native
-Markdown preview. The extension invokes the installed Ergo CLI to interpret the
-backlog. It does not parse or write JSONL, mutate tasks, or maintain another
-task-detail renderer. Use **Reopen Editor With → Text Editor** when you
-specifically need to inspect the underlying JSONL.
+The extension is a Preview. It is intentionally read-only and delegates
+backlog interpretation to the installed Ergo CLI.
 
 ## Requirements
 
-- VS Code 1.95 or later.
-- `ergo` on the extension host's `PATH`.
-- An Ergo build whose `ergo list --help` includes `--json`.
+- VS Code 1.95 or later
+- Ergo 4.2.0 or later in the extension host environment
+- A workspace containing an Ergo backlog
 
-Restart VS Code after installing or updating Ergo so the extension host receives
-the current `PATH`. In a remote, WSL, or development-container window, install
-Ergo in that environment.
-
-Set `ergo.executablePath` to an absolute executable path when VS Code should use
-a specific Ergo installation instead of resolving `ergo` from the extension
-host's `PATH`.
-
-## Develop locally
-
-Open `editors/vscode` as the VS Code workspace, run `npm ci`, and press `F5`.
-The launch configuration builds the extension and opens an Extension
-Development Host.
-
-Run the focused checks directly when needed:
+Install Ergo on macOS:
 
 ```sh
-npm test
-npm run build
+brew install sandover/tap/ergo
 ```
 
-## Package and install
+Windows and Linux archives are available from the
+[Ergo 4.2.0 GitHub Release](https://github.com/sandover/ergo/releases/tag/v4.2.0).
+Place `ergo` or `ergo.exe` on the extension host's `PATH`.
 
-Create the experimental package:
+Remote, WSL, and development-container windows need Ergo installed in that
+environment. Set `ergo.executablePath` to an absolute executable path when VS
+Code should use a specific installation. The extension reports the attempted
+path and corrective installation guidance when Ergo is missing or older than
+4.2.0.
+
+## Browse the backlog
+
+Run **Ergo: Backlog** from the Command Palette to open a searchable native
+picker. Search by title or six-character ID, select a task or epic, and inspect
+the exact readable `ergo show` document in VS Code's Markdown preview.
+
+Opening `.ergo/backlog.jsonl` presents a read-only backlog overview instead of
+raw JSONL. Filter the overview, expand an epic, and select any ID to open its
+details. Use **Reopen Editor With → Text Editor** when you specifically need
+the underlying event log.
+
+## Boundaries and privacy
+
+The extension invokes the configured Ergo executable with argument arrays and
+without a shell. It does not parse or write the JSONL event log, mutate tasks,
+add telemetry, or send backlog content to an Ergo service. VS Code and
+installed extensions remain subject to their own privacy behavior.
+
+The extension does not create, claim, complete, reorder, or otherwise change
+backlog work. Use the Ergo CLI for mutations.
+
+## Support
+
+Report defects and feature requests in the
+[Ergo issue tracker](https://github.com/sandover/ergo/issues). Include VS Code,
+operating-system, extension, and `ergo --version` information. Do not attach a
+private backlog.
+
+## Remove the extension
+
+Find **Ergo Backlog** in the Extensions view and choose **Uninstall**. Removing
+the extension does not remove Ergo or change repository backlogs.
+
+## Develop and package
+
+Open `editors/vscode` as the VS Code workspace, run `npm ci`, and press `F5` to
+open an Extension Development Host.
 
 ```sh
-npm ci
 npm test
 npm run package
 ```
 
-The package is `ergo-0.0.1.vsix`. In VS Code, run **Extensions: Install from
-VSIX...**, select that file, and reload the extension host when prompted. Use
-the same procedure on macOS and Windows.
+The package command creates `ergo-backlog-0.1.0.vsix`. The repository CI runs
+the same locked build and test workflow on Linux, macOS, and Windows and proves
+the package on Linux.
 
-To update the experiment, build and install the replacement VSIX. To remove it,
-find **Ergo** in the Extensions view and choose **Uninstall**. VSIX installations
-do not update automatically.
+## Maintainer smoke procedure
 
-## Smoke test
-
-Create a disposable backlog with distinct, realistic work:
-
-On macOS:
+Create a disposable backlog with distinct work:
 
 ```sh
 scratch="$(mktemp -d)"
 ergo init "$scratch"
-epic="$(ergo --dir "$scratch" new task "Create one Citation from text that spans pages")"
-ergo --dir "$scratch" new task "Decide what each page highlight should show" --epic "$epic"
-task="$(ergo --dir "$scratch" new task "Add support-safe plugin diagnostics to server logs")"
+epic="$(ergo --dir "$scratch" new task "Create one citation from text spanning pages")"
+ergo --dir "$scratch" new task "Define each page highlight" --epic "$epic"
+ergo --dir "$scratch" new task "Add support-safe diagnostics"
 code "$scratch"
-```
-
-On Windows PowerShell:
-
-```powershell
-$scratch = Join-Path $env:TEMP "ergo-vscode-smoke"
-New-Item -ItemType Directory -Path $scratch -Force | Out-Null
-ergo init $scratch
-$epic = ergo --dir $scratch new task "Create one Citation from text that spans pages"
-ergo --dir $scratch new task "Decide what each page highlight should show" --epic $epic
-$task = ergo --dir $scratch new task "Add support-safe plugin diagnostics to server logs"
-code $scratch
 ```
 
 In the opened window:
 
-1. Click `.ergo/backlog.jsonl` and confirm that the searchable Ergo backlog
-   overview opens instead of raw JSONL.
-2. Search for `Citation`, expand the epic, and click its child to inspect the
-   Markdown preview.
-3. Run **Ergo: Backlog**, search for the root task's six-character ID, and
-   inspect its preview.
-4. Use **Markdown: Switch to Editor View** and compare the read-only source with
+1. Open `.ergo/backlog.jsonl`, filter for `citation`, and open the epic child.
+2. Run **Ergo: Backlog**, search for a six-character ID, and open its preview.
+3. Compare the source view with
    `ergo --color=never --dir <scratch> show <id>`.
-5. Open an ordinary folder without `.ergo`, run **Ergo: Backlog**, and
-   confirm that Ergo's missing-backlog error is shown.
+4. Confirm that a folder without `.ergo` reports a missing backlog.
+5. Configure a missing executable and an Ergo version older than 4.2.0 and
+   confirm that each produces distinct corrective guidance.
