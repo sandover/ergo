@@ -59,7 +59,7 @@ export function clearCompatibilityCache(): void {
 }
 
 export function parseErgoVersion(output: string): string | undefined {
-  return output.match(/\b(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b/)?.[1];
+  return output.match(/(?:^|\s)v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)(?:\s|$)/)?.[1];
 }
 
 export function isSupportedVersion(version: string): boolean {

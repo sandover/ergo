@@ -31,6 +31,10 @@ test("maps missing executables and CLI failures to concise messages", () => {
 
 test("parses and compares Ergo semantic versions", () => {
   assert.equal(parseErgoVersion("ergo version 4.2.0\n"), "4.2.0");
+  assert.equal(
+    parseErgoVersion("ergo version v4.1.0-3-g9f95e3b-dirty\n"),
+    "4.1.0-3-g9f95e3b-dirty",
+  );
   assert.equal(parseErgoVersion("ergo version dev\n"), undefined);
   assert.equal(isSupportedVersion("4.1.9"), false);
   assert.equal(isSupportedVersion("4.2.0"), true);
