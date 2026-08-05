@@ -316,7 +316,7 @@ func TestMaintainedSurfacesUseCurrentVocabularyAndSyntax(t *testing.T) {
 	root := filepath.Join("..", "..")
 	files := []string{
 		"README.md", "internal/ergo/help.txt", "internal/ergo/quickstart.txt",
-		"skills/ergo-feature-planning/SKILL.md", "docs/spec.md",
+		"skills/ergo-backlog-planning/SKILL.md", "docs/spec.md",
 		"docs/release.md", "docs/suggested-hooks/pre-commit",
 	}
 	for _, name := range files {

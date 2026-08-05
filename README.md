@@ -38,7 +38,7 @@ Add a short repository instruction for your coding agent:
 > `ergo quickstart` to learn it.
 
 The repository also ships an
-[Ergo feature-planning skill](skills/ergo-feature-planning/SKILL.md) for shaping
+[Ergo backlog-planning skill](skills/ergo-backlog-planning/SKILL.md) for shaping
 and executing larger backlogs.
 
 ## Browse in VS Code
