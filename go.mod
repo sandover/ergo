@@ -1,4 +1,4 @@
-module github.com/sandover/ergo
+module github.com/sandover/ergo/v4
 
 go 1.24.0
 

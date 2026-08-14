@@ -8,7 +8,7 @@ package main
 import (
 	"os"
 
-	"github.com/sandover/ergo/internal/ergo"
+	"github.com/sandover/ergo/v4/internal/ergo"
 	"golang.org/x/term"
 )
 

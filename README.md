@@ -4,8 +4,8 @@
 
 [![License](https://img.shields.io/github/license/sandover/ergo)](LICENSE)
 [![CI](https://github.com/sandover/ergo/actions/workflows/ci.yml/badge.svg)](https://github.com/sandover/ergo/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo)](https://goreportcard.com/report/github.com/sandover/ergo)
-[![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo.svg)](https://pkg.go.dev/github.com/sandover/ergo)
+[![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo/v4)](https://goreportcard.com/report/github.com/sandover/ergo/v4)
+[![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo/v4.svg)](https://pkg.go.dev/github.com/sandover/ergo/v4)
 
 Ergo keeps an implementation backlog in the repository. Agents create tasks,
 order them with dependencies, claim ready work, and record outcomes through
@@ -29,7 +29,7 @@ brew install sandover/tap/ergo
 Any supported platform with Go:
 
 ```sh
-go install github.com/sandover/ergo/cmd/ergo@latest
+go install github.com/sandover/ergo/v4/cmd/ergo@latest
 ```
 
 Add a short repository instruction for your coding agent:

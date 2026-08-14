@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/sandover/ergo/internal/ergo"
+	"github.com/sandover/ergo/v4/internal/ergo"
 )
 
 func writeCLIError(w io.Writer, err error, args []string) {

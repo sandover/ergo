@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The Go module path now includes its required `/v4` major-version suffix, so
+  `go install github.com/sandover/ergo/v4/cmd/ergo@latest` resolves current
+  releases instead of stopping at v1.2.0.
+
 ## [4.3.1] - 2026-08-14
 
 ### Added

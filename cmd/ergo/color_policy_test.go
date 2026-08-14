@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sandover/ergo/internal/ergo"
+	"github.com/sandover/ergo/v4/internal/ergo"
 )
 
 const ansiEscape = "\x1b["
