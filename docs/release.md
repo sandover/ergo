@@ -7,6 +7,9 @@ in `ergo --help`, `ergo quickstart`, and `docs/spec.md`.
 
 - Start from a clean, current main branch.
 - Update `CHANGELOG.md` with user-visible behavior and upgrade notes.
+- Draft deliberate release notes before tagging. Lead with what changed and why,
+  then include useful examples, behavioral boundaries, compatibility, and the
+  upgrade path. A generated commit list is never acceptable as final notes.
 - Confirm help, quickstart, spec, architecture, README, and shipped skill agree.
 - Run `task ci`.
 - Run `task build` and smoke `./bin/ergo --help`, quickstart, readable output, and one lifecycle loop.
@@ -45,7 +48,9 @@ event logs rather than assumed from unit tests alone.
 2. Get explicit approval to publish the tag.
 3. Create and push the immutable version tag.
 4. Watch the tag-specific release workflow to completion.
-5. Verify the GitHub Release is final and contains checksums plus every configured archive.
+5. Replace generated notes with the drafted release notes and inspect the
+   rendered release page.
+6. Verify the GitHub Release is final and contains checksums plus every configured archive.
 
 Never move or replace a published version tag. Correct a failed release with a
 new version.
@@ -59,5 +64,6 @@ new version.
 - Install through Homebrew and invoke `$(brew --prefix)/bin/ergo` explicitly.
 - Verify WinGet too when its publisher is configured.
 
-The release is complete only when source, artifacts, and package-manager installs
-all report the intended version and accepted CLI contract.
+The release is complete only when its page has useful release notes and source,
+artifacts, and package-manager installs all report the intended version and
+accepted CLI contract.
