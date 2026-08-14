@@ -6,6 +6,7 @@
 package ergo
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,6 +36,29 @@ func TestMutationBuildsMixedAtomicBatch(t *testing.T) {
 	}
 	if !equalStrings(sortedUniqueStrings(fields), []string{"body", "claim", "state"}) {
 		t.Fatalf("updated fields = %v", fields)
+	}
+}
+
+func TestMutationAppendsBodyAgainstLockedTaskState(t *testing.T) {
+	task := &Task{ID: "ABCDEF", State: stateTodo, Title: "Task", Body: "existing"}
+	events, fields, err := buildMutationEvents(task.ID, task, taskMutation{
+		Kind: "body", Body: "+new", BodySet: true, BodyAppend: true,
+	}, "", time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := eventTypes(events); !equalStrings(got, []string{"body"}) {
+		t.Fatalf("event types = %v", got)
+	}
+	if !equalStrings(fields, []string{"body"}) {
+		t.Fatalf("updated fields = %v", fields)
+	}
+	var update BodyUpdateEvent
+	if err := json.Unmarshal(events[0].Data, &update); err != nil {
+		t.Fatal(err)
+	}
+	if update.Body != "existing+new" {
+		t.Fatalf("appended body = %q", update.Body)
 	}
 }
 

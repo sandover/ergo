@@ -45,7 +45,7 @@ func TestRootHelpIsTheFrontDoor(t *testing.T) {
 		"init [dir]", `new task "<title>"`, `new epic "<title>" --file <path>`,
 		"list [--epic <id>] [--ready | --all] [--json]", "show <id> [--body]", "claim [<id>]", "done <id>",
 		"block <id>", "cancel <id>", "release <id>", "title <id> <title>",
-		"body <id>", "move <id> <epic-id>", "sequence <A> <B>",
+		"body <id> [--append]", "move <id> <epic-id>", "sequence <A> <B>",
 		"unsequence <A> <B>", "where", "prune [--yes]", "compact",
 		"quickstart", "version",
 	} {
@@ -99,7 +99,7 @@ func TestRootAndQuickstartCoverThePublicContract(t *testing.T) {
 	normalized := strings.Join(strings.Fields(combined), " ")
 	for _, flag := range []string{
 		"--agent", "--dir", "--color", "--help", "--version", "--file", "--epic",
-		"--ready", "--all", "--json", "--body", "-m", "--result", "--root", "--yes",
+		"--ready", "--all", "--json", "--body", "--append", "-m", "--result", "--root", "--yes",
 	} {
 		if !strings.Contains(combined, flag) {
 			t.Errorf("documentation system lacks flag %q", flag)
@@ -207,7 +207,7 @@ func TestCommandsWithStdinInputsRevealThemInHelp(t *testing.T) {
 	expected := map[string]string{
 		"new task": "Optional piped stdin becomes the initial task body; no pipe creates an empty body.",
 		"new epic": "Optional piped stdin becomes the epic body; --file supplies the child tasks.",
-		"body":     "Piped stdin is required and replaces the body; an empty pipe clears it.",
+		"body":     "Piped stdin is required. By default it replaces the body; --append adds literal bytes, and empty append input is a no-op.",
 	}
 	for path, input := range expected {
 		help := renderCommandHelp(t, findCommand(t, root, path))
@@ -224,6 +224,7 @@ func TestCommandHelpRevealsOptionConstraints(t *testing.T) {
 		"list":     {"--ready", "conflicts with --all", "--all", "conflicts with --ready", "--json", "versioned JSON task listing"},
 		"claim":    {"--agent", "required"},
 		"show":     {"--body", "exact stored body", "byte-for-byte"},
+		"body":     {"--append", "Append stdin bytes to the existing body"},
 		"done":     {"-m, --message", "repeatable", "--result"},
 		"move":     {"ergo move <id> <epic-id> | ergo move <id> --root"},
 		"prune":    {"--yes", "default is dry-run"},

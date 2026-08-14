@@ -122,12 +122,16 @@ Use focused commands to change existing work:
 
   {{CMD}}ergo title ABCDEF "Clarify authentication failure"{{RESET}}
   {{CMD}}printf '%s\n' 'New body' | ergo body ABCDEF{{RESET}}
+  {{CMD}}printf '\n## New context\n' | ergo body ABCDEF --append{{RESET}}
   {{CMD}}printf '' | ergo body ABCDEF{{RESET}}
   {{CMD}}ergo move ABCDEF GHIJKL{{RESET}}
   {{CMD}}ergo move ABCDEF --root{{RESET}}
 
-`body` requires piped stdin and replaces the entire body; an empty pipe clears
-it. Move accepts leaves only. Its destination must be an epic or a clean,
+`body` requires piped stdin and replaces the entire body by default; an empty
+pipe clears it. `--append` instead adds the input bytes literally to the stored
+body under the write lock. It adds no separator or newline, so include any
+desired boundary in the input. Empty append input is a no-op. Move accepts
+leaves only. Its destination must be an epic or a clean,
 unclaimed root todo task with no results; the latter becomes an epic when it
 receives its first child.
 

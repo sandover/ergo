@@ -24,6 +24,7 @@ type taskMutation struct {
 	TitleSet      bool
 	Body          string
 	BodySet       bool
+	BodyAppend    bool
 	EpicID        string
 	EpicSet       bool
 	ValidateMove  bool
@@ -130,8 +131,12 @@ func buildMutationEvents(id string, task *Task, mutation taskMutation, agentID s
 		events = append(events, event)
 		fields = append(fields, "title")
 	}
-	if mutation.BodySet && mutation.Body != task.Body {
-		event, err := newEvent("body", now, BodyUpdateEvent{ID: id, Body: mutation.Body, TS: formatTime(now)})
+	targetBody := mutation.Body
+	if mutation.BodyAppend {
+		targetBody = task.Body + mutation.Body
+	}
+	if mutation.BodySet && targetBody != task.Body {
+		event, err := newEvent("body", now, BodyUpdateEvent{ID: id, Body: targetBody, TS: formatTime(now)})
 		if err != nil {
 			return nil, nil, err
 		}

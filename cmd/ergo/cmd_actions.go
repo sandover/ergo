@@ -1,3 +1,8 @@
+// Purpose: Assemble Ergo's user-facing commands and connect process I/O.
+// Exports: none; NewRootCommand calls addCommands.
+// Role: Parse arguments and flags into application requests, then render outcomes.
+// Invariants: command handlers do not implement persistence or graph rules.
+// Invariants: stdin body bytes pass through unchanged to the application layer.
 package main
 
 import (
@@ -197,14 +202,16 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 		}
 		return err
 	}
-	bodyCmd := &cobra.Command{Use: "body <id>", Short: "Replace a task body from stdin", Args: exactArgs(1, "usage: printf '%s\\n' '<body>' | ergo body <id>"),
-		Annotations: map[string]string{commandInputHelp: "Piped stdin is required and replaces the body; an empty pipe clears it."}}
+	bodyCmd := &cobra.Command{Use: "body <id> [--append]", Short: "Replace or append to a task body from stdin", Args: exactArgs(1, "usage: printf '%s\\n' '<body>' | ergo body <id> [--append]"),
+		Annotations: map[string]string{commandInputHelp: "Piped stdin is required. By default it replaces the body; --append adds literal bytes, and empty append input is a no-op."}}
+	bodyCmd.Flags().Bool("append", false, "Append stdin bytes to the existing body")
 	bodyCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		body, err := commandInput(cmd, streams, true, args[0])
 		if err != nil {
 			return err
 		}
-		out, err := app().UpdateBody(ergo.UpdateBodyRequest{ID: args[0], Body: []byte(body)})
+		appendBody, _ := cmd.Flags().GetBool("append")
+		out, err := app().UpdateBody(ergo.UpdateBodyRequest{ID: args[0], Body: []byte(body), Append: appendBody})
 		if err == nil {
 			ergo.RenderBody(cmd.OutOrStdout(), out)
 		}

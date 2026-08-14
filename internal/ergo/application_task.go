@@ -1,3 +1,8 @@
+// Purpose: Define application requests and outcomes for focused task changes.
+// Exports: title, body, and move request/outcome types and Application methods.
+// Role: Validate public inputs and map them onto the shared locked mutation path.
+// Invariants: titles are nonblank; body bytes remain literal.
+// Invariants: body append is resolved against repository state under the lock.
 package ergo
 
 import (
@@ -30,8 +35,9 @@ func (a *Application) UpdateTitle(request UpdateTitleRequest) (UpdateTitleOutcom
 }
 
 type UpdateBodyRequest struct {
-	ID   string
-	Body []byte
+	ID     string
+	Body   []byte
+	Append bool
 }
 type UpdateBodyOutcome struct {
 	ID      string
@@ -45,12 +51,15 @@ func (a *Application) UpdateBody(request UpdateBodyRequest) (UpdateBodyOutcome, 
 		return UpdateBodyOutcome{}, classifyRepositoryError(err)
 	}
 	outcome, err := applyTaskMutation(dir, a.repository, request.ID, taskMutation{
-		Kind: "body", Body: string(request.Body), BodySet: true,
+		Kind: "body", Body: string(request.Body), BodySet: true, BodyAppend: request.Append,
 	}, "")
 	if err != nil {
 		return UpdateBodyOutcome{}, classifyRepositoryError(err)
 	}
-	return UpdateBodyOutcome{ID: request.ID, Bytes: len(request.Body), Changed: len(outcome.ChangedFields) > 0}, nil
+	return UpdateBodyOutcome{
+		ID: request.ID, Bytes: len(outcome.Graph.Tasks[request.ID].Body),
+		Changed: len(outcome.ChangedFields) > 0,
+	}, nil
 }
 
 type MoveRequest struct {

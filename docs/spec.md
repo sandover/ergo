@@ -44,7 +44,7 @@ block <id> [-m <message>] [--result <path>]
 cancel <id> [-m <message>] [--result <path>]
 release <id> [-m <message>] [--result <path>]
 title <id> <title>
-body <id>
+body <id> [--append]
 move <id> <epic-id>
 move <id> --root
 sequence <A> <B> [<C>...]
@@ -121,8 +121,11 @@ An event-free success is explicit.
 ## Focused mutations
 
 `title` trims surrounding whitespace and rejects an empty value. `body` requires
-piped stdin and replaces the body literally; an empty pipe clears it. Both work
-on leaves and epics. Same-value writes append no event and report no change.
+piped stdin and replaces the body literally by default; an empty pipe clears it.
+With `--append`, the piped bytes are added literally to the current stored body
+under the write lock. Ergo adds no separator or newline. Empty append input is a
+no-op. Both modes work on leaves and epics. Writes that produce the current body
+append no event and report no change.
 
 Move accepts leaves only. Its destination follows the same promotion rules as
 `new task --epic`. Moving to the current parent or root is an explicit no-op.

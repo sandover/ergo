@@ -165,9 +165,14 @@ Use focused commands to edit existing work:
 ```sh
 ergo title ABCDEF "Clarify authentication failure"
 printf '%s\n' '## Goal' '- Clarify the failure' | ergo body ABCDEF
+printf '\n## New context\n' | ergo body ABCDEF --append
 ergo move ABCDEF GHIJKL
 ergo move ABCDEF --root
 ```
+
+`body --append` adds the piped bytes literally under the backlog write lock. It
+does not add a separator or newline, so include the desired boundary in the
+input. An empty append is a no-op.
 
 For a lossless body edit, project the stored body to a temporary file before
 writing it back:

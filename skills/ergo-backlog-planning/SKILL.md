@@ -95,3 +95,6 @@ Fix any problems. Then summarize the epics, key tasks, dependencies, decisions, 
 - End every claim with the lifecycle command that matches the outcome. Never leave claimed work in `doing`.
 - State the outcome and checks run in the completion message. Attach a result only when the task produced an actual project file.
 - After a spike, update dependent task bodies before closing it.
+- When adding newly discovered context, pipe only the new text to
+  `ergo body <id> --append`, including any desired leading newline. Replace the
+  whole body only when intentionally rewriting it.

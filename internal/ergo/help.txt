@@ -27,7 +27,7 @@ completes when its children finish.
   cancel <id> [-m <text>] [--result <path>]   cancel a task
   release <id> [-m <text>] [--result <path>]  return unfinished work to todo
   title <id> <title>                          replace a title
-  body <id>                                   replace a body from stdin
+  body <id> [--append]                        replace or append to a body from stdin
   move <id> <epic-id>                         move a task into an epic
   move <id> --root                            move a task to the root
   sequence <A> <B> [<C>...]                   require A before B before C
