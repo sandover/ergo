@@ -12,8 +12,8 @@ jobs:
   goreleaser:
     runs-on: ubuntu-latest
     env:
-      GOCACHE: ${{ runner.temp }}/ergo-release-cache/go-build
-      GOMODCACHE: ${{ runner.temp }}/ergo-release-cache/go-mod
+      GOCACHE: /tmp/ergo-release-cache/go-build
+      GOMODCACHE: /tmp/ergo-release-cache/go-mod
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,8 +28,8 @@ jobs:
         continue-on-error: true
         with:
           path: |
-            ${{ runner.temp }}/ergo-release-cache/go-build
-            ${{ runner.temp }}/ergo-release-cache/go-mod
+            /tmp/ergo-release-cache/go-build
+            /tmp/ergo-release-cache/go-mod
           key: release-go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
           restore-keys: |
             release-go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}-
@@ -46,6 +46,6 @@ jobs:
         continue-on-error: true
         with:
           path: |
-            ${{ runner.temp }}/ergo-release-cache/go-build
-            ${{ runner.temp }}/ergo-release-cache/go-mod
+            /tmp/ergo-release-cache/go-build
+            /tmp/ergo-release-cache/go-mod
           key: ${{ steps.release-cache.outputs.cache-primary-key }}
