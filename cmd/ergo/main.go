@@ -2,11 +2,13 @@
 // Exports: main.
 // Role: Binary entrypoint for the ergo CLI.
 // Invariants: Process state and process exit are confined to this file.
-// Notes: version is injected via ldflags.
+// Notes: version comes from release ldflags or Go's embedded module build info.
 package main
 
 import (
 	"os"
+	"runtime/debug"
+	"strings"
 
 	"github.com/sandover/ergo/v4/internal/ergo"
 	"golang.org/x/term"
@@ -17,8 +19,26 @@ var version = "dev"
 
 func main() {
 	streams := processStreams()
-	root := NewRootCommand(ergo.NewApplication(ergo.RepositoryOptions{}), streams, version)
+	root := NewRootCommand(ergo.NewApplication(ergo.RepositoryOptions{}), streams, effectiveVersion())
 	os.Exit(runCommand(root, os.Args[1:], streams))
+}
+
+func effectiveVersion() string {
+	moduleVersion := ""
+	if info, ok := debug.ReadBuildInfo(); ok {
+		moduleVersion = info.Main.Version
+	}
+	return resolveBuildVersion(version, moduleVersion)
+}
+
+func resolveBuildVersion(linkerVersion, moduleVersion string) string {
+	if linkerVersion != "" && linkerVersion != "dev" {
+		return linkerVersion
+	}
+	if moduleVersion != "" && moduleVersion != "(devel)" {
+		return strings.TrimPrefix(moduleVersion, "v")
+	}
+	return "dev"
 }
 
 func processStreams() Streams {

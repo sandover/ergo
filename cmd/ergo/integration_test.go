@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 		ergoBinary += ".exe"
 	}
 
-	cmd := exec.Command("go", "build", "-o", ergoBinary, ".")
+	cmd := exec.Command("go", "build", "-ldflags", "-X main.version=test", "-o", ergoBinary, ".")
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 	if err := cmd.Run(); err != nil {
@@ -739,7 +739,7 @@ func TestPathAndCreationConfirmations(t *testing.T) {
 	stdout, stderr, code = runErgo(t, dir, "", "info")
 	for _, want := range []string{
 		"Executable: ",
-		"Version: dev\n",
+		"Version: test\n",
 		"Project: " + dir + "\n",
 		"Backlog: " + filepath.Join(wantPath, "backlog.jsonl") + "\n",
 	} {

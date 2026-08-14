@@ -131,6 +131,24 @@ func TestRootHelpAndVersionUseProvidedWriters(t *testing.T) {
 	}
 }
 
+func TestResolveBuildVersion(t *testing.T) {
+	tests := []struct {
+		name, linker, module, want string
+	}{
+		{name: "release linker wins", linker: "4.3.3", module: "v4.3.2", want: "4.3.3"},
+		{name: "go install module", linker: "dev", module: "v4.3.3", want: "4.3.3"},
+		{name: "local build", linker: "dev", module: "(devel)", want: "dev"},
+		{name: "missing build info", linker: "dev", want: "dev"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := resolveBuildVersion(test.linker, test.module); got != test.want {
+				t.Fatalf("resolveBuildVersion(%q, %q) = %q, want %q", test.linker, test.module, got, test.want)
+			}
+		})
+	}
+}
+
 func freshRoot(t *testing.T, version string) *cobra.Command {
 	t.Helper()
 	return freshRootWithStreams(
