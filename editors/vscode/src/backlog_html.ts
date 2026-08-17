@@ -36,33 +36,35 @@ export function renderBacklog(
   <title>Ergo Backlog</title>
   <style nonce="${nonce}">
     :root { color-scheme: light dark; }
-    body { color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); margin: 0 auto; max-width: 920px; padding: 28px 32px 80px; }
-    header { margin-bottom: 18px; }
-    h1 { font-size: 22px; margin: 0; }
+    body { color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); font-weight: var(--vscode-font-weight); line-height: 1.35; margin: 0 auto; max-width: 920px; padding: 20px 24px 64px; }
+    header { margin-bottom: 14px; }
+    h1 { font-size: 20px; line-height: 1.2; margin: 0; }
     h2 { color: var(--vscode-descriptionForeground); font-size: 11px; letter-spacing: .09em; margin: 34px 8px 14px; text-transform: uppercase; }
     .meta { color: var(--vscode-descriptionForeground); }
-    .filters { border-bottom: 1px solid var(--vscode-widget-border, color-mix(in srgb, var(--vscode-foreground) 14%, transparent)); display: grid; gap: 10px; padding-bottom: 18px; }
+    .filters { border-bottom: 1px solid var(--vscode-widget-border, color-mix(in srgb, var(--vscode-foreground) 14%, transparent)); display: grid; gap: 8px; padding-bottom: 14px; }
     input[type="search"] { background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, transparent); color: var(--vscode-input-foreground); font: inherit; padding: 7px 9px; width: 100%; }
     input[type="search"]:focus { border-color: var(--vscode-focusBorder); outline: none; }
     .ready-filter { align-items: center; cursor: pointer; display: inline-flex; gap: 7px; justify-self: start; }
     .ready-filter input { accent-color: var(--vscode-checkbox-background); cursor: pointer; margin: 0; }
-    main { margin-top: 28px; }
-    section { margin-bottom: 30px; }
-    .row { align-items: center; border-radius: 3px; display: grid; gap: 12px; grid-template-columns: 18px minmax(0, 1fr) auto; padding: 6px 8px; }
+    main { margin-top: 18px; }
+    section { margin-bottom: 18px; }
+    .row { align-items: center; border-radius: 3px; display: grid; gap: 12px; grid-template-columns: 18px minmax(0, 1fr) auto; padding: 3px 8px; }
     .row:hover, .row:focus-within { background: var(--vscode-list-hoverBackground); }
     button.item { background: none; border: 0; color: var(--vscode-textLink-foreground); cursor: pointer; font: inherit; min-width: 0; overflow: hidden; padding: 0; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
     button.item:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
     button.item:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
-    .state { color: var(--vscode-descriptionForeground); text-align: center; }
-    .id { font-family: var(--vscode-editor-font-family); font-size: 12px; }
-    details { margin: 0 0 24px; }
-    details > summary { border-radius: 3px; cursor: pointer; list-style-position: outside; padding: 7px 8px; }
+    .state { color: var(--vscode-descriptionForeground); font-size: 14px; line-height: 1; text-align: center; }
+    .state[data-state="doing"] { color: var(--vscode-progressBar-background); }
+    .state[data-state="blocked"] { color: var(--vscode-errorForeground); font-weight: 600; }
+    .item.id { color: var(--vscode-descriptionForeground); font-family: var(--vscode-editor-font-family); font-size: 12px; }
+    details { margin: 0 0 18px; }
+    details > summary { border-radius: 3px; cursor: pointer; list-style-position: outside; padding: 5px 8px; }
     details > summary:hover, details > summary:focus { background: var(--vscode-list-hoverBackground); outline: none; }
     details > summary::marker { color: var(--vscode-descriptionForeground); }
     .epic-heading { align-items: baseline; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) auto; }
     .epic-title { font-weight: 600; }
     .epic-progress { color: var(--vscode-descriptionForeground); display: block; font-size: 12px; margin-top: 3px; }
-    .children { margin: 5px 0 0 22px; }
+    .children { margin: 3px 0 0 22px; }
     .empty { color: var(--vscode-descriptionForeground); padding: 28px 0; text-align: center; }
     [hidden] { display: none !important; }
   </style>
@@ -152,7 +154,7 @@ function renderEpic(epic: ErgoListItem, children: ErgoListItem[]): string {
 function renderTask(item: ErgoListItem): string {
   const state = displayState(item);
   return `<div class="row" data-search="${searchText([item])}" data-ready="${item.ready === true}">
-    <span class="state" title="${attribute(state)}">${stateSymbol(state)}</span>
+    <span class="state" data-state="${attribute(state)}" title="${attribute(state)}">${stateSymbol(state)}</span>
     <span>${text(item.title)}</span>
     <button class="item id" data-id="${attribute(item.id)}">${text(item.id)}</button>
   </div>`;

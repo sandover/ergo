@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.2
+
+- Tighten backlog typography and spacing so more tasks remain visible.
+- Reduce task ID contrast and emphasize active and blocked states.
+
 ## 0.1.1
 
 - Rework the Marketplace page around product value, primary workflows, concise
