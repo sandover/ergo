@@ -538,6 +538,33 @@ func TestShowEpicHumanDocumentFirstLayout(t *testing.T) {
 	}
 }
 
+func TestShowEpicNestsChildBodyHeadings(t *testing.T) {
+	dir := setupErgo(t)
+	epicOutput, _, _ := runNewTask(t, dir, "Epic")
+	epicID := strings.TrimSpace(epicOutput)
+	body := "## Investigation\n\n### Finding\n\n```md\n## Example\n```\n"
+	childOutput, _, code := runNewTaskWithBody(t, dir, body, "Child", "--epic", epicID)
+	if code != 0 {
+		t.Fatalf("new child failed: exit %d", code)
+	}
+	childID := strings.TrimSpace(childOutput)
+
+	stdout, stderr, code := runErgo(t, dir, "", "show", epicID)
+	if code != 0 || stderr != "" {
+		t.Fatalf("show epic: code=%d stderr=%q", code, stderr)
+	}
+	for _, want := range []string{"#### Investigation", "##### Finding", "```md\n## Example\n```"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("epic output missing %q:\n%s", want, stdout)
+		}
+	}
+
+	stdout, stderr, code = runErgo(t, dir, "", "show", childID, "--body")
+	if code != 0 || stderr != "" || stdout != body {
+		t.Fatalf("show child --body: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
 func TestShowEpicOmitsBodySectionWhenEmpty(t *testing.T) {
 	dir := setupErgo(t)
 
@@ -567,7 +594,8 @@ func TestShowEpicOmitsBodySectionWhenEmpty(t *testing.T) {
 func TestShowTaskHumanOutputUnchanged(t *testing.T) {
 	dir := setupErgo(t)
 
-	stdout, _, code := runNewTaskWithBody(t, dir, "Body text", "Standalone")
+	body := "## Investigation\n\n### Finding\n"
+	stdout, _, code := runNewTaskWithBody(t, dir, body, "Standalone")
 	if code != 0 {
 		t.Fatalf("new task failed: exit %d", code)
 	}
@@ -583,7 +611,7 @@ func TestShowTaskHumanOutputUnchanged(t *testing.T) {
 	if !strings.Contains(stdout, "\nid: \""+taskID+"\"\n") {
 		t.Fatalf("expected id in front matter: %s", stdout)
 	}
-	if !strings.Contains(stdout, "# Standalone") || !strings.Contains(stdout, "Body text") {
+	if !strings.Contains(stdout, "# Standalone") || !strings.Contains(stdout, body) {
 		t.Fatalf("expected task markdown heading and body in output: %s", stdout)
 	}
 	if strings.Contains(stdout, "──────────────────────────────────────────────────") {

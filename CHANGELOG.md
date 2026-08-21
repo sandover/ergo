@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.1] - 2026-08-21
+
+### Fixed
+
+- `ergo show <epic>` now nests headings from each child task body beneath the
+  generated task heading. Standalone task output and `show <id> --body` remain
+  unchanged.
+
 ## [5.0.0] - 2026-08-21
 
 ### Added
@@ -667,7 +675,8 @@ read that log.
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v5.0.0...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v5.0.1...HEAD
+[5.0.1]: https://github.com/sandover/ergo/compare/v5.0.0...v5.0.1
 [5.0.0]: https://github.com/sandover/ergo/compare/v4.3.3...v5.0.0
 [4.3.3]: https://github.com/sandover/ergo/compare/v4.3.2...v4.3.3
 [4.3.2]: https://github.com/sandover/ergo/compare/v4.3.1...v4.3.2

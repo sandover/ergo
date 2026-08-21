@@ -111,17 +111,30 @@ func TestColoredTaskDocumentsReduceExactlyToPlainOutput(t *testing.T) {
 			if got := stripANSICodes(colored); got != plain {
 				t.Fatalf("stripped colored document differs from plain\ncolored: %q\nplain:   %q", got, plain)
 			}
-			for _, literal := range []string{
-				child.Title, child.Body, dependency.Title,
-			} {
+			for _, literal := range []string{child.Title, dependency.Title} {
 				if !strings.Contains(colored, literal) {
 					t.Fatalf("colored document changed user-authored text %q:\n%s", literal, colored)
 				}
+			}
+			wantBody := child.Body
+			if test.name == "epic" {
+				wantBody = "Literal {{CYAN}} body\n\n### User heading"
+			}
+			if !strings.Contains(colored, wantBody) {
+				t.Fatalf("colored document changed child body %q:\n%s", wantBody, colored)
 			}
 			if test.name == "leaf" && !strings.Contains(colored, journal[0].Text) {
 				t.Fatalf("leaf document changed journal text %q:\n%s", journal[0].Text, colored)
 			}
 		})
+	}
+}
+
+func TestShiftChildBodyHeadings(t *testing.T) {
+	body := "# Overview\n\n## Details\n\n#### Fine point\n\n##### Already nested\n\n```md\n# Backtick example\n```\n\n~~~md\n## Tilde example\n~~~\n\nNot # a heading\n"
+	want := "### Overview\n\n#### Details\n\n###### Fine point\n\n##### Already nested\n\n```md\n# Backtick example\n```\n\n~~~md\n## Tilde example\n~~~\n\nNot # a heading\n"
+	if got := shiftChildBodyHeadings(body); got != want {
+		t.Fatalf("shiftChildBodyHeadings() = %q, want %q", got, want)
 	}
 }
 

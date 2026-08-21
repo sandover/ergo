@@ -81,7 +81,7 @@ func printContainerDocument(w io.Writer, epic *Task, children []*Task, graph *Gr
 		fmt.Fprintln(w)
 
 		if child.Body != "" {
-			printMarkdownBody(w, child.Body)
+			printMarkdownBody(w, shiftChildBodyHeadings(child.Body))
 			fmt.Fprintln(w)
 		}
 		printTaskDependenciesMarkdown(w, child, graph, "#### Dependencies", useColor)
@@ -150,6 +150,65 @@ func printMarkdownBody(w io.Writer, body string) {
 	if !strings.HasSuffix(body, "\n") {
 		fmt.Fprintln(w)
 	}
+}
+
+// shiftChildBodyHeadings keeps a task body's standalone Markdown structure
+// nested beneath the generated level-three heading in an epic document.
+func shiftChildBodyHeadings(body string) string {
+	lines := strings.SplitAfter(body, "\n")
+	inFence := false
+	fenceMarker := byte(0)
+	fenceWidth := 0
+	for index, line := range lines {
+		content := strings.TrimSuffix(line, "\n")
+		content = strings.TrimSuffix(content, "\r")
+		if marker, width, ok := markdownFence(content); ok {
+			if !inFence {
+				inFence, fenceMarker, fenceWidth = true, marker, width
+			} else if marker == fenceMarker && width >= fenceWidth && fenceCloses(content, marker, width) {
+				inFence = false
+			}
+			continue
+		}
+		if inFence {
+			continue
+		}
+		indent := 0
+		for indent < len(content) && indent < 3 && content[indent] == ' ' {
+			indent++
+		}
+		headingWidth := 0
+		for indent+headingWidth < len(content) && content[indent+headingWidth] == '#' {
+			headingWidth++
+		}
+		if headingWidth == 0 || headingWidth > 4 {
+			continue
+		}
+		after := indent + headingWidth
+		if after < len(content) && content[after] != ' ' && content[after] != '\t' {
+			continue
+		}
+		lines[index] = line[:indent] + "##" + line[indent:]
+	}
+	return strings.Join(lines, "")
+}
+
+func markdownFence(line string) (byte, int, bool) {
+	trimmed := strings.TrimLeft(line, " ")
+	if len(line)-len(trimmed) > 3 || len(trimmed) < 3 || (trimmed[0] != '`' && trimmed[0] != '~') {
+		return 0, 0, false
+	}
+	marker := trimmed[0]
+	width := 0
+	for width < len(trimmed) && trimmed[width] == marker {
+		width++
+	}
+	return marker, width, width >= 3
+}
+
+func fenceCloses(line string, marker byte, width int) bool {
+	trimmed := strings.TrimLeft(line, " ")
+	return strings.TrimSpace(trimmed[width:]) == "" && trimmed[0] == marker
 }
 
 func printTaskDependenciesMarkdown(w io.Writer, task *Task, graph *Graph, heading string, useColor bool) {
