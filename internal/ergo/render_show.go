@@ -15,7 +15,7 @@ type frontMatterField struct {
 }
 
 // printTaskDocument renders the complete leaf representation used by show and claim.
-func printTaskDocument(w io.Writer, task *Task, graph *Graph, repoDir string, useColor bool) {
+func printTaskDocument(w io.Writer, task *Task, graph *Graph, journal []JournalEntry, repoDir string, useColor bool) {
 	fields := []frontMatterField{
 		{key: "id", value: task.ID, style: colorCyan},
 		{key: "title", value: task.Title},
@@ -43,19 +43,24 @@ func printTaskDocument(w io.Writer, task *Task, graph *Graph, repoDir string, us
 	}
 
 	printTaskDependenciesMarkdown(w, task, graph, "## Dependencies", useColor)
-	printTaskMessagesMarkdown(w, task.Messages, "## Messages", useColor)
-	printTaskResultsMarkdown(w, task.Results, repoDir, "## Results", useColor)
+	printJournalMarkdown(w, journalForTask(journal, task.ID), repoDir, "## Journal", useColor)
 }
 
 // printContainerDocument renders a container and the complete details of each child.
-func printContainerDocument(w io.Writer, epic *Task, children []*Task, graph *Graph, repoDir string, useColor bool) {
-	writeShowFrontMatter(w, []frontMatterField{
+func printContainerDocument(w io.Writer, epic *Task, children []*Task, graph *Graph, journal []JournalEntry, repoDir string, useColor bool) {
+	fields := []frontMatterField{
 		{key: "epic", value: "true", raw: true},
 		{key: "id", value: epic.ID, style: colorCyan},
 		{key: "title", value: epic.Title},
-		{key: "created_at", value: formatTime(epic.CreatedAt), style: colorDim},
-		{key: "updated_at", value: formatTime(epic.UpdatedAt), style: colorDim},
-	}, useColor)
+	}
+	if state := graph.EpicState(epic.ID); state == stateFailed {
+		fields = append(fields, frontMatterField{key: "state", value: state, style: colorRed})
+	}
+	fields = append(fields,
+		frontMatterField{key: "created_at", value: formatTime(epic.CreatedAt), style: colorDim},
+		frontMatterField{key: "updated_at", value: formatTime(epic.UpdatedAt), style: colorDim},
+	)
+	writeShowFrontMatter(w, fields, useColor)
 
 	writeMarkdownHeading(w, "# ", showTitle(epic.Title, epic.ID), useColor)
 	if epic.Body != "" {
@@ -80,8 +85,9 @@ func printContainerDocument(w io.Writer, epic *Task, children []*Task, graph *Gr
 			fmt.Fprintln(w)
 		}
 		printTaskDependenciesMarkdown(w, child, graph, "#### Dependencies", useColor)
-		printTaskMessagesMarkdown(w, child.Messages, "#### Messages", useColor)
-		printTaskResultsMarkdown(w, child.Results, repoDir, "#### Results", useColor)
+		if result := latestExplicitResult(journal, child.ID); result != nil {
+			printJournalMarkdown(w, []JournalEntry{*result}, repoDir, "#### Latest result", useColor)
+		}
 		if index < len(children)-1 {
 			fmt.Fprintln(w)
 		}
@@ -178,38 +184,46 @@ func printTaskDependenciesMarkdown(w io.Writer, task *Task, graph *Graph, headin
 	fmt.Fprintln(w)
 }
 
-func printTaskMessagesMarkdown(w io.Writer, messages []Message, heading string, useColor bool) {
-	if len(messages) == 0 {
+func printJournalMarkdown(w io.Writer, entries []JournalEntry, repoDir, heading string, useColor bool) {
+	if len(entries) == 0 {
 		return
 	}
 	writeGeneratedLine(w, heading, colorBold+colorCyan, useColor)
 	fmt.Fprintln(w)
-	for _, message := range messages {
-		fmt.Fprintf(w, "**%s - ", message.Kind)
-		writeGenerated(w, formatTime(message.CreatedAt), colorDim, useColor)
-		fmt.Fprintln(w, "**")
-		fmt.Fprintln(w)
-		printMarkdownBody(w, message.Text)
-		fmt.Fprintln(w)
-	}
-}
-
-func printTaskResultsMarkdown(w io.Writer, results []Result, repoDir string, heading string, useColor bool) {
-	if len(results) == 0 {
-		return
-	}
-	writeGeneratedLine(w, heading, colorBold+colorCyan, useColor)
-	for _, result := range results {
-		fileURL := deriveFileURL(result.Path, repoDir)
-		fmt.Fprintf(w, "- [%s](", result.Path)
-		writeGenerated(w, fileURL, colorCyan, useColor)
-		fmt.Fprint(w, ")")
-		if result.Summary != "" && result.Summary != result.Path {
-			fmt.Fprintf(w, ": %s", result.Summary)
+	for _, entry := range entries {
+		fmt.Fprint(w, "- **")
+		writeGenerated(w, entry.Kind, stateColor(&Task{State: journalKindState(entry.Kind)}), useColor)
+		fmt.Fprint(w, "** — ")
+		writeGenerated(w, entry.At, colorDim, useColor)
+		if entry.Agent != "" {
+			fmt.Fprintf(w, " — `%s`", entry.Agent)
+		}
+		if entry.Text != "" {
+			fmt.Fprintf(w, ": %s", entry.Text)
+		}
+		if entry.File != nil {
+			fmt.Fprintf(w, " — [%s](", entry.File.Path)
+			writeGenerated(w, deriveFileURL(entry.File.Path, repoDir), colorCyan, useColor)
+			fmt.Fprint(w, ")")
 		}
 		fmt.Fprintln(w)
 	}
 	fmt.Fprintln(w)
+}
+
+func journalKindState(kind string) string {
+	switch kind {
+	case "fail":
+		return stateFailed
+	case "done":
+		return stateDone
+	case "block":
+		return stateBlocked
+	case "cancel":
+		return stateCanceled
+	default:
+		return stateTodo
+	}
 }
 
 func RunShow(id string, opts GlobalOptions, render RenderOptions) error {
@@ -223,10 +237,10 @@ func RunShow(id string, opts GlobalOptions, render RenderOptions) error {
 
 func RenderShow(w io.Writer, outcome ShowOutcome, useColor bool) {
 	if outcome.Graph.IsEpic(outcome.Task.ID) {
-		printContainerDocument(w, outcome.Task, outcome.Children, outcome.Graph, outcome.ProjectDir, useColor)
+		printContainerDocument(w, outcome.Task, outcome.Children, outcome.Graph, outcome.Journal, outcome.ProjectDir, useColor)
 		return
 	}
-	printTaskDocument(w, outcome.Task, outcome.Graph, outcome.ProjectDir, useColor)
+	printTaskDocument(w, outcome.Task, outcome.Graph, outcome.Journal, outcome.ProjectDir, useColor)
 }
 
 // RenderShowBody writes the stored body without adding or removing bytes.

@@ -131,6 +131,8 @@ func removedArgumentError(args []string) error {
 		switch {
 		case arg == "--summary" || strings.HasPrefix(arg, "--summary="):
 			return errors.New("--summary is not accepted; use -m <message>")
+		case arg == "--result" || strings.HasPrefix(arg, "--result="):
+			return errors.New(`--result is not accepted; use ergo result <id> "<text>" --file <path>`)
 		}
 	}
 	switch command := rootInvocation(args); command {

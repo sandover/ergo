@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-08-21
+
+### Added
+
+- Every repository now has one shared `.ergo/journal.jsonl` for all task work
+  history and results. Creation and meaningful lifecycle calls write terse
+  automatic entries; `ergo result <id> "<text>" [--file <path>]` records
+  unlimited explicit results without changing task state.
+- `ergo fail <id>` records work that finished without satisfying its objective.
+  Failed tasks release dependencies, remain visible as unsuccessful outcomes,
+  and can be claimed again for a retry.
+- Epics derive a failed outcome when all children finish and any child failed.
+  Terminal and VS Code views use a red `✗` for failed tasks and epics, and
+  `list --json` exposes the same derived epic state.
+
+### Changed
+
+- Lifecycle `-m` text now belongs to the command's journal entry. Result files
+  use `ergo result --file`; lifecycle `--result` now returns clean-cutover
+  guidance.
+- `compact` migrates legacy messages and results into the journal once, retains
+  every explicit result, and discards superseded automatic history. Prune
+  removes the selected tasks' journal entries and reports the count.
+- Prune treats failed leaves as finished work. Release rejects failed tasks;
+  claim resumes them under the same ID.
+
 ## [4.3.3] - 2026-08-14
 
 ### Fixed
@@ -641,7 +667,8 @@ read that log.
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v4.3.3...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v5.0.0...HEAD
+[5.0.0]: https://github.com/sandover/ergo/compare/v4.3.3...v5.0.0
 [4.3.3]: https://github.com/sandover/ergo/compare/v4.3.2...v4.3.3
 [4.3.2]: https://github.com/sandover/ergo/compare/v4.3.1...v4.3.2
 [4.3.1]: https://github.com/sandover/ergo/compare/v4.2.0...v4.3.1

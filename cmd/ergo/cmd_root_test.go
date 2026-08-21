@@ -19,9 +19,6 @@ func TestRootCommandConstructionDoesNotLeakFlags(t *testing.T) {
 		t.Fatal(err)
 	}
 	firstDone := findCommand(t, first, "done")
-	if err := firstDone.Flags().Set("result", "result.md"); err != nil {
-		t.Fatal(err)
-	}
 	if err := firstDone.Flags().Set("message", "one"); err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +30,7 @@ func TestRootCommandConstructionDoesNotLeakFlags(t *testing.T) {
 		t.Fatal("fresh root inherited --dir Changed state")
 	}
 	secondDone := findCommand(t, second, "done")
-	if secondDone.Flags().Changed("result") || secondDone.Flags().Changed("message") {
+	if secondDone.Flags().Changed("message") {
 		t.Fatal("fresh lifecycle command inherited Changed state")
 	}
 	messages, err := secondDone.Flags().GetStringArray("message")

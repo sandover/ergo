@@ -65,27 +65,44 @@ func TestCompatibilityReleasedBacklogs(t *testing.T) {
 func TestCompatibilityReleasedBacklogsCompactWithoutSemanticLoss(t *testing.T) {
 	for _, fixture := range releasedFixtures {
 		t.Run(fixture.name, func(t *testing.T) {
-			events, err := readEvents(filepath.Join("testdata", "compatibility", fixture.file))
+			project := t.TempDir()
+			ergoDir := filepath.Join(project, dataDirName)
+			if err := os.Mkdir(ergoDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := ensureFileExists(filepath.Join(ergoDir, "lock"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			copyReleasedFixture(t, fixture.file, filepath.Join(ergoDir, fixture.logName))
+			var repository Repository
+			if err := repository.Open(RepositoryOptions{StartDir: project}); err != nil {
+				t.Fatal(err)
+			}
+			before, err := repository.View()
 			if err != nil {
-				t.Fatalf("read released fixture: %v", err)
+				t.Fatalf("view released fixture: %v", err)
 			}
-			before, err := replayEvents(events)
+			assertReleasedFixture(t, before, fixture)
+			if _, err := repository.Compact(); err != nil {
+				t.Fatalf("compact released fixture: %v", err)
+			}
+			after, err := repository.View()
 			if err != nil {
-				t.Fatalf("replay released fixture: %v", err)
+				t.Fatalf("view compacted fixture: %v", err)
 			}
-			first, _, err := marshalSnapshot(before)
-			if err != nil {
-				t.Fatalf("marshal released fixture: %v", err)
-			}
-			after := roundTripSnapshot(t, before)
-			second, _, err := marshalSnapshot(after)
-			if err != nil {
-				t.Fatalf("remarshal released fixture: %v", err)
-			}
-			if string(first) != string(second) {
-				t.Fatal("released fixture snapshot was not deterministic")
-			}
+			assertReleasedFixture(t, after, fixture)
 			assertGraphStateEqual(t, before, after)
+			firstJournal, err := os.ReadFile(repository.journalPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := repository.Compact(); err != nil {
+				t.Fatalf("repeat compact released fixture: %v", err)
+			}
+			secondJournal, err := os.ReadFile(repository.journalPath)
+			if err != nil || string(firstJournal) != string(secondJournal) {
+				t.Fatalf("repeat compact changed migrated journal: %v", err)
+			}
 		})
 	}
 }

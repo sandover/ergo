@@ -133,26 +133,6 @@ func snapshotRecords(graph *Graph) ([]any, snapshotManifest, error) {
 			ClaimedAt: claimedAt, CreatedAt: formatTime(task.CreatedAt), UpdatedAt: formatTime(task.UpdatedAt),
 		})
 	}
-	for _, task := range tasks {
-		for ordinal, result := range task.Results {
-			records = append(records, snapshotResultRecord{
-				Type: snapshotResultRecordType, TaskID: task.ID, Ordinal: ordinal,
-				Summary: result.Summary, Path: result.Path, SHA256AtAttach: result.Sha256AtAttach,
-				MtimeAtAttach: result.MtimeAtAttach, GitCommitAtAttach: result.GitCommitAtAttach,
-				CreatedAt: formatTime(result.CreatedAt),
-			})
-			manifest.Results++
-		}
-	}
-	for _, task := range tasks {
-		for ordinal, message := range task.Messages {
-			records = append(records, snapshotMessageRecord{
-				Type: snapshotMessageRecordType, TaskID: task.ID, Ordinal: ordinal,
-				Kind: message.Kind, Text: message.Text, CreatedAt: formatTime(message.CreatedAt),
-			})
-			manifest.Messages++
-		}
-	}
 	fromIDs := sortedMapKeys(graph.Deps)
 	for _, from := range fromIDs {
 		toIDs := sortedKeys(graph.Deps[from])

@@ -18,21 +18,24 @@ import (
 // Its paths are selected once at open time. Each View or update acquires the
 // repository lock before reading the selected log.
 type Repository struct {
-	dir        string
-	eventsPath string
-	lockPath   string
-	opts       GlobalOptions
-	io         repositoryIO
+	dir         string
+	eventsPath  string
+	journalPath string
+	lockPath    string
+	opts        GlobalOptions
+	io          repositoryIO
 }
 
 type UpdateOutcome struct {
-	Graph *Graph
+	Graph   *Graph
+	Journal []JournalEntry
 }
 
 type CompactOutcome struct {
 	Path            string
 	SourceRecords   int
 	SnapshotRecords int
+	JournalRecords  int
 }
 
 type InitializeOutcome struct {
@@ -50,6 +53,8 @@ func InitializeRepository(dir string) (InitializeOutcome, error) {
 	_, eventsErr := os.Stat(eventsPath)
 	lockPath := filepath.Join(target, "lock")
 	_, lockErr := os.Stat(lockPath)
+	journalPath := journalPathForDir(target)
+	_, journalErr := os.Stat(journalPath)
 	if err := os.MkdirAll(target, 0755); err != nil {
 		return InitializeOutcome{}, err
 	}
@@ -59,6 +64,9 @@ func InitializeRepository(dir string) (InitializeOutcome, error) {
 	if err := ensureFileExists(lockPath, 0644); err != nil {
 		return InitializeOutcome{}, err
 	}
+	if err := ensureFileExists(journalPath, 0644); err != nil {
+		return InitializeOutcome{}, err
+	}
 	resolved, err := filepath.Abs(target)
 	if err != nil {
 		return InitializeOutcome{}, err
@@ -66,7 +74,7 @@ func InitializeRepository(dir string) (InitializeOutcome, error) {
 	status := "existing"
 	if os.IsNotExist(dirErr) {
 		status = "initialized"
-	} else if os.IsNotExist(eventsErr) || os.IsNotExist(lockErr) {
+	} else if os.IsNotExist(eventsErr) || os.IsNotExist(lockErr) || os.IsNotExist(journalErr) {
 		status = "repaired"
 	}
 	return InitializeOutcome{Path: resolved, Status: status}, nil
@@ -116,6 +124,7 @@ func (r *Repository) openAt(dir string, opts GlobalOptions, io repositoryIO) err
 	}
 	r.dir = dir
 	r.eventsPath = eventsPath
+	r.journalPath = journalPathForDir(dir)
 	r.lockPath = filepath.Join(dir, "lock")
 	r.opts = opts
 	r.io = io
@@ -131,15 +140,55 @@ func (r *Repository) View() (*Graph, error) {
 	err := withLock(r.lockPath, r.opts, func() error {
 		var err error
 		graph, err = r.load()
-		return err
+		if err != nil {
+			return err
+		}
+		journal, err := r.loadJournal()
+		if err != nil {
+			return err
+		}
+		hydrateGraphEvidence(graph, mergeLegacyJournal(journal, graph))
+		return nil
 	})
 	return graph, err
+}
+
+func (r *Repository) ViewWithJournal() (*Graph, []JournalEntry, error) {
+	if r == nil || r.eventsPath == "" {
+		return nil, nil, errors.New("repository is not open")
+	}
+	var graph *Graph
+	var journal []JournalEntry
+	err := withLock(r.lockPath, r.opts, func() error {
+		var err error
+		graph, err = r.load()
+		if err != nil {
+			return err
+		}
+		journal, err = r.loadJournal()
+		if err != nil {
+			return err
+		}
+		journal = mergeLegacyJournal(journal, graph)
+		hydrateGraphEvidence(graph, journal)
+		return nil
+	})
+	return graph, journal, err
 }
 
 // Update is the mutation boundary. The callback builds a complete event batch
 // against the locked snapshot; the pure reducer validates its resulting graph
 // before the transaction is appended.
 func (r *Repository) Update(fn func(*Graph) ([]Event, error)) (UpdateOutcome, error) {
+	return r.UpdateWithJournal(func(graph *Graph) ([]Event, []JournalEntry, error) {
+		events, err := fn(graph)
+		return events, nil, err
+	})
+}
+
+// UpdateWithJournal writes validated graph state before its journal side effect
+// while both files remain under the same repository lock.
+func (r *Repository) UpdateWithJournal(fn func(*Graph) ([]Event, []JournalEntry, error)) (UpdateOutcome, error) {
 	if r == nil || r.eventsPath == "" {
 		return UpdateOutcome{}, errors.New("repository is not open")
 	}
@@ -149,8 +198,14 @@ func (r *Repository) Update(fn func(*Graph) ([]Event, error)) (UpdateOutcome, er
 		if err != nil {
 			return err
 		}
+		existingJournal, err := r.loadJournal()
+		if err != nil {
+			return err
+		}
+		existingJournal = mergeLegacyJournal(existingJournal, graph)
+		hydrateGraphEvidence(graph, existingJournal)
 		base := cloneGraph(graph)
-		events, err := fn(graph)
+		events, journal, err := fn(graph)
 		if err != nil {
 			return err
 		}
@@ -162,6 +217,11 @@ func (r *Repository) Update(fn func(*Graph) ([]Event, error)) (UpdateOutcome, er
 			return err
 		}
 		outcome.Graph = candidate
+		if err := r.appendJournal(journal); err != nil {
+			return fmt.Errorf("backlog changed, but journal update failed: %w", err)
+		}
+		outcome.Journal = append(existingJournal, journal...)
+		hydrateGraphEvidence(outcome.Graph, outcome.Journal)
 		return nil
 	})
 	return outcome, err
@@ -181,6 +241,15 @@ func (r *Repository) Compact() (CompactOutcome, error) {
 		if err != nil {
 			return err
 		}
+		journal, err := r.loadJournal()
+		if err != nil {
+			return err
+		}
+		journal = compactJournal(mergeLegacyJournal(journal, graph), graph)
+		journalData, err := marshalJournal(journal)
+		if err != nil {
+			return err
+		}
 		data, stats, err := marshalSnapshot(graph)
 		if err != nil {
 			return err
@@ -189,10 +258,16 @@ func (r *Repository) Compact() (CompactOutcome, error) {
 		if err != nil {
 			return err
 		}
+		// Journal-first prevents legacy evidence loss if the second replacement
+		// fails. If interrupted here, the unchanged backlog replays that evidence
+		// on the next view; a later compact deduplicates it and finishes the cutover.
+		if err := replaceLogAtomically(r.journalPath, journalData); err != nil {
+			return err
+		}
 		if err := replaceLogAtomically(r.eventsPath, data); err != nil {
 			return err
 		}
-		outcome = CompactOutcome{Path: path, SourceRecords: read.recordCount, SnapshotRecords: stats.Records}
+		outcome = CompactOutcome{Path: path, SourceRecords: read.recordCount, SnapshotRecords: stats.Records, JournalRecords: len(journal)}
 		return nil
 	})
 	return outcome, err

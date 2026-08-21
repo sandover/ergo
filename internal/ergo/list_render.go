@@ -48,6 +48,10 @@ func renderSummary(w io.Writer, stats taskStats, useColor bool, buckets []summar
 			count = stats.errors
 			label = "error"
 			color = colorRed
+		case summaryFailed:
+			count = stats.failed
+			label = "failed"
+			color = colorRed
 		case summaryDone:
 			count = stats.done
 			label = "done"
@@ -98,7 +102,13 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 	}
 
 	// Build the line
-	icon := stateIcon(task, node.isReady, node.isEpic)
+	displayTask := task
+	if node.isEpic && graph.EpicState(task.ID) == stateFailed {
+		copy := *task
+		copy.State = stateFailed
+		displayTask = &copy
+	}
+	icon := stateIcon(displayTask, node.isReady, node.isEpic)
 	title := task.Title
 
 	annotations := []string{}
@@ -135,12 +145,11 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 	}
 
 	// Format with optional color
-	line := formatTreeLine(prefix, connector, showConnector, icon, task.ID, title, annotations, blockerAnnotation, task, node.isReady, useColor, termWidth)
+	line := formatTreeLine(prefix, connector, showConnector, icon, task.ID, title, annotations, blockerAnnotation, displayTask, node.isReady, node.isEpic, useColor, termWidth)
 	fmt.Fprintln(w, line)
 
 	// Show result file URL on separate line for done tasks
-	if (task.State == stateDone || task.State == stateCanceled) && len(task.Results) > 0 {
-		latest := task.Results[0]
+	if latest, ok := latestAttachedResult(task.Results); ok {
 		fileURL := deriveFileURL(latest.Path, repoDir)
 		resultPrefix := prefix
 		if isRoot {
@@ -178,6 +187,15 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 	}
 }
 
+func latestAttachedResult(results []Result) (Result, bool) {
+	for _, result := range results {
+		if result.Path != "" {
+			return result, true
+		}
+	}
+	return Result{}, false
+}
+
 // abbreviate truncates a string to maxLen, adding "…" if truncated.
 func abbreviate(s string, maxLen int) string {
 	if len(s) <= maxLen {
@@ -192,6 +210,9 @@ func abbreviate(s string, maxLen int) string {
 // stateIcon returns the appropriate icon for a task's state.
 func stateIcon(task *Task, isReady, isEpic bool) string {
 	if isEpic {
+		if task.State == stateFailed {
+			return iconFailed
+		}
 		return iconEpic
 	}
 	switch task.State {
@@ -199,6 +220,8 @@ func stateIcon(task *Task, isReady, isEpic bool) string {
 		return iconDone
 	case stateCanceled:
 		return iconCanceled
+	case stateFailed:
+		return iconFailed
 	case stateError:
 		return iconError
 	case stateDoing:
@@ -374,8 +397,7 @@ func formatCollapsedEpicLine(prefix, connector string, showConnector bool, id, t
 // formatTreeLine formats a tree line with optional color.
 // Visual hierarchy: icon → title → @claimer → [blocker column] → ID (right-aligned)
 // Ensures the line never exceeds termWidth by truncating content as needed.
-func formatTreeLine(prefix, connector string, showConnector bool, icon, id, title string, annotations []string, blockerAnnotation string, task *Task, isReady bool, useColor bool, termWidth int) string {
-	isEpic := icon == iconEpic
+func formatTreeLine(prefix, connector string, showConnector bool, icon, id, title string, annotations []string, blockerAnnotation string, task *Task, isReady, isEpic, useColor bool, termWidth int) string {
 	// Layout contract: ids are right-aligned at idStart.
 	minGap := idMinGap
 	rightMargin := idRightMargin
@@ -557,6 +579,8 @@ func stateColor(task *Task) string {
 		return colorGreen
 	case stateCanceled:
 		return colorDim
+	case stateFailed:
+		return colorRed
 	case stateError:
 		return colorRed
 	case stateDoing:

@@ -1,18 +1,18 @@
-// Purpose: Compute and apply prune plans for closed work.
-// Exports: RunPrunePlan, RunPruneApply, PrunePlan, PruneItem.
-// Role: Prune policy logic used by the CLI and tests.
-// Invariants: Only done/canceled tasks are pruned; empty containers follow.
-// Notes: Planning is deterministic and sorted by ID.
+// Prune computes one deterministic deletion plan for finished leaves and epics
+// left empty by that plan. It must use the shared finished-state boundary so
+// unsuccessful finished work receives the same explicit cleanup semantics.
 package ergo
 
 import (
+	"fmt"
 	"sort"
 	"time"
 )
 
 type PrunePlan struct {
-	PrunedIDs []string
-	Items     []PruneItem
+	PrunedIDs      []string
+	Items          []PruneItem
+	JournalEntries int
 }
 
 type PruneItem struct {
@@ -38,23 +38,49 @@ func runPrune(dir string, opts GlobalOptions, apply bool) (PrunePlan, error) {
 		return PrunePlan{}, err
 	}
 	var plan PrunePlan
-	if !apply {
-		graph, err := repository.View()
+	err := withLock(repository.lockPath, repository.opts, func() error {
+		graph, err := repository.load()
 		if err != nil {
-			return PrunePlan{}, err
+			return err
 		}
-		return buildPrunePlan(graph), nil
-	}
-	_, err := repository.Update(func(graph *Graph) ([]Event, error) {
+		journal, err := repository.loadJournal()
+		if err != nil {
+			return err
+		}
 		plan = buildPrunePlan(graph)
+		selected := make(map[string]struct{}, len(plan.PrunedIDs))
+		for _, id := range plan.PrunedIDs {
+			selected[id] = struct{}{}
+		}
+		retained := make([]JournalEntry, 0, len(journal))
+		for _, entry := range journal {
+			if _, remove := selected[entry.TaskID]; remove {
+				plan.JournalEntries++
+				continue
+			}
+			retained = append(retained, entry)
+		}
+		if !apply || len(plan.PrunedIDs) == 0 {
+			return nil
+		}
+		base := cloneGraph(graph)
 		if len(plan.PrunedIDs) == 0 {
-			return nil, nil
+			return nil
 		}
 		events, err := buildTombstoneEvents(plan.PrunedIDs, "")
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return events, nil
+		if _, err := applyTransaction(base, events); err != nil {
+			return err
+		}
+		if err := repository.append(events); err != nil {
+			return err
+		}
+		if err := repository.replaceJournal(retained); err != nil {
+			return fmt.Errorf("backlog changed, but journal update failed: %w", err)
+		}
+		return nil
 	})
 	return plan, err
 }
@@ -74,7 +100,7 @@ func selectPruneTargets(graph *Graph) []string {
 		if graph.IsEpic(task.ID) {
 			continue
 		}
-		if task.State == stateDone || task.State == stateCanceled {
+		if isFinishedState(task.State) {
 			eligibleTasks[task.ID] = struct{}{}
 		}
 	}

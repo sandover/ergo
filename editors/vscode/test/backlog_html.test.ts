@@ -42,6 +42,14 @@ const claimsLibraryBacklog = parseListDocument(JSON.stringify({
       ready: false,
       epic_id: "BQM4Y5",
     },
+	{
+	  id: "FAIL01",
+	  title: "Verify the Windows package",
+	  kind: "task",
+	  state: "failed",
+	  ready: false,
+	  epic_id: "BQM4Y5",
+	},
   ],
 }));
 
@@ -50,7 +58,7 @@ test("renders a clickable searchable overview from realistic backlog data", () =
 
   assert.match(view.html, /Add support-safe plugin diagnostics to server logs/);
   assert.match(view.html, /Create one Citation from text that spans pages/);
-  assert.match(view.html, /1 ready · 1 waiting · 1 done/);
+	assert.match(view.html, /1 ready · 1 waiting · 1 failed · 1 done/);
   assert.match(view.html, /data-id="OKOKSE"/);
   assert.match(view.html, /data-id="BQM4Y5">BQM4Y5<\/button>/);
   assert.doesNotMatch(view.html, /<button[^>]*>Create one Citation/);
@@ -64,7 +72,7 @@ test("renders a clickable searchable overview from realistic backlog data", () =
   assert.match(view.html, /group\.hidden = query && !epicMatches && groupMatches === 0/);
   assert.match(view.html, /const onlyReady = readyOnly\.checked/);
   assert.match(view.html, /readyOnly\.addEventListener\("change", applyFilters\)/);
-  assert.deepEqual([...view.itemIds], ["CCKOC2", "BQM4Y5", "OKOKSE", "RKSARF", "EUDZOS"]);
+	assert.deepEqual([...view.itemIds], ["CCKOC2", "BQM4Y5", "OKOKSE", "RKSARF", "EUDZOS", "FAIL01"]);
 });
 
 test("escapes task content before inserting it into HTML", () => {
@@ -82,4 +90,17 @@ test("escapes task content before inserting it into HTML", () => {
   const view = renderBacklog(hostile, "vscode-resource:", "fixed-nonce");
   assert.doesNotMatch(view.html, /<img src=x/);
   assert.match(view.html, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
+});
+
+test("marks a finished epic failed when any child failed", () => {
+	const document = parseListDocument(JSON.stringify({
+	  version: 1,
+	  items: [
+		{ id: "EPIC01", title: "Ship release", kind: "epic" },
+		{ id: "DONE01", title: "Build", kind: "task", state: "done", ready: false, epic_id: "EPIC01" },
+		{ id: "FAIL01", title: "Verify", kind: "task", state: "failed", ready: false, epic_id: "EPIC01" },
+	  ],
+	}));
+	const view = renderBacklog(document, "vscode-resource:", "fixed-nonce");
+	assert.match(view.html, /data-state="failed" title="failed">✗<\/span> Ship release/);
 });

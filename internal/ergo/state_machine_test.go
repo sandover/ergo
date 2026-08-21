@@ -8,8 +8,8 @@ package ergo
 import "testing"
 
 func TestLifecycleStatePostconditionsAcceptEveryReadableSource(t *testing.T) {
-	sources := []string{stateTodo, stateDoing, stateBlocked, stateDone, stateCanceled, stateError}
-	targets := []string{stateTodo, stateDoing, stateBlocked, stateDone, stateCanceled}
+	sources := []string{stateTodo, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled, stateError}
+	targets := []string{stateTodo, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled}
 	for _, source := range sources {
 		for _, target := range targets {
 			t.Run(source+"-to-"+target, func(t *testing.T) {
@@ -47,10 +47,12 @@ func TestClaimInvariant(t *testing.T) {
 		{stateTodo, "", true},
 		{stateBlocked, "", true},
 		{stateDone, "", true},
+		{stateFailed, "", true},
 		{stateCanceled, "", true},
 		{stateTodo, "agent-1", false},
 		{stateBlocked, "agent-1", false},
 		{stateDone, "agent-1", false},
+		{stateFailed, "agent-1", false},
 		{stateCanceled, "agent-1", false},
 	}
 	for _, test := range tests {

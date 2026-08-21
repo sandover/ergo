@@ -15,8 +15,8 @@ import (
 
 func TestLifecycleCommandsFromEveryState(t *testing.T) {
 	t.Parallel()
-	verbs := map[string]string{"done": "done", "block": "blocked", "cancel": "canceled"}
-	sources := []string{"todo", "doing", "blocked", "done", "canceled", "error"}
+	verbs := map[string]string{"done": "done", "fail": "failed", "block": "blocked", "cancel": "canceled"}
+	sources := []string{"todo", "doing", "blocked", "done", "failed", "canceled", "error"}
 	for verb, target := range verbs {
 		for _, source := range sources {
 			t.Run(verb+"-from-"+source, func(t *testing.T) {
@@ -57,7 +57,7 @@ func TestReleaseLifecycleStates(t *testing.T) {
 			}
 		})
 	}
-	for _, source := range []string{"done", "canceled"} {
+	for _, source := range []string{"done", "failed", "canceled"} {
 		t.Run("reject-"+source, func(t *testing.T) {
 			t.Parallel()
 			dir := setupErgo(t)
@@ -102,7 +102,7 @@ func TestLifecycleReceiptNamesClaimChangesAndNewlyReadyWork(t *testing.T) {
 
 func TestLifecycleMessageCardinality(t *testing.T) {
 	t.Parallel()
-	for _, verb := range []string{"done", "block", "cancel", "release"} {
+	for _, verb := range []string{"done", "fail", "block", "cancel", "release"} {
 		for _, messages := range [][]string{nil, {"one note"}, {"first note", "second note"}} {
 			name := verb + "-" + string(rune('0'+len(messages)))
 			t.Run(name, func(t *testing.T) {
@@ -143,12 +143,12 @@ func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	stdout, stderr, code := runErgo(t, dir, "", "done", id,
-		"--result", "result.txt", "-m", " Primary result ", "-m", "Verified cleanly")
+		"-m", " Primary result ", "-m", "Verified cleanly")
 	if code != 0 {
 		t.Fatalf("done failed: %s", stderr)
 	}
 	if !strings.Contains(stdout, id+" - Lifecycle task\n") || !strings.Contains(stdout, "State: done\n") ||
-		!strings.Contains(stdout, "Message: appended\n") || !strings.Contains(stdout, "Result: result.txt\n") {
+		!strings.Contains(stdout, "Message: appended\n") {
 		t.Fatalf("done output = %q", stdout)
 	}
 	shown := showTaskOutput(t, dir, id)
@@ -159,7 +159,12 @@ func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 	if len(messages) != 1 || messages[0].Kind != "done" || messages[0].Text != "Primary result\n\nVerified cleanly" {
 		t.Fatalf("messages = %#v", messages)
 	}
-	if strings.Count(shown, "[result.txt](file://") != 1 || strings.Contains(shown, "): result.txt") {
+	stdout, stderr, code = runErgo(t, dir, "", "result", id, "Primary result", "--file", "result.txt")
+	if code != 0 || !strings.Contains(stdout, "File: result.txt") {
+		t.Fatalf("result failed: stdout=%s stderr=%s", stdout, stderr)
+	}
+	shown = showTaskOutput(t, dir, id)
+	if strings.Count(shown, "[result.txt](file://") != 1 {
 		t.Fatalf("show result missing: %s", shown)
 	}
 
@@ -168,13 +173,16 @@ func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 		t.Fatal(err)
 	}
 	beforeLate := countEventLines(t, dir)
-	stdout, stderr, code = runErgo(t, dir, "", "done", id, "--result", "late.txt", "-m", "Late evidence")
-	if code != 0 || !strings.Contains(stdout, "State: done\n") ||
-		!strings.Contains(stdout, "Message: appended\n") || !strings.Contains(stdout, "Result: late.txt\n") {
+	stdout, stderr, code = runErgo(t, dir, "", "done", id, "-m", "Late evidence")
+	if code != 0 || !strings.Contains(stdout, "State: done\n") || !strings.Contains(stdout, "Message: appended\n") {
 		t.Fatalf("late result failed: stdout=%s stderr=%s", stdout, stderr)
 	}
-	if got := countEventLines(t, dir); got != beforeLate+1 {
-		t.Fatalf("late result/message transaction records = %d, want %d", got, beforeLate+1)
+	if got := countEventLines(t, dir); got != beforeLate {
+		t.Fatalf("journal-only message changed backlog records: before=%d after=%d", beforeLate, got)
+	}
+	stdout, stderr, code = runErgo(t, dir, "", "result", id, "Late result", "--file", "late.txt")
+	if code != 0 || !strings.Contains(stdout, "File: late.txt") {
+		t.Fatalf("late result failed: stdout=%s stderr=%s", stdout, stderr)
 	}
 	shown = showTaskOutput(t, dir, id)
 	if strings.Count(shown, "(file://") != 2 || !strings.Contains(shown, "[late.txt](file://") {
@@ -210,7 +218,7 @@ func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 
 func TestClaimResumesEverySpecificState(t *testing.T) {
 	t.Parallel()
-	for _, source := range []string{"todo", "blocked", "done", "canceled", "error"} {
+	for _, source := range []string{"todo", "blocked", "done", "failed", "canceled", "error"} {
 		t.Run(source, func(t *testing.T) {
 			dir := setupErgo(t)
 			id := createLifecycleTask(t, dir)
@@ -229,6 +237,57 @@ func TestClaimResumesEverySpecificState(t *testing.T) {
 				t.Fatalf("claim output = %s", stdout)
 			}
 		})
+	}
+}
+
+func TestFailedLifecyclePublicJourney(t *testing.T) {
+	t.Parallel()
+	dir := setupErgo(t)
+	id := createLifecycleTask(t, dir)
+	if _, stderr, code := runErgo(t, dir, "", "claim", id, "--agent", "failure@local"); code != 0 {
+		t.Fatalf("claim: %s", stderr)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "failure.txt"), []byte("failure evidence"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code := runErgo(t, dir, "", "fail", id, "-m", "Constraint disproved")
+	if code != 0 {
+		t.Fatalf("fail: %s", stderr)
+	}
+	for _, fact := range []string{"State: failed", "Claim: cleared", "Message: appended"} {
+		if !strings.Contains(stdout, fact) {
+			t.Fatalf("receipt lacks %q: %s", fact, stdout)
+		}
+	}
+	stdout, stderr, code = runErgo(t, dir, "", "result", id, "Failure reproduced", "--file", "failure.txt")
+	if code != 0 || !strings.Contains(stdout, "Result recorded: Failure reproduced") || !strings.Contains(stdout, "File: failure.txt") {
+		t.Fatalf("result receipt: stdout=%q stderr=%q", stdout, stderr)
+	}
+	shown := showTaskOutput(t, dir, id)
+	if !strings.Contains(shown, "state: \"failed\"") || !strings.Contains(shown, "Constraint disproved") || !strings.Contains(shown, "[failure.txt](file://") {
+		t.Fatalf("show lacks failed evidence: %s", shown)
+	}
+	stdout, stderr, code = runErgo(t, dir, "", "list")
+	if code != 0 || !strings.Contains(stdout, id) || !strings.Contains(stdout, "✗") {
+		t.Fatalf("default list hides failure: stdout=%q stderr=%q", stdout, stderr)
+	}
+	stdout, stderr, code = runErgo(t, dir, "", "list", "--json")
+	if code != 0 || !strings.Contains(stdout, `"id":"`+id+`"`) || !strings.Contains(stdout, `"state":"failed"`) {
+		t.Fatalf("JSON list lacks failed state: stdout=%q stderr=%q", stdout, stderr)
+	}
+	before := countEventLines(t, dir)
+	if _, stderr, code = runErgo(t, dir, "", "release", id); code == 0 || !strings.Contains(stderr, "release cannot apply") {
+		t.Fatalf("release failed task: code=%d stderr=%q", code, stderr)
+	}
+	if after := countEventLines(t, dir); after != before {
+		t.Fatalf("rejected release wrote events: before=%d after=%d", before, after)
+	}
+	if _, stderr, code = runErgo(t, dir, "", "claim", id, "--agent", "retry@local"); code != 0 {
+		t.Fatalf("retry claim: %s", stderr)
+	}
+	fields := showTaskFields(t, dir, id)
+	if fields["state"] != "doing" || fields["claimed_by"] != "retry@local" {
+		t.Fatalf("retry postcondition = %#v", fields)
 	}
 }
 
@@ -316,41 +375,18 @@ type lifecycleMessageLog struct {
 
 func readLifecycleMessages(t *testing.T, dir, id string) []lifecycleMessageLog {
 	t.Helper()
-	data, err := os.ReadFile(getEventFilePath(dir))
+	data, err := os.ReadFile(filepath.Join(dir, ".ergo", "journal.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var messages []lifecycleMessageLog
 	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
-		var event struct {
-			Type   string          `json:"type"`
-			Data   json.RawMessage `json:"data"`
-			Events []struct {
-				Type string          `json:"type"`
-				Data json.RawMessage `json:"data"`
-			} `json:"events"`
-		}
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
+		var message lifecycleMessageLog
+		if err := json.Unmarshal([]byte(line), &message); err != nil {
 			t.Fatal(err)
 		}
-		events := event.Events
-		if event.Type != "transaction" {
-			events = append(events, struct {
-				Type string          `json:"type"`
-				Data json.RawMessage `json:"data"`
-			}{Type: event.Type, Data: event.Data})
-		}
-		for _, inner := range events {
-			if inner.Type != "message" {
-				continue
-			}
-			var message lifecycleMessageLog
-			if err := json.Unmarshal(inner.Data, &message); err != nil {
-				t.Fatal(err)
-			}
-			if message.TaskID == id {
-				messages = append(messages, message)
-			}
+		if message.TaskID == id && message.Text != "" && message.Kind != "result" {
+			messages = append(messages, message)
 		}
 	}
 	return messages

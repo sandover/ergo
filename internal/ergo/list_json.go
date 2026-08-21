@@ -30,13 +30,13 @@ func RenderListJSON(w io.Writer, outcome ListOutcome) error {
 		Version: listJSONVersion,
 		Items:   make([]listJSONItem, 0),
 	}
-	appendNodesAsJSON(&document.Items, outcome.Roots)
+	appendNodesAsJSON(&document.Items, outcome.Roots, outcome.Graph)
 	encoder := json.NewEncoder(w)
 	encoder.SetEscapeHTML(false)
 	return encoder.Encode(document)
 }
 
-func appendNodesAsJSON(items *[]listJSONItem, nodes []*treeNode) {
+func appendNodesAsJSON(items *[]listJSONItem, nodes []*treeNode, graph *Graph) {
 	for _, node := range nodes {
 		if node == nil || node.task == nil {
 			continue
@@ -45,6 +45,7 @@ func appendNodesAsJSON(items *[]listJSONItem, nodes []*treeNode) {
 			ID:    node.task.ID,
 			Title: node.task.Title,
 			Kind:  "epic",
+			State: graph.EpicState(node.task.ID),
 		}
 		if !node.isEpic {
 			ready := node.isReady
@@ -54,6 +55,6 @@ func appendNodesAsJSON(items *[]listJSONItem, nodes []*treeNode) {
 			item.EpicID = node.task.EpicID
 		}
 		*items = append(*items, item)
-		appendNodesAsJSON(items, node.children)
+		appendNodesAsJSON(items, node.children, graph)
 	}
 }

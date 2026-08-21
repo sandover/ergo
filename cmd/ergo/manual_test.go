@@ -20,7 +20,7 @@ import (
 
 var publicCommandPaths = []string{
 	"init", "new", "new task", "new epic", "list", "show", "claim", "done",
-	"block", "cancel", "release", "title", "body", "move", "sequence",
+	"fail", "block", "cancel", "release", "result", "title", "body", "move", "sequence",
 	"unsequence", "where", "info", "compact", "prune", "quickstart", "version",
 }
 
@@ -44,7 +44,7 @@ func TestRootHelpIsTheFrontDoor(t *testing.T) {
 	for _, signature := range []string{
 		"init [dir]", `new task "<title>"`, `new epic "<title>" --file <path>`,
 		"list [--epic <id>] [--ready | --all] [--json]", "show <id> [--body]", "claim [<id>]", "done <id>",
-		"block <id>", "cancel <id>", "release <id>", "title <id> <title>",
+		"block <id>", "cancel <id>", "release <id>", `result <id> "<text>"`, "title <id> <title>",
 		"body <id> [--append]", "move <id> <epic-id>", "sequence <A> <B>",
 		"unsequence <A> <B>", "where", "prune [--yes]", "compact",
 		"quickstart", "version",
@@ -99,7 +99,7 @@ func TestRootAndQuickstartCoverThePublicContract(t *testing.T) {
 	normalized := strings.Join(strings.Fields(combined), " ")
 	for _, flag := range []string{
 		"--agent", "--dir", "--color", "--help", "--version", "--file", "--epic",
-		"--ready", "--all", "--json", "--body", "--append", "-m", "--result", "--root", "--yes",
+		"--ready", "--all", "--json", "--body", "--append", "-m", "--root", "--yes",
 	} {
 		if !strings.Contains(combined, flag) {
 			t.Errorf("documentation system lacks flag %q", flag)
@@ -225,7 +225,8 @@ func TestCommandHelpRevealsOptionConstraints(t *testing.T) {
 		"claim":    {"--agent", "required"},
 		"show":     {"--body", "exact stored body", "byte-for-byte"},
 		"body":     {"--append", "Append stdin bytes to the existing body"},
-		"done":     {"-m, --message", "repeatable", "--result"},
+		"done":     {"-m, --message", "repeatable"},
+		"result":   {`ergo result <id> "<text>"`, "--file", "project-relative"},
 		"move":     {"ergo move <id> <epic-id> | ergo move <id> --root"},
 		"prune":    {"--yes", "default is dry-run"},
 	}

@@ -14,9 +14,10 @@ Run `ergo <command> --help` for command syntax and options.
 
 {{HEADER}}2. BACKLOG MODEL{{RESET}}
 
-Each task has a title, optional body, lifecycle state, dependencies, messages,
-results, and timestamps. A task is ready when it is todo and every dependency
-is complete.
+Each task has a title, optional body, lifecycle state, dependencies, and
+timestamps. The backlog owns that current graph. One repository-wide journal
+owns every task's work history and results. A task is ready when it is todo and
+every dependency is complete.
 
 The lifecycle states are:
 
@@ -24,14 +25,18 @@ The lifecycle states are:
   doing      claimed by one agent
   blocked    an identified impediment requires action
   done       objective satisfied
+  failed     attempt finished without satisfying the objective
   canceled   objective no longer wanted
 
 A todo task with unmet dependencies is waiting, not blocked. A claim exists
-only while a task is doing.
+only while a task is doing. Done and failed are both finished states: either
+one satisfies a dependency, but only done records success. Blocked remains
+unfinished and does not satisfy dependencies.
 
 An epic is a root task with children. It has no lifecycle state, claim, message,
-or result of its own. It completes when every child is done or canceled. Epics
-cannot be nested.
+or result of its own. It finishes when every child is done, failed, or canceled.
+A finished epic is failed when any child failed, canceled when none failed and
+any child was canceled, and done otherwise. Epics cannot be nested.
 
 {{HEADER}}3. INITIALIZE AND FIND WORK{{RESET}}
 
@@ -45,7 +50,7 @@ Ergo discovers `.ergo` by walking upward from the current directory or from
 running executable and version together with the active project and backlog
 paths.
 
-  {{CMD}}ergo list{{RESET}}                 active work; omits done and canceled
+  {{CMD}}ergo list{{RESET}}                 active work and failed outcomes
   {{CMD}}ergo list --ready{{RESET}}         tasks available to claim
   {{CMD}}ergo list --all{{RESET}}           include closed work
   {{CMD}}ergo list --epic ABCDEF{{RESET}}   one epic and its children
@@ -143,36 +148,42 @@ Use a stable identity such as `model@host`:
   {{CMD}}ergo claim --agent model@host{{RESET}}          claim the oldest ready task
 
 Automatic claim selects a ready todo task. A specific claim can resume todo,
-blocked, done, or canceled work under the same ID, even if its dependencies are
-incomplete. Repeating a claim as its owner succeeds; another identity gets a
-conflict.
+blocked, done, failed, or canceled work under the same ID, even if its
+dependencies are incomplete. This is how work retries after failure. Repeating
+a claim as its owner succeeds; another identity gets a conflict.
 
-{{HEADER}}6. COMPLETE, BLOCK, CANCEL, OR RELEASE{{RESET}}
+{{HEADER}}6. FINISH, BLOCK, CANCEL, OR RELEASE{{RESET}}
 
   {{CMD}}ergo done ABCDEF{{RESET}}       objective satisfied
+  {{CMD}}ergo fail ABCDEF{{RESET}}       attempt finished unsuccessfully
   {{CMD}}ergo block ABCDEF{{RESET}}      impediment requires action
   {{CMD}}ergo cancel ABCDEF{{RESET}}     objective no longer wanted
   {{CMD}}ergo release ABCDEF{{RESET}}    unfinished work returns to todo
 
-Done, block, and cancel accept any readable task state. Release accepts
-unfinished work and rejects done or canceled work. Every lifecycle command
-clears the claim.
+Done, fail, block, and cancel accept any readable task state. Release accepts
+unfinished work and rejects done, failed, or canceled work. Every lifecycle
+command clears the claim.
 
-Use `-m` for durable outcome or attempt context:
+Use `-m` for terse outcome or attempt context on the automatic journal entry:
 
   {{CMD}}ergo block ABCDEF -m "Waiting for an API key"{{RESET}}
+  {{CMD}}ergo fail ABCDEF -m "CI proves the required target cannot build"{{RESET}}
   {{CMD}}ergo done ABCDEF -m "Implemented" -m "Verified with task ci"{{RESET}}
 
-Repeated `-m` values form paragraphs in one appended message. Lifecycle
+Repeated `-m` values form paragraphs in one entry. Successful task creation and
+state-changing claim, done, fail, block, cancel, and release calls each append
+one automatic entry. Reads, structural changes, and no-ops do not. Lifecycle
 commands do not read stdin and never replace the task body.
 
-Use `--result` to attach an existing project-relative file outside `.ergo`:
+Record any number of explicit results without changing task state:
 
-  {{CMD}}ergo done ABCDEF --result docs/verification.md{{RESET}}
-  {{CMD}}ergo release ABCDEF -m "Useful partial work" --result .scratch/attempt.md{{RESET}}
+  {{CMD}}ergo result ABCDEF "Verified the fix"{{RESET}}
+  {{CMD}}ergo result ABCDEF "Captured rollout evidence" --file docs/verification.md{{RESET}}
 
-Results append as attempt history. Repeat the current lifecycle command to
-attach evidence produced after the state change.
+Result text is nonblank and single-line. A result may refer to one existing
+project-relative regular file outside `.ergo`. The file remains in the project;
+the journal stores its path, hash, modification time, and Git commit when
+available. Results work in every readable leaf state and reject epics.
 
 {{HEADER}}7. DEPENDENCIES{{RESET}}
 
@@ -185,7 +196,9 @@ task. Unsequence removes those adjacent edges. Existing or absent edges are
 no-ops. A failed chain writes no partial edges.
 
 Self-dependencies, cycles, and edges between an epic and its child fail. A
-dependency on an epic completes when all its children are done or canceled.
+dependency on an epic completes when all its children are done, failed, or
+canceled. This lets fan-in work continue after every branch reports an outcome;
+the epic still renders as failed when any child failed.
 Children also inherit dependencies assigned to their epic.
 
 {{HEADER}}8. TERMINAL PRESENTATION{{RESET}}
@@ -213,8 +226,21 @@ literal stored bytes without adding ANSI decoration, even with
   {{CMD}}ergo prune --yes{{RESET}}  remove it from the current backlog
   {{CMD}}ergo compact{{RESET}}      remove superseded event history
 
-Prune targets done and canceled leaves, then epics left empty. Compact preserves
-the current backlog while shortening its event log.
+Prune targets done, failed, and canceled leaves, then epics left empty. It also
+removes their entries from the shared journal. Compact preserves all explicit
+results, keeps only the newest automatic entry needed to explain each surviving
+task, and migrates legacy messages and results out of the backlog once.
+
+Every task shares `.ergo/journal.jsonl`; the readable Journal section in `show`
+is a filtered rendering of that JSONL, not another file. Leaf show includes the
+retained task journal. Epic show includes only each child's latest result. List
+shows the newest attached result file for visible leaves, while `list --json`
+remains a journal-free task-picker projection.
+
+Projects may track or ignore `journal.jsonl`. Deleting it loses work evidence
+but does not corrupt the backlog; the next journal write recreates it. Older
+Ergo versions do not understand the split journal or newly written failed-state
+records.
 
 Reads and writes use the repository lock. Claim selection and mutation happen
 under the same lock, so concurrent agents cannot claim the same task.

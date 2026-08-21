@@ -35,14 +35,16 @@ func RenderClaim(w io.Writer, outcome ClaimOutcome, useColor bool) {
 	id := task.ID
 	next := map[string]string{
 		"done":    "ergo done " + id,
+		"fail":    "ergo fail " + id,
 		"block":   "ergo block " + id,
 		"cancel":  "ergo cancel " + id,
 		"release": "ergo release " + id,
 	}
-	printTaskDocument(w, task, graph, repoDir, useColor)
+	printTaskDocument(w, task, graph, outcome.Journal, repoDir, useColor)
 	writeGeneratedLine(w, "## Next", colorBold+colorCyan, useColor)
 	fmt.Fprintln(w)
 	writeNextCommand(w, next["done"], useColor)
+	writeNextCommand(w, next["fail"], useColor)
 	writeNextCommand(w, next["block"], useColor)
 	writeNextCommand(w, next["cancel"], useColor)
 	writeNextCommand(w, next["release"], useColor)

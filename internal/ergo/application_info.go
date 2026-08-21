@@ -14,6 +14,7 @@ type InfoOutcome struct {
 	Version    string
 	Project    string
 	Backlog    string
+	Journal    string
 }
 
 func (a *Application) Info(request InfoRequest) (InfoOutcome, error) {
@@ -33,5 +34,6 @@ func (a *Application) Info(request InfoRequest) (InfoOutcome, error) {
 		Version:    request.Version,
 		Project:    filepath.Dir(where.Path),
 		Backlog:    filepath.Join(where.Path, backlogFileName),
+		Journal:    filepath.Join(where.Path, journalFileName),
 	}, nil
 }

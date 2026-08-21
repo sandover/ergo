@@ -40,7 +40,8 @@ Teams need a lightweight task tracker that works well with AI coding agents.
 2. Agent-friendly - clear output and task states
 3. Human-friendly - readable CLI output, intuitive commands
 EOF
-$ERGO done "$REQ_TASK" --result docs/prd.md
+$ERGO done "$REQ_TASK"
+$ERGO result "$REQ_TASK" "Captured product requirements" --file docs/prd.md
 
 COMP_TASK=$(new_task "Competitor analysis" "$DESIGN_EPIC")
 $ERGO done "$COMP_TASK"

@@ -1,7 +1,8 @@
 // Purpose: Decode canonical mutations into current graph state.
 // Exports: none (package-internal graph helpers).
-// Role: Core domain logic for state reconstruction and queries.
-// Invariants: Tombstones remove tasks; results are ordered newest-first.
+// Replay reconstructs the current graph from released and current records.
+// It accepts legacy compatibility forms but enforces current graph invariants
+// after replay. Tombstones remove tasks, and results remain newest-first.
 // Notes: Readiness checks direct deps and inherited container deps.
 package ergo
 
@@ -42,7 +43,7 @@ func replayTarget(target string) string {
 // into the in-memory task model.
 func isReadableState(state string) bool {
 	switch state {
-	case stateTodo, stateDoing, stateBlocked, stateDone, stateCanceled, stateError:
+	case stateTodo, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled, stateError:
 		return true
 	default:
 		return false
@@ -244,8 +245,8 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 			task.State = data.NewState
 			lifecycleSource[data.ID] = replayEventSource{context: context, kind: event.Type}
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
-			// todo/done/canceled clear claim
-			if data.NewState == stateTodo || data.NewState == stateDone || data.NewState == stateCanceled {
+			// Current non-doing lifecycle states clear the claim.
+			if data.NewState == stateTodo || isFinishedState(data.NewState) {
 				task.ClaimedBy = ""
 				task.ClaimedAt = time.Time{}
 			}

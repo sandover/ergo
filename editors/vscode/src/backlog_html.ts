@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { ErgoListDocument, ErgoListItem } from "./listing";
+import { derivedEpicState, ErgoListDocument, ErgoListItem } from "./listing";
 
 export interface BacklogView {
   html: string;
@@ -56,6 +56,7 @@ export function renderBacklog(
     .state { color: var(--vscode-descriptionForeground); font-size: 14px; line-height: 1; text-align: center; }
     .state[data-state="doing"] { color: var(--vscode-progressBar-background); }
     .state[data-state="blocked"] { color: var(--vscode-errorForeground); font-weight: 600; }
+    .state[data-state="failed"], .state[data-state="error"] { color: var(--vscode-errorForeground); font-weight: 600; }
     .item.id { color: var(--vscode-descriptionForeground); font-family: var(--vscode-editor-font-family); font-size: 12px; }
     details { margin: 0 0 18px; }
     details > summary { border-radius: 3px; cursor: pointer; list-style-position: outside; padding: 5px 8px; }
@@ -133,7 +134,8 @@ function renderEpic(epic: ErgoListItem, children: ErgoListItem[]): string {
     const state = displayState(child);
     counts.set(state, (counts.get(state) ?? 0) + 1);
   }
-  const progress = ["ready", "doing", "waiting", "blocked", "done", "canceled"]
+  const epicState = derivedEpicState(children);
+  const progress = ["ready", "doing", "waiting", "blocked", "failed", "done", "canceled", "error"]
     .flatMap((state) => {
       const count = counts.get(state);
       return count ? [`${count} ${state}`] : [];
@@ -142,7 +144,7 @@ function renderEpic(epic: ErgoListItem, children: ErgoListItem[]): string {
   return `<details open data-epic-search="${searchText([epic])}">
     <summary>
       <span class="epic-heading">
-        <span class="epic-title">${text(epic.title)}</span>
+        <span class="epic-title">${epicState === "failed" ? '<span class="state" data-state="failed" title="failed">✗</span> ' : ""}${text(epic.title)}</span>
         <button class="item id" data-id="${attribute(epic.id)}">${text(epic.id)}</button>
       </span>
       ${progress ? `<span class="epic-progress">${progress}</span>` : ""}
@@ -168,7 +170,18 @@ function displayState(item: ErgoListItem): string {
 }
 
 function stateSymbol(state: string): string {
-  return ({ ready: "○", waiting: "◷", doing: "↻", blocked: "!", done: "✓", canceled: "–" } as Record<string, string>)[state] ?? "○";
+  return (
+    ({
+      ready: "○",
+      waiting: "◷",
+      doing: "↻",
+      blocked: "!",
+      failed: "✗",
+      done: "✓",
+      canceled: "–",
+      error: "⚠",
+    } as Record<string, string>)[state] ?? "○"
+  );
 }
 
 function searchText(items: ErgoListItem[]): string {

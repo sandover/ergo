@@ -14,7 +14,7 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 	}
 
 	var out bulkCreateOutput
-	if _, err := repository.Update(func(graph *Graph) ([]Event, error) {
+	if _, err := repository.UpdateWithJournal(func(graph *Graph) ([]Event, []JournalEntry, error) {
 		working := cloneGraph(graph)
 		workingIDs := make(map[string]*Task, len(working.Tasks)+len(tasks)+1)
 		for id, task := range working.Tasks {
@@ -24,11 +24,11 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 		now := time.Now().UTC()
 		epicID, err := newShortID(workingIDs)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		epicUUID, err := newUUID()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		workingIDs[epicID] = &Task{ID: epicID}
 		createdAt := formatTime(now)
@@ -42,7 +42,7 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 			CreatedAt: createdAt,
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		out = bulkCreateOutput{
@@ -54,6 +54,7 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 
 		newEvents := make([]Event, 0, 1+len(tasks))
 		newEvents = append(newEvents, epicEvent)
+		journal := []JournalEntry{newJournalEntry(epicID, "created", "", "", now)}
 
 		titleToID := make(map[string]string, len(tasks))
 		for _, taskInput := range tasks {
@@ -62,11 +63,11 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 
 			taskID, err := newShortID(workingIDs)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			taskUUID, err := newUUID()
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			workingIDs[taskID] = &Task{ID: taskID, EpicID: epicID}
 
@@ -81,9 +82,10 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 				CreatedAt: formatTime(taskNow),
 			})
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			newEvents = append(newEvents, taskEvent)
+			journal = append(journal, newJournalEntry(taskID, "created", "", "", taskNow))
 			out.Children = append(out.Children, bulkCreateChildOutput{
 				ID:    taskID,
 				Title: taskTitle,
@@ -109,10 +111,10 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 				seenEdges[edgeKey] = struct{}{}
 
 				if err := validateDepSelf(fromID, toID); err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				if hasCycle(working, fromID, toID) {
-					return nil, errors.New("dependency would create a cycle")
+					return nil, nil, errors.New("dependency would create a cycle")
 				}
 
 				linkNow := time.Now().UTC()
@@ -122,7 +124,7 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 					Type:   dependsLinkType,
 				})
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				newEvents = append(newEvents, linkEvent)
 				if working.Deps[fromID] == nil {
@@ -136,7 +138,7 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 			}
 		}
 
-		return newEvents, nil
+		return newEvents, journal, nil
 	}); err != nil {
 		return bulkCreateOutput{}, err
 	}

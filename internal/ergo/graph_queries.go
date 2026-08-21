@@ -1,7 +1,6 @@
-// Purpose: Own graph-derived indexes and domain queries.
-// Exports: none.
-// Role: Canonical access to relationships, epic identity, completion, and readiness.
-// Invariants: Tasks and forward dependency edges are canonical; all other indexes derive from them.
+// Graph queries derive every relationship from tasks and forward dependency
+// edges. Completion and readiness must use the shared finished-state boundary;
+// duplicating state lists here can release dependencies incorrectly.
 package ergo
 
 import "sort"
@@ -79,14 +78,45 @@ func (graph *Graph) IsComplete(id string) bool {
 		return false
 	}
 	if !graph.IsEpic(id) {
-		return task.State == stateDone || task.State == stateCanceled
+		return isFinishedState(task.State)
 	}
 	for _, child := range graph.Children(id) {
-		if child.State != stateDone && child.State != stateCanceled {
+		if !isFinishedState(child.State) {
 			return false
 		}
 	}
 	return true
+}
+
+func derivedEpicStateForTasks(children []*Task) string {
+	if len(children) == 0 {
+		return "empty"
+	}
+	allFinished := true
+	allCanceled := true
+	anyFailed := false
+	for _, child := range children {
+		allFinished = allFinished && isFinishedState(child.State)
+		allCanceled = allCanceled && child.State == stateCanceled
+		anyFailed = anyFailed || child.State == stateFailed
+	}
+	if !allFinished {
+		return "active"
+	}
+	if anyFailed {
+		return stateFailed
+	}
+	if allCanceled {
+		return stateCanceled
+	}
+	return stateDone
+}
+
+func (graph *Graph) EpicState(id string) string {
+	if graph == nil || !graph.IsEpic(id) {
+		return ""
+	}
+	return derivedEpicStateForTasks(graph.Children(id))
 }
 
 func (graph *Graph) Blockers(id string) []string {

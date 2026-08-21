@@ -148,7 +148,7 @@ func TestSnapshotDerivesNonemptyEpicIdentityFromChildren(t *testing.T) {
 	}
 }
 
-func TestSnapshotUsesBoundedRecordsForAccumulatedItems(t *testing.T) {
+func TestSnapshotExcludesJournalOwnedAccumulatedItems(t *testing.T) {
 	graph := newGraph()
 	now := time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC)
 	task := &Task{ID: "AAAAAA", UUID: "uuid", State: stateTodo, Title: "Task", CreatedAt: now, UpdatedAt: now}
@@ -161,8 +161,8 @@ func TestSnapshotUsesBoundedRecordsForAccumulatedItems(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stats.Records != 202 {
-		t.Fatalf("records = %d, want 202", stats.Records)
+	if stats.Records != 2 {
+		t.Fatalf("records = %d, want 2", stats.Records)
 	}
 	for lineNo, line := range bytes.Split(bytes.TrimSuffix(data, []byte{'\n'}), []byte{'\n'}) {
 		if len(line) > maxLogRecordBytes {

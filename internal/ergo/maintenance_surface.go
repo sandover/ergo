@@ -17,6 +17,7 @@ func RunCompact(opts GlobalOptions, render RenderOptions) error {
 
 func RenderCompact(w io.Writer, outcome CompactOutcomeResult) {
 	fmt.Fprintf(w, "Compacted %s: %d source records -> %d snapshot records\n", outcome.Path, outcome.SourceRecords, outcome.SnapshotRecords)
+	fmt.Fprintf(w, "Journal: %d retained entries\n", outcome.JournalRecords)
 }
 
 func RunPrune(confirm bool, opts GlobalOptions, render RenderOptions) error {
@@ -37,8 +38,10 @@ func RenderPrune(w io.Writer, outcome PruneOutcome, useColor bool, termWidth int
 
 	if !confirm {
 		printPrunePreview(w, items, useColor, termWidth)
+		fmt.Fprintf(w, "Journal entries to remove: %d\n", outcome.JournalEntries)
 	} else {
 		printPruneApplied(w, items, useColor)
+		fmt.Fprintf(w, "Journal entries removed: %d\n", outcome.JournalEntries)
 	}
 }
 
@@ -56,7 +59,7 @@ func printPruneEmpty(w io.Writer, useColor bool) {
 
 func printPrunePreview(w io.Writer, items []PruneItem, useColor bool, termWidth int) {
 	stats := computePruneStats(items)
-	total := stats.done + stats.canceled + stats.containers
+	total := stats.done + stats.failed + stats.canceled + stats.containers
 
 	// Header - tells you exactly what this is
 	if useColor {
@@ -89,7 +92,7 @@ func printPrunePreview(w io.Writer, items []PruneItem, useColor bool, termWidth 
 
 func printPruneApplied(w io.Writer, items []PruneItem, useColor bool) {
 	stats := computePruneStats(items)
-	total := stats.done + stats.canceled + stats.containers
+	total := stats.done + stats.failed + stats.canceled + stats.containers
 
 	// Header
 	if useColor {
@@ -107,6 +110,7 @@ func printPruneApplied(w io.Writer, items []PruneItem, useColor bool) {
 
 type pruneStats struct {
 	done       int
+	failed     int
 	canceled   int
 	containers int
 }
@@ -118,6 +122,8 @@ func computePruneStats(items []PruneItem) pruneStats {
 			stats.containers++
 		} else if item.State == stateDone {
 			stats.done++
+		} else if item.State == stateFailed {
+			stats.failed++
 		} else if item.State == stateCanceled {
 			stats.canceled++
 		}
@@ -147,6 +153,17 @@ func printPruneStats(w io.Writer, stats pruneStats, useColor bool) {
 			fmt.Fprint(w, colorReset)
 		}
 		fmt.Fprintf(w, " %d canceled tasks\n", stats.canceled)
+	}
+	if stats.failed > 0 {
+		fmt.Fprint(w, "  ")
+		if useColor {
+			fmt.Fprint(w, colorRed)
+		}
+		fmt.Fprint(w, iconFailed)
+		if useColor {
+			fmt.Fprint(w, colorReset)
+		}
+		fmt.Fprintf(w, " %d failed tasks\n", stats.failed)
 	}
 	if stats.containers > 0 {
 		fmt.Fprint(w, "  ")
@@ -233,6 +250,8 @@ func pruneItemIcon(item PruneItem) string {
 		return iconDone
 	case stateCanceled:
 		return iconCanceled
+	case stateFailed:
+		return iconFailed
 	default:
 		return "?"
 	}
@@ -247,6 +266,8 @@ func pruneItemColor(item PruneItem) string {
 		return colorGreen
 	case stateCanceled:
 		return colorDim
+	case stateFailed:
+		return colorRed
 	default:
 		return ""
 	}
@@ -270,4 +291,5 @@ func RenderInfo(w io.Writer, outcome InfoOutcome) {
 	fmt.Fprintf(w, "Version: %s\n", outcome.Version)
 	fmt.Fprintf(w, "Project: %s\n", outcome.Project)
 	fmt.Fprintf(w, "Backlog: %s\n", outcome.Backlog)
+	fmt.Fprintf(w, "Journal: %s\n", outcome.Journal)
 }

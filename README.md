@@ -151,14 +151,20 @@ ergo claim --agent model@host
 Finish the attempt with the command that states the outcome:
 
 ```sh
-ergo done ABCDEF -m "Implemented and verified" --result docs/verification.md
+ergo done ABCDEF -m "Implemented and verified"
+ergo result ABCDEF "Captured verification evidence" --file docs/verification.md
+ergo fail ABCDEF -m "The implementation cannot meet the required constraint"
 ergo block ABCDEF -m "Waiting for the staging credential"
 ergo cancel ABCDEF -m "Requirement withdrawn"
 ergo release ABCDEF -m "Ready for another agent"
 ```
 
-Lifecycle messages append. Results refer to existing project-relative files.
-Lifecycle commands clear the claim and never replace the task body.
+Use `done` when the objective succeeded, `fail` when the attempt finished
+unsuccessfully, and `block` when an impediment prevents the attempt from
+finishing. Done and failed tasks both satisfy dependencies. Lifecycle messages
+append to one shared task journal. Results may be recorded in any leaf state and
+refer to existing project-relative files. Lifecycle commands clear the claim
+and never replace the task body.
 
 Use focused commands to edit existing work:
 
@@ -192,6 +198,7 @@ ergo body ABCDEF <"$tmp"
 ```text
 .ergo/
 ├── backlog.jsonl  # transactions and compacted snapshots
+├── journal.jsonl  # shared work history and results for every task
 └── lock           # write and coherent-read serialization
 ```
 
@@ -201,6 +208,12 @@ reads load a coherent graph under the lock. Mutations validate their complete
 event batch and append it as one transaction record under that same lock.
 Ready-task selection and claim are one locked update, so concurrent agents
 cannot claim the same task.
+
+The backlog owns current tasks, dependencies, claims, and state. The shared
+journal owns work narrative and results. `ergo show` turns its JSONL records
+into readable Markdown; attached files remain ordinary project files. A project
+may track or ignore the journal. Deleting it loses evidence but leaves backlog
+state intact, and the next journal write recreates it.
 
 Run `ergo --help` for the front door and `ergo quickstart` for the complete
 guide. Each command also supports `--help` for syntax and options.

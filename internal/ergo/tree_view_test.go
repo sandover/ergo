@@ -46,6 +46,14 @@ func TestDerivedEpicState(t *testing.T) {
 			want: "done",
 		},
 		{
+			name: "finished epic with failed child is failed",
+			children: []*treeNode{
+				{task: &Task{ID: "T1", State: stateDone}},
+				{task: &Task{ID: "T2", State: stateFailed}},
+			},
+			want: "failed",
+		},
+		{
 			name: "has active work (todo)",
 			children: []*treeNode{
 				{task: &Task{ID: "T1", State: stateDone}},
@@ -78,6 +86,19 @@ func TestDerivedEpicState(t *testing.T) {
 				t.Errorf("derivedEpicState() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestFailedEpicUsesFailedPresentation(t *testing.T) {
+	graph := &Graph{Tasks: map[string]*Task{
+		"EPIC01": {ID: "EPIC01", Title: "Failed epic"},
+		"TASK01": {ID: "TASK01", EpicID: "EPIC01", Title: "Failed child", State: stateFailed},
+	}}
+	graph.rebuildIndexes()
+	var output bytes.Buffer
+	renderTreeView(&output, buildTree(graph), graph, t.TempDir(), true, 80)
+	if got := output.String(); !strings.Contains(got, iconFailed) || !strings.Contains(got, colorRed) {
+		t.Fatalf("failed epic lacks red failed presentation: %q", got)
 	}
 }
 
@@ -406,6 +427,7 @@ func TestFormatTreeLineTruncation(t *testing.T) {
 		"",                             // blockerAnnotation
 		task,                           // task
 		true,                           // isReady
+		false,                          // isEpic
 		false,                          // useColor
 		termWidth,                      // termWidth
 	)

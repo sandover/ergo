@@ -35,11 +35,13 @@ into the public readable output contract.
 Ergo searches the selected directory and its ancestors for `.ergo/`. Without
 `--dir`, the selected directory is the process working directory.
 
-An initialized repository contains a lock and exactly one supported log:
+An initialized repository contains one shared journal, a lock, and exactly one
+supported backlog log:
 
 ```text
 .ergo/
 ├── backlog.jsonl
+├── journal.jsonl
 └── lock
 ```
 
@@ -49,13 +51,13 @@ exists, Ergo uses it. If more than one exists, opening fails and asks the user
 to reconcile them. Ergo does not choose one by precedence, rename a selected
 log, or create `backlog.jsonl` beside an existing supported log.
 
-An opened `Repository` selects its data, log, and lock paths once. Its `View`,
-`Update`, and `Compact` operations provide the persistence boundary used by the
-application.
+An opened `Repository` selects its backlog, journal, and lock paths once. Its
+view, update, prune, and compact operations provide the persistence boundary
+used by the application.
 
 ## Physical log records
 
-The selected log is JSONL. Current mutations append a versioned `transaction`
+The selected backlog is JSONL. Current graph mutations append a versioned `transaction`
 record containing the command's complete, nonempty event batch. A transaction
 is one physical line, so replay either observes the complete batch or ignores
 an interrupted partial line. Transaction records and snapshot records are
@@ -92,7 +94,7 @@ and the interrupted-tail rule repairs only an incomplete final JSON record.
 
 ## Locking and repository updates
 
-`View` acquires `.ergo/lock`, loads the selected log once, and returns a coherent
+`View` acquires `.ergo/lock`, loads the selected backlog and journal, and returns a coherent
 graph. List and show therefore cannot observe the middle of a transaction.
 
 `Update` holds the same lock for its entire operation:
@@ -125,13 +127,14 @@ events, replay validates cross-event invariants and rebuilds derived indexes.
 
 The canonical in-memory state consists of:
 
-- tasks, including bodies, lifecycle data, results, and messages;
+- tasks, including bodies and current lifecycle data;
 - forward dependency edges; and
 - tombstone metadata.
 
 Reverse dependencies and children grouped by epic are derived indexes.
-Legacy explicit empty-epic identity is compatibility metadata. Results and
-lifecycle messages are ordered newest first.
+Legacy explicit empty-epic identity is compatibility metadata. Journal evidence
+may be projected onto tasks in memory for existing renderers, but it never
+becomes a second durable source.
 
 A tombstone removes its task and every incident dependency from the live graph.
 Later events for that ID do not restore it. Tombstones remain in an
@@ -149,8 +152,9 @@ parent ID refers to it. Legacy `new_epic` records preserve empty epics that were
 explicitly created by older versions.
 
 A leaf task has one of the current forward states: `todo`, `doing`, `blocked`,
-`done`, or `canceled`. The historical `error` state remains readable but cannot
-be written by current commands. Forward writes enforce:
+`done`, `failed`, or `canceled`. The historical `error` state remains readable
+but cannot be written by current commands. `done` and `failed` are finished;
+the latter records an unsuccessful outcome. Forward writes enforce:
 
 ```text
 state=doing  <=>  claimed_by is nonempty
@@ -162,9 +166,10 @@ target postcondition directly, so acting on one of those tasks normalizes it
 without an intermediate command.
 
 The shared mutation path handles lifecycle state, claim ownership, title, body,
-placement, lifecycle messages, and result attachment. It suppresses true
-same-value changes. A message, result, or required legacy claim cleanup still
-produces events when the requested state itself is unchanged.
+and placement. It suppresses true same-value changes. Meaningful creation,
+claim, and lifecycle calls append one automatic journal entry under the same
+lock. Lifecycle text belongs to that entry. Explicit results append only to the
+journal and never change graph state.
 
 Epics remain at the root and cannot nest or move. A clean, unclaimed root
 `todo` task with no results may be promoted when it receives its first child.
@@ -178,7 +183,9 @@ self-dependencies, cycles, and edges between an epic and its own child.
 
 A leaf is ready when it is unclaimed, in `todo`, and all direct and inherited
 dependencies are complete. A child inherits dependencies assigned to its epic.
-A dependency on an epic is complete when every child is `done` or `canceled`.
+A dependency on an epic is complete when every child is `done`, `failed`, or
+`canceled`. A finished epic derives `failed` if any child failed, then
+`canceled` if any child was canceled, and otherwise `done`.
 An explicitly `blocked` task is distinct from a `todo` task waiting on a
 dependency.
 
@@ -188,9 +195,10 @@ first item in that order while holding the repository lock.
 ## Prune and snapshots
 
 Prune is logical deletion. A dry run computes a deterministic plan under a
-coherent read lock. Confirmed prune selects done and canceled leaves and then
-epics with no remaining children. It appends the resulting tombstones as one
-transaction.
+coherent read lock. Confirmed prune selects done, failed, and canceled leaves
+and then epics with no remaining children. It appends the resulting tombstones
+as one transaction, then removes every journal entry for the selected IDs. The
+dry run reports that entry count.
 
 Compact is the only operation that replaces the selected log. While holding
 the lock, it loads the current graph and creates a deterministic snapshot block:
@@ -198,8 +206,7 @@ the lock, it loads the current graph and creates a deterministic snapshot block:
 1. A manifest records format version, record counts, and a SHA-256 integrity
    digest.
 2. Ordered task records follow.
-3. Ordered result and message records follow.
-4. Ordered dependency records finish the block.
+3. Ordered dependency records finish the block.
 
 Each record remains independently bounded. The decoder checks the manifest,
 counts, ordering, referential integrity, and digest before accepting the
@@ -207,10 +214,12 @@ snapshot. Transactions may follow a snapshot and replay onto it normally.
 
 A snapshot represents current live state, not reconstructed history.
 Compaction intentionally garbage-collects tombstones and superseded events.
-It preserves current tasks, explicit empty-epic identity, dependencies,
-messages, results, and readable compatibility lifecycle state. Replacement
-writes and syncs a temporary file, renames it over the selected log, and syncs
-the containing directory.
+It preserves current tasks, explicit empty-epic identity, dependencies, and
+readable compatibility lifecycle state. The same locked operation migrates
+legacy backlog messages and results into the journal once. Journal compaction
+keeps every explicit result and the newest automatic entry for each surviving
+task. Replacement writes and syncs temporary files, renames them over the
+selected files, and syncs their directory.
 
 ## Application boundary and errors
 
@@ -239,17 +248,28 @@ reading an epic input file, resolving the working directory, and inspecting a
 result. Its independence guarantee concerns process streams, terminal state,
 rendering, and mutable command context.
 
-## Results
+## Journal and results
 
-Result attachment occurs inside the mutation lock. The supplied path must be
+All tasks share `.ergo/journal.jsonl`; a task journal is a filtered view by task
+ID. Records contain a version, task ID, kind, timestamp, and optional agent,
+text, and file evidence. File order defines journal order. The reader tolerates
+a missing file and one interrupted final JSON record, but rejects malformed
+complete records and unsupported versions.
+
+`ergo result` appends inside the repository lock without writing a backlog
+event. The supplied optional path must be
 local and relative to the project root. Its symlink-resolved target must remain
 inside that root, outside `.ergo/`, and be a regular file.
 
 Ergo preserves the accepted caller-relative path and captures its SHA-256
 digest and modification time. It also attempts to capture the current Git
 commit with a two-second timeout; Git metadata is optional. Renderers derive a
-`file:` URL from the project root and stored relative path. Replay keeps
-attached results newest first.
+`file:` URL from the project root and stored relative path. The file itself
+remains outside `.ergo`.
+
+Graph mutations write the backlog first and then their automatic journal entry.
+If the journal append fails, Ergo reports that the backlog changed. This is an
+explicit partial-success boundary, not a cross-file transaction protocol.
 
 ## Rendering and the CLI
 

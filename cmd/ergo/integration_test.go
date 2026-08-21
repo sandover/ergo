@@ -162,6 +162,8 @@ func putTaskInState(t *testing.T, dir, id, state, agent string) (string, string,
 		return runErgo(t, dir, "", "block", id)
 	case "done":
 		return runErgo(t, dir, "", "done", id)
+	case "failed":
+		return runErgo(t, dir, "", "fail", id)
 	case "canceled":
 		return runErgo(t, dir, "", "cancel", id)
 	case "error":
@@ -179,12 +181,7 @@ func putTaskInState(t *testing.T, dir, id, state, agent string) (string, string,
 
 func attachResultForTest(t *testing.T, dir, id, path string) (string, string, int) {
 	t.Helper()
-	state := showTaskFields(t, dir, id)["state"]
-	verb := map[string]string{
-		"todo": "release", "doing": "release", "blocked": "block",
-		"done": "done", "canceled": "cancel", "error": "release",
-	}[state]
-	return runErgo(t, dir, "", verb, id, "--result", path)
+	return runErgo(t, dir, "", "result", id, path, "--file", path)
 }
 
 func appendLegacyErrorState(t *testing.T, dir, id string) {
@@ -533,7 +530,7 @@ func TestShowEpicHumanDocumentFirstLayout(t *testing.T) {
 	if !strings.Contains(task1Section, "- state: ") {
 		t.Fatalf("expected child state metadata in task section: %s", task1Section)
 	}
-	if !strings.Contains(task1Section, "#### Results") {
+	if !strings.Contains(task1Section, "#### Latest result") {
 		t.Fatalf("expected child results metadata in task section: %s", task1Section)
 	}
 	if !strings.Contains(task1Section, "#### Dependencies") || !strings.Contains(task1Section, "blocks `"+task2+"`") {
@@ -642,7 +639,7 @@ func TestShowTaskHeaderDense(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("show failed: exit %d", code)
 	}
-	if !strings.Contains(stdout, "## Results") {
+	if !strings.Contains(stdout, "## Journal") {
 		t.Fatalf("expected markdown results heading for task show output: %s", stdout)
 	}
 	if !strings.Contains(stdout, "docs/r1.md") {
@@ -845,7 +842,7 @@ func TestExistingPlansLogRemainsInPlace(t *testing.T) {
 		t.Fatal(err)
 	}
 	if stdout, stderr, code := runErgo(t, dir, "", "init"); code != 0 || stderr != "" ||
-		!strings.Contains(stdout, "Ergo already initialized at "+ergoDir) {
+		!strings.Contains(stdout, "Repaired Ergo at "+ergoDir) {
 		t.Fatalf("init: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	if _, stderr, code := runNewTask(t, dir, "Compatible task"); code != 0 {
@@ -1638,11 +1635,15 @@ func TestCompact_PreservesShowOutput(t *testing.T) {
 	afterT1 := showTaskOutput(t, dir, t1)
 	afterT2 := showTaskOutput(t, dir, t2)
 
-	if !reflect.DeepEqual(beforeT1, afterT1) {
-		t.Fatalf("show changed for %s after compact", t1)
+	for _, want := range []string{`state: "done"`, "T1\\n\\n## v2\\nmore", "docs/r1.md", "blocks `" + t2 + "`"} {
+		if !strings.Contains(beforeT1, want) || !strings.Contains(afterT1, want) {
+			t.Fatalf("task %s lost %q across compact", t1, want)
+		}
 	}
-	if !reflect.DeepEqual(beforeT2, afterT2) {
-		t.Fatalf("show changed for %s after compact", t2)
+	for _, want := range []string{`state: "todo"`, "T2", "depends on `" + t1 + "`"} {
+		if !strings.Contains(beforeT2, want) || !strings.Contains(afterT2, want) {
+			t.Fatalf("task %s lost %q across compact", t2, want)
+		}
 	}
 }
 

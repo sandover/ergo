@@ -75,6 +75,7 @@ type ShowOutcome struct {
 	Task       *Task
 	Children   []*Task
 	ProjectDir string
+	Journal    []JournalEntry
 }
 
 // ShowBodyRequest selects the lossless body projection of one task or epic.
@@ -96,7 +97,7 @@ func (a *Application) Show(request ShowRequest) (ShowOutcome, error) {
 	if err := repository.Open(a.repository); err != nil {
 		return ShowOutcome{}, classifyRepositoryError(err)
 	}
-	graph, err := repository.View()
+	graph, journal, err := repository.ViewWithJournal()
 	if err != nil {
 		return ShowOutcome{}, classifyRepositoryError(err)
 	}
@@ -116,6 +117,7 @@ func (a *Application) Show(request ShowRequest) (ShowOutcome, error) {
 		Task:       task,
 		Children:   children,
 		ProjectDir: repository.ProjectDir(),
+		Journal:    journal,
 	}, nil
 }
 
@@ -143,11 +145,9 @@ func (a *Application) ShowBody(request ShowBodyRequest) (ShowBodyOutcome, error)
 }
 
 type LifecycleRequest struct {
-	Kind       string
-	ID         string
-	ResultPath string
-	ResultSet  bool
-	Messages   []string
+	Kind     string
+	ID       string
+	Messages []string
 }
 
 type LifecycleOutcome struct {
@@ -155,8 +155,65 @@ type LifecycleOutcome struct {
 	Task          *Task
 	ChangedFields []string
 	MessageSet    bool
-	ResultPath    string
 	Ready         *Task
+}
+
+type ResultRequest struct {
+	ID, Text, FilePath string
+	FileSet            bool
+}
+
+type ResultOutcome struct {
+	TaskID, Text, FilePath string
+}
+
+func (a *Application) Result(request ResultRequest) (ResultOutcome, error) {
+	id := strings.TrimSpace(request.ID)
+	text := strings.TrimSpace(request.Text)
+	if id == "" {
+		return ResultOutcome{}, classified(ErrorUsage, errors.New(`usage: ergo result <id> "<text>" [--file <path>]`))
+	}
+	if err := validateResultSummary(text); err != nil {
+		return ResultOutcome{}, classified(ErrorUsage, err)
+	}
+	filePath := strings.TrimSpace(request.FilePath)
+	if request.FileSet && filePath == "" {
+		return ResultOutcome{}, classified(ErrorUsage, errors.New("--file cannot be empty"))
+	}
+	var repository Repository
+	if err := repository.Open(a.repository); err != nil {
+		return ResultOutcome{}, classifyRepositoryError(err)
+	}
+	_, err := repository.UpdateWithJournal(func(graph *Graph) ([]Event, []JournalEntry, error) {
+		if _, pruned := graph.Tombstones[id]; pruned {
+			return nil, nil, classified(ErrorNotFound, prunedErr(id))
+		}
+		task := graph.Tasks[id]
+		if task == nil {
+			return nil, nil, classified(ErrorNotFound, fmt.Errorf("unknown task id %s", id))
+		}
+		if graph.IsEpic(id) {
+			return nil, nil, classified(ErrorConflict, errors.New("epics cannot have results"))
+		}
+		entry := newJournalEntry(id, "result", task.ClaimedBy, text, time.Now().UTC())
+		if request.FileSet {
+			cleanPath, err := validateResultPath(repository.ProjectDir(), filePath)
+			if err != nil {
+				return nil, nil, err
+			}
+			evidence, err := captureResultEvidence(repository.ProjectDir(), cleanPath)
+			if err != nil {
+				return nil, nil, err
+			}
+			filePath = cleanPath
+			entry.File = &JournalFile{Path: cleanPath, SHA256: evidence.Sha256AtAttach, Mtime: evidence.MtimeAtAttach, GitCommitAtAttach: evidence.GitCommitAtAttach}
+		}
+		return nil, []JournalEntry{entry}, nil
+	})
+	if err != nil {
+		return ResultOutcome{}, classifyRepositoryError(err)
+	}
+	return ResultOutcome{TaskID: id, Text: text, FilePath: filePath}, nil
 }
 
 func (a *Application) Lifecycle(request LifecycleRequest) (LifecycleOutcome, error) {
@@ -166,11 +223,7 @@ func (a *Application) Lifecycle(request LifecycleRequest) (LifecycleOutcome, err
 	}
 	id := strings.TrimSpace(request.ID)
 	if id == "" {
-		return LifecycleOutcome{}, classified(ErrorUsage, fmt.Errorf("usage: ergo %s <id> [-m <message>] [--result <path>]", request.Kind))
-	}
-	resultPath := strings.TrimSpace(request.ResultPath)
-	if request.ResultSet && resultPath == "" {
-		return LifecycleOutcome{}, classified(ErrorUsage, errors.New("--result cannot be empty"))
+		return LifecycleOutcome{}, classified(ErrorUsage, fmt.Errorf("usage: ergo %s <id> [-m <message>]", request.Kind))
 	}
 	message, messageSet, err := normalizeLifecycleMessages(request.Messages)
 	if err != nil {
@@ -182,7 +235,6 @@ func (a *Application) Lifecycle(request LifecycleRequest) (LifecycleOutcome, err
 	}
 	mutation := taskMutation{
 		Kind: request.Kind, State: targetState, StateSet: true,
-		ResultPath: resultPath, ResultSet: request.ResultSet,
 		MessageKind: request.Kind, MessageText: message, MessageSet: messageSet,
 	}
 	if request.Kind == "release" {
@@ -195,7 +247,6 @@ func (a *Application) Lifecycle(request LifecycleRequest) (LifecycleOutcome, err
 	outcome := LifecycleOutcome{
 		Graph: mutated.Graph, Task: mutated.Graph.Tasks[id],
 		ChangedFields: mutated.ChangedFields, MessageSet: messageSet,
-		ResultPath: resultPath,
 	}
 	if ready := readyTasks(mutated.Graph); len(ready) > 0 {
 		outcome.Ready = ready[0]
@@ -213,6 +264,7 @@ type ClaimOutcome struct {
 	Task       *Task
 	ProjectDir string
 	NoReady    bool
+	Journal    []JournalEntry
 }
 
 func (a *Application) Claim(request ClaimRequest) (ClaimOutcome, error) {
@@ -229,14 +281,14 @@ func (a *Application) Claim(request ClaimRequest) (ClaimOutcome, error) {
 		mutation := taskMutation{
 			Kind: "claim", State: stateDoing, StateSet: true,
 			Claim: agentID, ClaimSet: true, ClaimConflict: true,
-			AllowedStates: []string{stateTodo, stateDoing, stateBlocked, stateDone, stateCanceled, stateError},
+			AllowedStates: []string{stateTodo, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled, stateError},
 		}
 		mutated, err := applyTaskMutation(dir, a.repository, id, mutation, agentID)
 		if err != nil {
 			return ClaimOutcome{}, classifyRepositoryError(err)
 		}
 		task := mutated.Graph.Tasks[id]
-		return ClaimOutcome{Graph: mutated.Graph, Task: task, ProjectDir: filepath.Dir(dir)}, nil
+		return ClaimOutcome{Graph: mutated.Graph, Task: task, ProjectDir: filepath.Dir(dir), Journal: mutated.Journal}, nil
 	}
 
 	var repository Repository
@@ -244,15 +296,18 @@ func (a *Application) Claim(request ClaimRequest) (ClaimOutcome, error) {
 		return ClaimOutcome{}, classifyRepositoryError(err)
 	}
 	var chosenID string
-	update, err := repository.Update(func(graph *Graph) ([]Event, error) {
+	update, err := repository.UpdateWithJournal(func(graph *Graph) ([]Event, []JournalEntry, error) {
 		ready := readyTasks(graph)
 		if len(ready) == 0 {
-			return nil, nil
+			return nil, nil, nil
 		}
 		chosenID = ready[0].ID
 		mutation := taskMutation{Kind: "claim", State: stateDoing, StateSet: true, Claim: agentID, ClaimSet: true}
 		events, _, err := buildMutationEvents(chosenID, ready[0], mutation, agentID, time.Now().UTC())
-		return events, err
+		if err != nil {
+			return nil, nil, err
+		}
+		return events, []JournalEntry{newJournalEntry(chosenID, "claim", agentID, "", time.Now().UTC())}, nil
 	})
 	if err != nil {
 		return ClaimOutcome{}, classifyRepositoryError(err)
@@ -264,5 +319,5 @@ func (a *Application) Claim(request ClaimRequest) (ClaimOutcome, error) {
 	if task == nil {
 		return ClaimOutcome{}, classified(ErrorInternal, errors.New("internal error: missing chosen task"))
 	}
-	return ClaimOutcome{Graph: update.Graph, Task: task, ProjectDir: repository.ProjectDir()}, nil
+	return ClaimOutcome{Graph: update.Graph, Task: task, ProjectDir: repository.ProjectDir(), Journal: update.Journal}, nil
 }

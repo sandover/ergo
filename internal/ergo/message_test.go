@@ -1,7 +1,7 @@
-// Purpose: Verify durable lifecycle message validation, replay, and compaction.
+// Purpose: Verify legacy lifecycle message replay and the journal cutover.
 // Exports: none.
 // Role: Domain and storage coverage for the v3 lifecycle message event.
-// Invariants: messages are leaf-only, newest-first, and lossless across compact.
+// Invariants: legacy messages remain readable until compaction migrates them.
 // Invariants: invalid message mutations append no events.
 package ergo
 
@@ -36,8 +36,8 @@ func TestMessageReplayAndCompact(t *testing.T) {
 	}
 
 	replayed := roundTripSnapshot(t, graph)
-	if got := replayed.Tasks["ABCDEF"].Messages; !reflect.DeepEqual(got, want) {
-		t.Fatalf("compacted messages = %#v, want %#v", got, want)
+	if got := replayed.Tasks["ABCDEF"].Messages; len(got) != 0 {
+		t.Fatalf("snapshot retained journal-owned messages: %#v", got)
 	}
 }
 
@@ -51,20 +51,15 @@ func TestMessageMutationValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := eventTypes(events); !equalStrings(got, []string{"message", "unclaim", "state"}) {
+	if got := eventTypes(events); !equalStrings(got, []string{"unclaim", "state"}) {
 		t.Fatalf("event types = %v", got)
 	}
-	if !equalStrings(sortedUniqueStrings(fields), []string{"claim", "message", "state"}) {
+	if !equalStrings(sortedUniqueStrings(fields), []string{"claim", "state"}) {
 		t.Fatalf("updated fields = %v", fields)
 	}
 
-	for _, mutation := range []taskMutation{
-		{MessageKind: "finish", MessageText: "Text", MessageSet: true},
-		{MessageKind: "done", MessageText: "  ", MessageSet: true},
-	} {
-		if _, _, err := buildMutationEvents(task.ID, task, mutation, "", now); err == nil {
-			t.Fatalf("expected validation error for %#v", mutation)
-		}
+	if _, _, err := normalizeLifecycleMessages([]string{"  "}); err == nil {
+		t.Fatal("expected blank lifecycle text to fail")
 	}
 }
 

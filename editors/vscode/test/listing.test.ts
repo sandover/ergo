@@ -23,6 +23,14 @@ test("groups roots and epics into compact searchable picker rows", () => {
           ready: false,
           epic_id: "EPIC01",
         },
+		{
+		  id: "FAIL01",
+		  title: "Verify the package",
+		  kind: "task",
+		  state: "failed",
+		  ready: false,
+		  epic_id: "EPIC01",
+		},
       ],
     }),
   );
@@ -44,8 +52,8 @@ test("groups roots and epics into compact searchable picker rows", () => {
   });
   assert.deepEqual(picker[3], {
     type: "item",
-    label: "$(symbol-structure) Create one Citation from text that spans pages",
-    description: "EPIC01 · 1 task",
+	label: "$(symbol-structure) Create one Citation from text that spans pages",
+	description: "EPIC01 · 2 tasks",
     item: document.items[1],
   });
   assert.deepEqual(picker[4], {
@@ -54,6 +62,12 @@ test("groups roots and epics into compact searchable picker rows", () => {
     description: "TASK01 · waiting",
     item: document.items[2],
   });
+	assert.deepEqual(picker[5], {
+	  type: "item",
+	  label: "    ↳ $(close) Verify the package",
+	  description: "FAIL01 · failed",
+	  item: document.items[3],
+	});
 });
 
 test("rejects malformed and unsupported listings", () => {
@@ -66,4 +80,22 @@ test("rejects malformed and unsupported listings", () => {
     () => parseListDocument('{"version":1,"items":[{"id":"TASK01","title":"Task","kind":"task"}]}'),
     /invalid task listing/,
   );
+});
+
+test("marks an epic failed when every child finishes and one fails", () => {
+	const document = parseListDocument(JSON.stringify({
+	  version: 1,
+	  items: [
+		{ id: "EPIC01", title: "Ship release", kind: "epic" },
+		{ id: "DONE01", title: "Build", kind: "task", state: "done", ready: false, epic_id: "EPIC01" },
+		{ id: "FAIL01", title: "Verify", kind: "task", state: "failed", ready: false, epic_id: "EPIC01" },
+	  ],
+	}));
+	const picker = toPickerItems(document);
+	assert.deepEqual(picker[1], {
+	  type: "item",
+	  label: "$(close) Ship release",
+	  description: "EPIC01 · 2 tasks · failed",
+	  item: document.items[0],
+	});
 });

@@ -49,7 +49,8 @@ Teams need a lightweight task tracker that works well with AI coding agents.
 - <100ms for any command
 - Zero external dependencies at runtime
 EOF
-$ERGO done "$REQ_TASK" --result docs/prd.md
+$ERGO done "$REQ_TASK"
+$ERGO result "$REQ_TASK" "Captured product requirements" --file docs/prd.md
 
 COMP_TASK=$(new_task "Competitor analysis" "$DESIGN_EPIC")
 mkdir -p docs
@@ -66,7 +67,8 @@ cat > docs/competitor-analysis.md << 'EOF'
 - Agent-friendly JSON mode
 - Minimal footprint
 EOF
-$ERGO done "$COMP_TASK" --result docs/competitor-analysis.md
+$ERGO done "$COMP_TASK"
+$ERGO result "$COMP_TASK" "Captured competitor analysis" --file docs/competitor-analysis.md
 
 INTERVIEW_TASK=$(new_task "User interviews (3 customers)" "$DESIGN_EPIC")
 $ERGO claim "$INTERVIEW_TASK" --agent human@agent-host

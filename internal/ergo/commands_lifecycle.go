@@ -1,8 +1,6 @@
-// Purpose: Implement direct lifecycle verbs for finishing or releasing work.
-// Exports: LifecycleOptions and RunLifecycle.
-// Role: Translate user intent into one shared atomic task mutation.
-// Invariants: done, blocked, canceled, and todo postconditions clear claims.
-// Invariants: lifecycle stdin is rejected; only body may replace task bodies.
+// Lifecycle verbs share one mutation path so postconditions and journal text
+// stay aligned. Every lifecycle target clears the claim.
+// Lifecycle commands reject stdin because only body commands may replace prose.
 package ergo
 
 import (
@@ -13,15 +11,12 @@ import (
 )
 
 type LifecycleOptions struct {
-	ResultPath string
-	ResultSet  bool
-	Messages   []string
+	Messages []string
 }
 
 func RunLifecycle(kind, id string, lifecycle LifecycleOptions, opts GlobalOptions, render RenderOptions) error {
 	outcome, err := NewApplication(opts).Lifecycle(LifecycleRequest{
-		Kind: kind, ID: id, ResultPath: lifecycle.ResultPath,
-		ResultSet: lifecycle.ResultSet, Messages: lifecycle.Messages,
+		Kind: kind, ID: id, Messages: lifecycle.Messages,
 	})
 	if err != nil {
 		return err
@@ -40,14 +35,18 @@ func RenderLifecycle(w io.Writer, outcome LifecycleOutcome) {
 	if outcome.MessageSet {
 		fmt.Fprintln(w, "Message: appended")
 	}
-	if outcome.ResultPath != "" {
-		fmt.Fprintf(w, "Result: %s\n", outcome.ResultPath)
-	}
 	if len(outcome.ChangedFields) == 0 {
 		fmt.Fprintln(w, "No changes.")
 	}
 	if outcome.Ready != nil {
 		fmt.Fprintf(w, "Ready: %s - %s\n", outcome.Ready.ID, outcome.Ready.Title)
+	}
+}
+
+func RenderResult(w io.Writer, outcome ResultOutcome) {
+	fmt.Fprintf(w, "%s - Result recorded: %s\n", outcome.TaskID, outcome.Text)
+	if outcome.FilePath != "" {
+		fmt.Fprintf(w, "File: %s\n", outcome.FilePath)
 	}
 }
 
@@ -69,6 +68,8 @@ func lifecycleTargetState(kind string) (string, error) {
 	switch kind {
 	case "done":
 		return stateDone, nil
+	case "fail":
+		return stateFailed, nil
 	case "block":
 		return stateBlocked, nil
 	case "cancel":

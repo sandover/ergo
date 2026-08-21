@@ -326,7 +326,7 @@ func TestResultEventReplay(t *testing.T) {
 	}
 }
 
-func TestResultCompaction(t *testing.T) {
+func TestSnapshotOmitsResultsOwnedByJournal(t *testing.T) {
 	// Create graph with results
 	now := time.Now().UTC()
 	graph := &Graph{
@@ -365,15 +365,8 @@ func TestResultCompaction(t *testing.T) {
 		t.Fatal("task T1 not found after replay")
 	}
 
-	// Should preserve both results in correct order
-	if len(task.Results) != 2 {
-		t.Fatalf("expected 2 results after compaction, got %d", len(task.Results))
-	}
-	if task.Results[0].Summary != "Second result" {
-		t.Errorf("first result should be 'Second result', got %q", task.Results[0].Summary)
-	}
-	if task.Results[1].Summary != "First result" {
-		t.Errorf("second result should be 'First result', got %q", task.Results[1].Summary)
+	if len(task.Results) != 0 {
+		t.Fatalf("snapshot retained journal-owned results: %#v", task.Results)
 	}
 }
 

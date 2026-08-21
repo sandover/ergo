@@ -73,16 +73,11 @@ func TestV2BodyAndSummarizedResultRenderWithoutMigration(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "legacy.txt"), []byte("legacy"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if _, stderr, code := runErgo(t, dir, "", "done", id, "--result", "legacy.txt"); code != 0 {
+	if _, stderr, code := runErgo(t, dir, "", "done", id); code != 0 {
+		t.Fatalf("finish task: %s", stderr)
+	}
+	if _, stderr, code := runErgo(t, dir, "", "result", id, "Legacy verification", "--file", "legacy.txt"); code != 0 {
 		t.Fatalf("attach result: %s", stderr)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	data = []byte(strings.Replace(string(data), `"summary":"legacy.txt"`, `"summary":"Legacy verification"`, 1))
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		t.Fatal(err)
 	}
 
 	shown := showTaskOutput(t, dir, id)

@@ -175,23 +175,32 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 		cmd := &cobra.Command{
 			Use:   kind + " <id>",
 			Short: short,
-			Args:  exactArgs(1, fmt.Sprintf("usage: ergo %s <id> [-m <message>] [--result <path>]", kind)),
+			Args:  exactArgs(1, fmt.Sprintf("usage: ergo %s <id> [-m <message>]", kind)),
 		}
-		cmd.Flags().String("result", "", "Attach an existing project-relative result file")
 		cmd.Flags().StringArrayP("message", "m", nil, "Append a lifecycle message (repeatable)")
 		cmd.RunE = func(cmd *cobra.Command, args []string) error {
 			if !streams.StdinTerminal {
 				return fmt.Errorf("%s does not read stdin; use ergo body %s to replace the body or -m <message> to add a lifecycle note", kind, args[0])
 			}
-			result, _ := cmd.Flags().GetString("result")
 			messages, _ := cmd.Flags().GetStringArray("message")
-			out, err := app().Lifecycle(ergo.LifecycleRequest{Kind: kind, ID: args[0], ResultPath: result, ResultSet: cmd.Flags().Changed("result"), Messages: messages})
+			out, err := app().Lifecycle(ergo.LifecycleRequest{Kind: kind, ID: args[0], Messages: messages})
 			if err == nil {
 				ergo.RenderLifecycle(cmd.OutOrStdout(), out)
 			}
 			return err
 		}
 		return cmd
+	}
+
+	resultCmd := &cobra.Command{Use: `result <id> "<text>"`, Short: "Record a task result", Args: exactArgs(2, `usage: ergo result <id> "<text>" [--file <path>]`)}
+	resultCmd.Flags().String("file", "", "Attach an existing project-relative file")
+	resultCmd.RunE = func(cmd *cobra.Command, args []string) error {
+		filePath, _ := cmd.Flags().GetString("file")
+		out, err := app().Result(ergo.ResultRequest{ID: args[0], Text: args[1], FilePath: filePath, FileSet: cmd.Flags().Changed("file")})
+		if err == nil {
+			ergo.RenderResult(cmd.OutOrStdout(), out)
+		}
+		return err
 	}
 
 	titleCmd := &cobra.Command{Use: "title <id> <title>", Short: "Replace a task title", Args: exactArgs(2, "usage: ergo title <id> <title>")}
@@ -303,8 +312,8 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	}
 
 	root.AddCommand(initCmd, newCmd, listCmd, showCmd, claimCmd,
-		lifecycle("done", "Mark a task done"), lifecycle("block", "Mark a task blocked"), lifecycle("cancel", "Cancel a task"), lifecycle("release", "Return unfinished work to todo"),
-		titleCmd, bodyCmd, moveCmd, sequence("sequence", "link", "Enforce task order (A then B then C)"), sequence("unsequence", "unlink", "Remove task order (A then B then C)"),
+		lifecycle("done", "Mark a task done"), lifecycle("fail", "Mark finished work failed"), lifecycle("block", "Mark a task blocked"), lifecycle("cancel", "Cancel a task"), lifecycle("release", "Return unfinished work to todo"),
+		resultCmd, titleCmd, bodyCmd, moveCmd, sequence("sequence", "link", "Enforce task order (A then B then C)"), sequence("unsequence", "unlink", "Remove task order (A then B then C)"),
 		whereCmd, infoCmd, compactCmd, pruneCmd, quickCmd, versionCmd)
 }
 

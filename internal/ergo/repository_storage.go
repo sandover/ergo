@@ -326,36 +326,36 @@ func createTask(dir string, opts RepositoryOptions, epicID string, title, body s
 		return createOutput{}, err
 	}
 	var output createOutput
-	update, err := repository.Update(func(graph *Graph) ([]Event, error) {
+	update, err := repository.UpdateWithJournal(func(graph *Graph) ([]Event, []JournalEntry, error) {
 		if epicID != "" {
 			epic, ok := graph.Tasks[epicID]
 			if !ok {
-				return nil, classified(ErrorNotFound, fmt.Errorf("unknown epic id %s", epicID))
+				return nil, nil, classified(ErrorNotFound, fmt.Errorf("unknown epic id %s", epicID))
 			}
 			if epic.EpicID != "" {
-				return nil, classified(ErrorConflict, fmt.Errorf("task %s is not an epic", epicID))
+				return nil, nil, classified(ErrorConflict, fmt.Errorf("task %s is not an epic", epicID))
 			}
 			// Reject first-child assignment to a dirty leaf: once promoted to a
 			// container, leaf-only semantics (state/claim/results) no longer apply.
 			if !graph.IsEpic(epic.ID) {
 				if epic.ClaimedBy != "" {
-					return nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: task is claimed by %q", epicID, epic.ClaimedBy))
+					return nil, nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: task is claimed by %q", epicID, epic.ClaimedBy))
 				}
 				if epic.State != stateTodo {
-					return nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: state is %q (must be todo to promote to epic)", epicID, epic.State))
+					return nil, nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: state is %q (must be todo to promote to epic)", epicID, epic.State))
 				}
 				if len(epic.Results) > 0 {
-					return nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: task has results attached", epicID))
+					return nil, nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: task has results attached", epicID))
 				}
 			}
 		}
 		id, err := newShortID(graph.Tasks)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		uuid, err := newUUID()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		now := time.Now().UTC()
 		createdAt := formatTime(now)
@@ -370,7 +370,7 @@ func createTask(dir string, opts RepositoryOptions, epicID string, title, body s
 		}
 		event, err := newEvent("new_task", now, payload)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		output = createOutput{
@@ -382,7 +382,7 @@ func createTask(dir string, opts RepositoryOptions, epicID string, title, body s
 			Body:      payload.Body,
 			CreatedAt: createdAt,
 		}
-		return []Event{event}, nil
+		return []Event{event}, []JournalEntry{newJournalEntry(id, "created", "", "", now)}, nil
 	})
 	if err != nil {
 		return createOutput{}, err
@@ -510,39 +510,4 @@ func getGitHead(repoDir string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(output))
-}
-
-func buildResultEvent(repoDir string, graph *Graph, taskID, summary, relPath string, now time.Time) (Event, error) {
-	if _, ok := graph.Tombstones[taskID]; ok {
-		return Event{}, prunedErr(taskID)
-	}
-	task, ok := graph.Tasks[taskID]
-	if !ok {
-		return Event{}, fmt.Errorf("unknown task id %s", taskID)
-	}
-	if graph.IsEpic(task.ID) {
-		return Event{}, errors.New("cannot attach result to epic")
-	}
-	if err := validateResultSummary(summary); err != nil {
-		return Event{}, err
-	}
-
-	cleanPath, err := validateResultPath(repoDir, relPath)
-	if err != nil {
-		return Event{}, err
-	}
-	evidence, err := captureResultEvidence(repoDir, cleanPath)
-	if err != nil {
-		return Event{}, err
-	}
-
-	return newEvent("result", now, ResultEvent{
-		TaskID:            taskID,
-		Summary:           strings.TrimSpace(summary),
-		Path:              cleanPath,
-		Sha256AtAttach:    evidence.Sha256AtAttach,
-		MtimeAtAttach:     evidence.MtimeAtAttach,
-		GitCommitAtAttach: evidence.GitCommitAtAttach,
-		TS:                formatTime(now),
-	})
 }

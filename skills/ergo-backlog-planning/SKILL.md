@@ -114,7 +114,8 @@ If you see opportunities for elegance, take them now.
 - Each agent claims one task at a time. Independent agents may work on ready tasks in parallel when the user wants parallel execution.
 - Always keep task state updated and accurate.
 - End every claim with the lifecycle command that matches the outcome. Never leave claimed work in `doing`.
-- State the outcome and checks run in the completion message. Attach a result only when the task produced an actual project file.
+- Use `ergo done` when the objective succeeded, `ergo fail` when the attempt finished unsuccessfully, and `ergo block` only when an impediment prevents the attempt from finishing.
+- State the outcome and checks run in the lifecycle message. Use `ergo result <id> "<text>" [--file <path>]` for durable result evidence; attach a file only when the task produced an actual project file.
 - After a spike, update dependent task bodies before closing it.
 - When adding newly discovered context, pipe only the new text to
   `ergo body <id> --append`, including any desired leading newline. Replace the

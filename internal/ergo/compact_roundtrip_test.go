@@ -32,24 +32,7 @@ type taskSnapshot struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	Deps      []string       `json:"deps"`
 	RDeps     []string       `json:"rdeps"`
-	Results   []resultSnap   `json:"results"`
-	Messages  []messageSnap  `json:"messages"`
 	Invariant invariantState `json:"invariant"`
-}
-
-type resultSnap struct {
-	Summary           string    `json:"summary"`
-	Path              string    `json:"path"`
-	Sha256AtAttach    string    `json:"sha256_at_attach"`
-	MtimeAtAttach     string    `json:"mtime_at_attach"`
-	GitCommitAtAttach string    `json:"git_commit_at_attach"`
-	CreatedAt         time.Time `json:"created_at"`
-}
-
-type messageSnap struct {
-	Kind      string    `json:"kind"`
-	Text      string    `json:"text"`
-	CreatedAt time.Time `json:"created_at"`
 }
 
 type invariantState struct {
@@ -86,8 +69,6 @@ func snapshotTaskState(graph *Graph, task *Task) taskSnapshot {
 		UpdatedAt: task.UpdatedAt,
 		Deps:      graph.Dependencies(task.ID),
 		RDeps:     graph.Dependents(task.ID),
-		Results:   snapshotResults(task.Results),
-		Messages:  snapshotMessages(task.Messages),
 	}
 	if err := validateClaimInvariant(task.State, task.ClaimedBy); err != nil {
 		snap.Invariant = invariantState{ClaimOk: false, Error: err.Error()}
@@ -95,28 +76,6 @@ func snapshotTaskState(graph *Graph, task *Task) taskSnapshot {
 		snap.Invariant = invariantState{ClaimOk: true}
 	}
 	return snap
-}
-
-func snapshotMessages(messages []Message) []messageSnap {
-	if len(messages) == 0 {
-		return nil
-	}
-	out := make([]messageSnap, 0, len(messages))
-	for _, message := range messages {
-		out = append(out, messageSnap(message))
-	}
-	return out
-}
-
-func snapshotResults(results []Result) []resultSnap {
-	if len(results) == 0 {
-		return nil
-	}
-	out := make([]resultSnap, 0, len(results))
-	for _, r := range results {
-		out = append(out, resultSnap(r))
-	}
-	return out
 }
 
 func assertGraphStateEqual(t *testing.T, before, after *Graph) {
@@ -390,7 +349,7 @@ func (s *simState) applyState(id, newState string, ts time.Time) {
 	}
 	task.State = newState
 	task.UpdatedAt = maxTime(task.UpdatedAt, ts)
-	if newState == stateTodo || newState == stateDone || newState == stateCanceled {
+	if newState == stateTodo || isFinishedState(newState) {
 		task.ClaimedBy = ""
 	}
 }
@@ -583,7 +542,7 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 			if task == nil {
 				continue
 			}
-			candidates := []string{stateTodo, stateDoing, stateDone, stateBlocked, stateCanceled, stateError}
+			candidates := []string{stateTodo, stateDoing, stateDone, stateFailed, stateBlocked, stateCanceled, stateError}
 			newState := candidates[r.Intn(len(candidates))]
 			if err := validateForwardState(newState); err != nil {
 				continue
@@ -682,7 +641,7 @@ func randomEventLog(t *testing.T, seed int64, steps int) []Event {
 			// Keep generated histories within the claim/state invariants that ergo enforces.
 			// todo/done/canceled must not be claimed; doing/error must remain claimed; blocked may toggle.
 			switch task.State {
-			case stateTodo, stateDone, stateCanceled:
+			case stateTodo, stateDone, stateFailed, stateCanceled:
 				if task.ClaimedBy != "" {
 					events = append(events, unclaimEvent(t, ts, id))
 					sim.applyUnclaim(id)

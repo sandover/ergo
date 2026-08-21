@@ -44,7 +44,7 @@ func RenderList(w io.Writer, outcome ListOutcome, useColor bool, width int) {
 			if len(epicChildrenReady) == 0 {
 				fmt.Fprintln(w, "No ready tasks in this epic.")
 				stats := computeStatsForTasks(epicChildren, graph)
-				printSummary(stats, []summaryBucket{summaryInProgress, summaryBlocked, summaryWaiting, summaryError}, false)
+				printSummary(stats, []summaryBucket{summaryInProgress, summaryBlocked, summaryWaiting, summaryFailed, summaryError}, false)
 				return
 			}
 			stats := computeStatsForTasks(epicChildrenReady, graph)
@@ -57,7 +57,7 @@ func RenderList(w io.Writer, outcome ListOutcome, useColor bool, width int) {
 			}
 			// Epic-focused view includes done/canceled by default.
 			stats := computeStatsForTasks(epicChildren, graph)
-			printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryWaiting, summaryError, summaryDone, summaryCanceled}, true)
+			printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryWaiting, summaryFailed, summaryError, summaryDone, summaryCanceled}, true)
 			return
 		}
 	}
@@ -71,7 +71,7 @@ func RenderList(w io.Writer, outcome ListOutcome, useColor bool, width int) {
 		if len(readyTasks) == 0 {
 			fmt.Fprintln(w, "No ready tasks.")
 			stats := computeStatsForTasks(activeTasks, graph)
-			printSummary(stats, []summaryBucket{summaryInProgress, summaryBlocked, summaryWaiting, summaryError}, false)
+			printSummary(stats, []summaryBucket{summaryInProgress, summaryBlocked, summaryWaiting, summaryFailed, summaryError}, false)
 			return
 		}
 		renderTreeView(w, roots, graph, repoDir, useColor, width)
@@ -85,7 +85,7 @@ func RenderList(w io.Writer, outcome ListOutcome, useColor bool, width int) {
 		}
 		renderTreeView(w, roots, graph, repoDir, useColor, width)
 		stats := computeStatsForTasks(allTasks, graph)
-		printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryWaiting, summaryError, summaryDone, summaryCanceled}, true)
+		printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryWaiting, summaryFailed, summaryError, summaryDone, summaryCanceled}, true)
 		return
 	default:
 		if len(allTasks) == 0 {
@@ -104,7 +104,7 @@ func RenderList(w io.Writer, outcome ListOutcome, useColor bool, width int) {
 		}
 		renderTreeView(w, roots, graph, repoDir, useColor, width)
 		stats := computeStatsForTasks(activeTasks, graph)
-		printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryWaiting, summaryError}, true)
+		printSummary(stats, []summaryBucket{summaryReady, summaryInProgress, summaryBlocked, summaryWaiting, summaryFailed, summaryError}, true)
 		return
 	}
 }

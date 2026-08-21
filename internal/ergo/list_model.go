@@ -31,6 +31,7 @@ const (
 	iconWaiting  = "◷"
 	iconDoing    = "↻"
 	iconBlocked  = "!"
+	iconFailed   = "✗"
 	iconCanceled = "–"
 	iconError    = "⚠"
 	iconEpic     = "◈"
@@ -185,38 +186,21 @@ func filterNodesByReady(nodes []*treeNode, graph *Graph) []*treeNode {
 }
 
 // derivedEpicState computes an epic's state from its child tasks.
-// Returns: "done" (all done/canceled), "canceled" (all canceled), "active" (has open work), "empty" (no tasks)
+// Returns a derived presentation state for an epic's children.
 func derivedEpicState(children []*treeNode) string {
-	if len(children) == 0 {
-		return "empty"
-	}
-	allDone := true
-	allCanceled := true
+	tasks := make([]*Task, 0, len(children))
 	for _, child := range children {
-		if child.task == nil {
-			continue
-		}
-		if child.task.State != stateDone && child.task.State != stateCanceled {
-			allDone = false
-			allCanceled = false
-		}
-		if child.task.State != stateCanceled {
-			allCanceled = false
+		if child.task != nil {
+			tasks = append(tasks, child.task)
 		}
 	}
-	if allCanceled {
-		return "canceled"
-	}
-	if allDone {
-		return "done"
-	}
-	return "active"
+	return derivedEpicStateForTasks(tasks)
 }
 
 // filterAndCollapseNodes filters tasks for the active view (default list output).
 // UX goals for supervisors monitoring agent progress:
 // - Show progress within active epics (done tasks visible for context)
-// - Hide fully-done/canceled epics (nothing to supervise)
+// - Hide successful or canceled finished epics; keep failed outcomes visible
 // - Hide orphan done tasks (standalone completed work)
 // - Hide all canceled tasks (abandoned work)
 func filterAndCollapseNodes(nodes []*treeNode) []*treeNode {
@@ -233,9 +217,11 @@ func filterAndCollapseNodesImpl(nodes []*treeNode, withinEpic bool) []*treeNode 
 			case "canceled":
 				// Hide fully-canceled epics
 				continue
-			case "done":
+			case stateDone:
 				// Hide fully-done epics in active view
 				continue
+			case stateFailed:
+				// Keep failed epics visible for investigation.
 			case "empty":
 				// Empty epics are shown as-is
 				filtered = append(filtered, node)
@@ -287,6 +273,7 @@ type taskStats struct {
 	blocked    int
 	waiting    int
 	errors     int
+	failed     int
 	done       int
 	canceled   int
 	total      int
@@ -300,6 +287,7 @@ const (
 	summaryBlocked
 	summaryWaiting
 	summaryError
+	summaryFailed
 	summaryDone
 	summaryCanceled
 )
@@ -316,6 +304,8 @@ func computeStatsForTasks(tasks []*Task, graph *Graph) taskStats {
 			stats.done++
 		case stateCanceled:
 			stats.canceled++
+		case stateFailed:
+			stats.failed++
 		case stateError:
 			stats.errors++
 		case stateDoing:

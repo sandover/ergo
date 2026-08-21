@@ -397,6 +397,12 @@ func TestIsBlocked_BasicCases(t *testing.T) {
 			expected: false,
 		},
 		{
+			name:     "todo with failed dep not blocked",
+			task:     &Task{ID: "T1", State: stateTodo},
+			deps:     map[string]*Task{"T2": {ID: "T2", State: stateFailed}},
+			expected: false,
+		},
+		{
 			name:     "doing not blocked by deps",
 			task:     &Task{ID: "T1", State: stateDoing, ClaimedBy: "agent-1"},
 			deps:     map[string]*Task{"T2": {ID: "T2", State: stateTodo}},
@@ -565,6 +571,15 @@ func TestIsEpicComplete(t *testing.T) {
 			tasks: map[string]*Task{
 				"T1": {ID: "T1", EpicID: "E1", State: stateDone},
 				"T2": {ID: "T2", EpicID: "E1", State: stateCanceled},
+			},
+			expected: true,
+		},
+		{
+			name:   "mix includes failed",
+			epicID: "E1",
+			tasks: map[string]*Task{
+				"T1": {ID: "T1", EpicID: "E1", State: stateDone},
+				"T2": {ID: "T2", EpicID: "E1", State: stateFailed},
 			},
 			expected: true,
 		},

@@ -72,10 +72,11 @@ export function toPickerItems(document: ErgoListDocument): PickerEntry[] {
     entries.push({ type: "separator", label: "EPICS" });
     for (const epic of epics) {
       const children = document.items.filter((item) => item.epic_id === epic.id);
+      const state = derivedEpicState(children);
       entries.push({
         type: "item",
-        label: `$(symbol-structure) ${epic.title}`,
-        description: `${epic.id} · ${children.length} ${children.length === 1 ? "task" : "tasks"}`,
+        label: `${state === "failed" ? statusIcon(state) : "$(symbol-structure)"} ${epic.title}`,
+        description: `${epic.id} · ${children.length} ${children.length === 1 ? "task" : "tasks"}${state === "failed" ? " · failed" : ""}`,
         item: epic,
       });
       for (const child of children) {
@@ -85,6 +86,16 @@ export function toPickerItems(document: ErgoListDocument): PickerEntry[] {
   }
 
   return entries;
+}
+
+export function derivedEpicState(children: ErgoListItem[]): string {
+  if (
+    children.length === 0 ||
+    !children.every((child) => ["done", "failed", "canceled"].includes(child.state ?? ""))
+  ) {
+    return "active";
+  }
+  return children.some((child) => child.state === "failed") ? "failed" : "done";
 }
 
 function taskPickerItem(item: ErgoListItem, child: boolean): PickerItem {
@@ -109,6 +120,8 @@ function statusIcon(status: string): string {
       return "$(sync)";
     case "blocked":
       return "$(error)";
+    case "failed":
+      return "$(close)";
     case "done":
       return "$(check)";
     case "canceled":

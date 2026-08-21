@@ -39,8 +39,9 @@ func (a *Application) Where() (WhereOutcome, error) {
 
 type PruneRequest struct{ Confirm bool }
 type PruneOutcome struct {
-	Confirmed bool
-	Items     []PruneItem
+	Confirmed      bool
+	Items          []PruneItem
+	JournalEntries int
 }
 
 func (a *Application) Prune(request PruneRequest) (PruneOutcome, error) {
@@ -57,5 +58,5 @@ func (a *Application) Prune(request PruneRequest) (PruneOutcome, error) {
 	if err != nil {
 		return PruneOutcome{}, classifyRepositoryError(err)
 	}
-	return PruneOutcome{Confirmed: request.Confirm, Items: plan.Items}, nil
+	return PruneOutcome{Confirmed: request.Confirm, Items: plan.Items, JournalEntries: plan.JournalEntries}, nil
 }

@@ -1,8 +1,8 @@
-// Purpose: Define core domain types, constants, and validation rules.
-// Exports: GlobalOptions, Task, Graph, Result, Message, and related domain structs.
-// Role: Shared model and state machine definitions.
-// Invariants: lifecycle postconditions and claim ownership must stay consistent.
-// Notes: Error values are stable sentinel constants.
+// Core domain values live here so every command shares one state vocabulary.
+// Only doing work may carry a claim. Finished-state membership controls both
+// dependency release and epic completion, so callers must use isFinishedState
+// instead of spelling their own state lists. Legacy error remains readable but
+// current writers must never create it.
 package ergo
 
 import (
@@ -16,12 +16,22 @@ const (
 	stateTodo     = "todo"
 	stateDoing    = "doing"
 	stateDone     = "done"
+	stateFailed   = "failed"
 	stateBlocked  = "blocked"
 	stateCanceled = "canceled"
 	stateError    = "error"
 
 	dependsLinkType = "depends"
 )
+
+func isFinishedState(state string) bool {
+	switch state {
+	case stateDone, stateFailed, stateCanceled:
+		return true
+	default:
+		return false
+	}
+}
 
 var (
 	ErrNoErgoDir = errors.New("no .ergo directory found")
@@ -129,7 +139,7 @@ type Message struct {
 
 func validateMessageKind(kind string) error {
 	switch kind {
-	case "done", "block", "cancel", "release":
+	case "done", "fail", "block", "cancel", "release":
 		return nil
 	default:
 		return fmt.Errorf("invalid lifecycle message kind: %s", kind)

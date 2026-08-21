@@ -36,8 +36,13 @@ func TestTaskDocumentRendersCompleteAgentContext(t *testing.T) {
 			"AFTER1": {"ABCDEF": {}},
 		},
 	}
+	journal := []JournalEntry{
+		newJournalEntry("ABCDEF", "release", "agent@host", "Retry with the new token.", now.Add(time.Minute)),
+		{Version: journalVersion, TaskID: "ABCDEF", Kind: "result", At: formatTime(now.Add(2 * time.Minute)), Text: "Legacy caption", File: &JournalFile{Path: "docs/legacy.md", SHA256: "abc"}},
+		{Version: journalVersion, TaskID: "ABCDEF", Kind: "result", At: formatTime(now.Add(3 * time.Minute)), Text: "Current result", File: &JournalFile{Path: "docs/new.md", SHA256: "def"}},
+	}
 	var buf bytes.Buffer
-	printTaskDocument(&buf, task, graph, "/repo", false)
+	printTaskDocument(&buf, task, graph, journal, "/repo", false)
 	output := buf.String()
 	if !strings.HasPrefix(output, "---\nid: \"ABCDEF\"\n") {
 		t.Fatalf("ID is not fixed at the start of front matter: %s", output)
@@ -45,15 +50,12 @@ func TestTaskDocumentRendersCompleteAgentContext(t *testing.T) {
 	for _, want := range []string{
 		"state: \"doing\"", "parent: \"PARENT\"", "claimed_by: \"agent@host\"",
 		"Line one\n\n- literal Markdown", "depends on `BEFORE`: Prepare schema",
-		"blocks `AFTER1`: Run rollout", "## Messages", "Retry with the new token.",
-		"[docs/new.md](file:///repo/docs/new.md)", "[docs/legacy.md](file:///repo/docs/legacy.md): Legacy caption",
+		"blocks `AFTER1`: Run rollout", "## Journal", "Retry with the new token.",
+		"[docs/new.md](file:///repo/docs/new.md)", "[docs/legacy.md](file:///repo/docs/legacy.md)",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q: %s", want, output)
 		}
-	}
-	if strings.Contains(output, "[docs/new.md](file:///repo/docs/new.md): docs/new.md") {
-		t.Fatalf("path-only result repeated its path as a caption: %s", output)
 	}
 }
 
@@ -79,6 +81,10 @@ func TestColoredTaskDocumentsReduceExactlyToPlainOutput(t *testing.T) {
 			dependency.ID: {},
 		},
 	}
+	journal := []JournalEntry{
+		newJournalEntry(child.ID, "block", "agent@host", "User message with `code`.", now),
+		{Version: journalVersion, TaskID: child.ID, Kind: "result", At: formatTime(now.Add(time.Second)), Text: "User result summary", File: &JournalFile{Path: "docs/result.md", SHA256: "abc"}},
+	}
 
 	render := func(color bool, outcome ShowOutcome) string {
 		var output bytes.Buffer
@@ -89,8 +95,8 @@ func TestColoredTaskDocumentsReduceExactlyToPlainOutput(t *testing.T) {
 		name    string
 		outcome ShowOutcome
 	}{
-		{name: "leaf", outcome: ShowOutcome{Graph: graph, Task: child, ProjectDir: "/project"}},
-		{name: "epic", outcome: ShowOutcome{Graph: graph, Task: epic, Children: []*Task{child}, ProjectDir: "/project"}},
+		{name: "leaf", outcome: ShowOutcome{Graph: graph, Task: child, Journal: journal, ProjectDir: "/project"}},
+		{name: "epic", outcome: ShowOutcome{Graph: graph, Task: epic, Children: []*Task{child}, Journal: journal, ProjectDir: "/project"}},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
@@ -106,11 +112,14 @@ func TestColoredTaskDocumentsReduceExactlyToPlainOutput(t *testing.T) {
 				t.Fatalf("stripped colored document differs from plain\ncolored: %q\nplain:   %q", got, plain)
 			}
 			for _, literal := range []string{
-				child.Title, child.Body, child.Messages[0].Text, dependency.Title,
+				child.Title, child.Body, dependency.Title,
 			} {
 				if !strings.Contains(colored, literal) {
 					t.Fatalf("colored document changed user-authored text %q:\n%s", literal, colored)
 				}
+			}
+			if test.name == "leaf" && !strings.Contains(colored, journal[0].Text) {
+				t.Fatalf("leaf document changed journal text %q:\n%s", journal[0].Text, colored)
 			}
 		})
 	}
