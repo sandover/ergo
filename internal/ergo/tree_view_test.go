@@ -264,7 +264,8 @@ func TestRenderTreeRootRowsNoConnectors(t *testing.T) {
 	if orphanLine == "" {
 		t.Fatalf("expected root task line for O1")
 	}
-	if strings.HasPrefix(orphanLine, "├") || strings.HasPrefix(orphanLine, "└") || strings.HasPrefix(orphanLine, "│") {
+	orphanContent := strings.TrimPrefix(orphanLine, "O1  ")
+	if strings.HasPrefix(orphanContent, "├") || strings.HasPrefix(orphanContent, "└") || strings.HasPrefix(orphanContent, "│") {
 		t.Errorf("expected root task line to avoid connectors, got: %q", orphanLine)
 	}
 
@@ -272,7 +273,8 @@ func TestRenderTreeRootRowsNoConnectors(t *testing.T) {
 	if epicLine == "" {
 		t.Fatalf("expected epic line for E1")
 	}
-	if strings.HasPrefix(epicLine, "├") || strings.HasPrefix(epicLine, "└") || strings.HasPrefix(epicLine, "│") {
+	epicContent := strings.TrimPrefix(epicLine, "E1  ")
+	if strings.HasPrefix(epicContent, "├") || strings.HasPrefix(epicContent, "└") || strings.HasPrefix(epicContent, "│") {
 		t.Errorf("expected root epic line to avoid connectors, got: %q", epicLine)
 	}
 
@@ -280,7 +282,8 @@ func TestRenderTreeRootRowsNoConnectors(t *testing.T) {
 	if childLine == "" {
 		t.Fatalf("expected child task line for T1")
 	}
-	if !(strings.HasPrefix(childLine, "├") || strings.HasPrefix(childLine, "└")) {
+	childContent := strings.TrimPrefix(childLine, "T1  ")
+	if !(strings.HasPrefix(childContent, "├") || strings.HasPrefix(childContent, "└")) {
 		t.Errorf("expected child task line to start with connector, got: %q", childLine)
 	}
 }
@@ -442,9 +445,22 @@ func TestFormatTreeLineTruncation(t *testing.T) {
 	if !strings.Contains(line, "ABC123") {
 		t.Errorf("line should contain task ID, got: %q", line)
 	}
+	if !strings.HasPrefix(line, "ABC123  ├ ↻ Test task") {
+		t.Errorf("task ID should occupy the left column, got: %q", line)
+	}
 
 	// The annotation should be truncated (contains ellipsis)
 	if !strings.Contains(line, "…") {
 		t.Errorf("expected truncation ellipsis in line: %q", line)
+	}
+}
+
+func TestFormatCollapsedEpicLineStartsWithID(t *testing.T) {
+	line := formatCollapsedEpicLine("", "├", true, "EPIC01", "Finished epic", "[3 tasks]", false, 80)
+	if !strings.HasPrefix(line, "EPIC01  ├ ◈  ✓ Finished epic [3 tasks]") {
+		t.Fatalf("collapsed epic ID should occupy the left column: %q", line)
+	}
+	if visibleLen(line) > 80 {
+		t.Fatalf("visible line length %d exceeds terminal width: %q", visibleLen(line), line)
 	}
 }

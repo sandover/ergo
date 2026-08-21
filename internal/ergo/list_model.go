@@ -18,10 +18,9 @@ const (
 )
 
 const (
-	// Layout contract: IDs start at (termWidth - rightMargin - idWidth - minGap).
-	// All truncation and padding must use visibleLen/ truncateToWidth.
-	idMinGap      = 2
-	idRightMargin = 2
+	// Layout contract: every task ID starts in column one, followed by a fixed
+	// gap before tree structure and presentation. Width math uses visibleLen.
+	idContentGap = 2
 )
 
 // State icons

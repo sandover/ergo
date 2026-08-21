@@ -151,7 +151,7 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 	// Show result file URL on separate line for done tasks
 	if latest, ok := latestAttachedResult(task.Results); ok {
 		fileURL := deriveFileURL(latest.Path, repoDir)
-		resultPrefix := prefix
+		resultPrefix := strings.Repeat(" ", visibleLen(task.ID)+idContentGap) + prefix
 		if isRoot {
 			resultPrefix += "  "
 		} else if isLast {
@@ -313,18 +313,11 @@ func truncateToWidth(s string, maxWidth int) string {
 }
 
 // formatCollapsedEpicLine formats a done epic as a single collapsed line.
-// Format: ├ ◈  ✓ Epic title [3 tasks]                                    EPICID
+// Format: EPICID  ├ ◈  ✓ Epic title [3 tasks]
 func formatCollapsedEpicLine(prefix, connector string, showConnector bool, id, title, countStr string, useColor bool, termWidth int) string {
-	// Layout contract: ids are right-aligned at idStart.
-	minGap := idMinGap
-	rightMargin := idRightMargin
-	idWidth := len(id)
-	idStart := termWidth - rightMargin - idWidth - minGap
-	if idStart < 0 {
-		idStart = 0
-	}
-
 	var base strings.Builder
+	base.WriteString(id)
+	base.WriteString(strings.Repeat(" ", idContentGap))
 	if showConnector {
 		if useColor {
 			base.WriteString(colorDim)
@@ -354,7 +347,7 @@ func formatCollapsedEpicLine(prefix, connector string, showConnector bool, id, t
 	baseWidth := visibleLen(baseStr) + visibleLen(titleSep)
 
 	content := title + " " + countStr
-	maxContent := idStart - minGap - baseWidth
+	maxContent := termWidth - baseWidth
 	if maxContent < 0 {
 		maxContent = 0
 	}
@@ -374,39 +367,13 @@ func formatCollapsedEpicLine(prefix, connector string, showConnector bool, id, t
 	sb.WriteString(baseStr)
 	sb.WriteString(content)
 
-	padding := idStart - visibleLen(sb.String())
-	if padding < 0 {
-		padding = 0
-	}
-	if padding > 0 {
-		sb.WriteString(strings.Repeat(" ", padding))
-	}
-	sb.WriteString(strings.Repeat(" ", minGap))
-
-	if useColor {
-		sb.WriteString(colorReset)
-	}
-	sb.WriteString(id)
-	if useColor {
-		sb.WriteString(colorReset)
-	}
-
 	return sb.String()
 }
 
 // formatTreeLine formats a tree line with optional color.
-// Visual hierarchy: icon → title → @claimer → [blocker column] → ID (right-aligned)
+// Visual hierarchy: ID → tree → icon → title → @claimer → [blocker column]
 // Ensures the line never exceeds termWidth by truncating content as needed.
 func formatTreeLine(prefix, connector string, showConnector bool, icon, id, title string, annotations []string, blockerAnnotation string, task *Task, isReady, isEpic, useColor bool, termWidth int) string {
-	// Layout contract: ids are right-aligned at idStart.
-	minGap := idMinGap
-	rightMargin := idRightMargin
-	idWidth := len(id)
-	idStart := termWidth - rightMargin - idWidth - minGap
-	if idStart < 0 {
-		idStart = 0
-	}
-
 	iconStr := ""
 	if icon != "" {
 		iconStr = icon + " "
@@ -420,8 +387,16 @@ func formatTreeLine(prefix, connector string, showConnector bool, icon, id, titl
 		annotationStr = "  " + strings.Join(annotations, "  ")
 	}
 
-	// Build base prefix (tree + icon).
+	// Build base prefix (ID + tree + icon).
 	var base strings.Builder
+	if useColor && !isEpic {
+		base.WriteString(colorDim)
+	}
+	base.WriteString(id)
+	if useColor {
+		base.WriteString(colorReset)
+	}
+	base.WriteString(strings.Repeat(" ", idContentGap))
 	if showConnector {
 		if useColor {
 			base.WriteString(colorDim)
@@ -449,7 +424,7 @@ func formatTreeLine(prefix, connector string, showConnector bool, icon, id, titl
 	}
 	baseWidth := visibleLen(baseStr) + visibleLen(titleSep)
 
-	maxContent := idStart - minGap - baseWidth
+	maxContent := termWidth - baseWidth
 	if maxContent < 0 {
 		maxContent = 0
 	}
@@ -500,12 +475,12 @@ func formatTreeLine(prefix, connector string, showConnector bool, icon, id, titl
 	var sb strings.Builder
 	sb.WriteString(left.String())
 
-	// Optional blocker annotation within remaining space before ID.
+	// Optional blocker annotation within the remaining terminal width.
 	if blockerAnnotation != "" {
-		available := idStart - minGap - visibleLen(sb.String())
+		available := termWidth - visibleLen(sb.String())
 		if available > 6 {
 			blockerCol := termWidth * 55 / 100
-			maxBlockerStart := idStart - minGap - 1
+			maxBlockerStart := termWidth - 1
 			if blockerCol > maxBlockerStart {
 				blockerCol = maxBlockerStart
 			}
@@ -515,7 +490,7 @@ func formatTreeLine(prefix, connector string, showConnector bool, icon, id, titl
 			} else {
 				sb.WriteString("  ")
 			}
-			maxBlockerLen := idStart - minGap - visibleLen(sb.String())
+			maxBlockerLen := termWidth - visibleLen(sb.String())
 			if maxBlockerLen > 0 {
 				if useColor {
 					sb.WriteString(colorDim)
@@ -530,28 +505,6 @@ func formatTreeLine(prefix, connector string, showConnector bool, icon, id, titl
 				}
 			}
 		}
-	}
-
-	// Pad to ID column and append ID.
-	currentLen := visibleLen(sb.String())
-	padding := idStart - currentLen
-	if padding < 0 {
-		padding = 0
-	}
-	if padding > 0 {
-		sb.WriteString(strings.Repeat(" ", padding))
-	}
-	sb.WriteString(strings.Repeat(" ", minGap))
-	if useColor {
-		if isEpic {
-			sb.WriteString(colorReset)
-		} else {
-			sb.WriteString(colorDim)
-		}
-	}
-	sb.WriteString(id)
-	if useColor {
-		sb.WriteString(colorReset)
 	}
 
 	return sb.String()
