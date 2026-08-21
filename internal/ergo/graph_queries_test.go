@@ -63,6 +63,39 @@ func TestGraphReadinessAndBlockersIncludeEpicDependencies(t *testing.T) {
 	}
 }
 
+func TestPreparedDerivedQueriesMatchLiveQueries(t *testing.T) {
+	graph := &Graph{
+		Tasks: map[string]*Task{
+			"EPIC01": {ID: "EPIC01"},
+			"TASK01": {ID: "TASK01", EpicID: "EPIC01", State: stateTodo},
+			"TASK02": {ID: "TASK02", EpicID: "EPIC01", State: stateFailed},
+			"BLOCK1": {ID: "BLOCK1", State: stateTodo},
+		},
+		Deps: map[string]map[string]struct{}{
+			"TASK01": {"BLOCK1": {}},
+		},
+	}
+	graph.rebuildIndexes()
+
+	wantComplete := graph.IsComplete("EPIC01")
+	wantState := graph.EpicState("EPIC01")
+	wantBlockers := graph.Blockers("TASK01")
+	wantReady := graph.IsReady("TASK01")
+	graph.prepareDerivedQueries()
+
+	if graph.IsComplete("EPIC01") != wantComplete || graph.EpicState("EPIC01") != wantState || graph.IsReady("TASK01") != wantReady {
+		t.Fatal("prepared scalar queries differ from live queries")
+	}
+	gotBlockers := graph.Blockers("TASK01")
+	if !equalStrings(gotBlockers, wantBlockers) {
+		t.Fatalf("prepared blockers = %v, want %v", gotBlockers, wantBlockers)
+	}
+	gotBlockers[0] = "MUTATED"
+	if got := graph.Blockers("TASK01"); !equalStrings(got, wantBlockers) {
+		t.Fatalf("caller mutation changed cached blockers: %v", got)
+	}
+}
+
 func TestGraphPreservesLegacyEmptyEpicExplicitly(t *testing.T) {
 	now := time.Now().UTC()
 	graph, err := replayEvents([]Event{mustNewEvent("new_epic", now, NewTaskEvent{

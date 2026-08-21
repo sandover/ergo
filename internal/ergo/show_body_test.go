@@ -3,6 +3,8 @@ package ergo
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -21,6 +23,25 @@ func TestRenderShowBodyPreservesExactBytes(t *testing.T) {
 				t.Fatalf("body bytes = %q, want %q", got, body)
 			}
 		})
+	}
+}
+
+func TestApplicationShowBodyDoesNotReadJournal(t *testing.T) {
+	app := newTestApplication(t)
+	created, err := app.CreateTask(CreateTaskRequest{Title: "Task", Body: "literal body\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := ergoDir(app.repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, journalFileName), []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := app.ShowBody(ShowBodyRequest(created))
+	if err != nil || outcome.Body != "literal body\n" {
+		t.Fatalf("show body = %#v, %v", outcome, err)
 	}
 }
 

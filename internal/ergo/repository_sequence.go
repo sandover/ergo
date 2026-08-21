@@ -13,7 +13,7 @@ func writeLinkEvents(dir string, opts GlobalOptions, eventType string, edges []s
 	}
 	var changed []sequenceEdge
 	_, err := repository.Update(func(graph *Graph) ([]Event, error) {
-		working := cloneGraph(graph)
+		working := graph
 		events := make([]Event, 0, len(edges))
 		now := time.Now().UTC()
 		for _, edge := range edges {

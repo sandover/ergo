@@ -112,6 +112,11 @@ type Graph struct {
 	reverseDeps      map[string]map[string]struct{}
 	childrenByEpic   map[string][]*Task
 	legacyEmptyEpics map[string]struct{}
+	completeByID     map[string]bool
+	blockersByID     map[string][]string
+	readyByID        map[string]bool
+	epicStateByID    map[string]string
+	derivedCached    bool
 }
 
 type TombstoneInfo struct {

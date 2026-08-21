@@ -11,6 +11,11 @@ func (graph *Graph) rebuildIndexes() {
 	}
 	graph.reverseDeps = make(map[string]map[string]struct{})
 	graph.childrenByEpic = make(map[string][]*Task)
+	graph.completeByID = nil
+	graph.blockersByID = nil
+	graph.readyByID = nil
+	graph.epicStateByID = nil
+	graph.derivedCached = false
 	for from, dependencies := range graph.Deps {
 		for to := range dependencies {
 			if graph.reverseDeps[to] == nil {
@@ -73,19 +78,29 @@ func (graph *Graph) IsEpic(id string) bool {
 }
 
 func (graph *Graph) IsComplete(id string) bool {
+	if graph.derivedCached {
+		return graph.completeByID[id]
+	}
+	return graph.isCompleteUncached(id)
+}
+
+func (graph *Graph) isCompleteUncached(id string) bool {
 	task := graph.Tasks[id]
 	if task == nil {
 		return false
 	}
+	complete := true
 	if !graph.IsEpic(id) {
-		return isFinishedState(task.State)
-	}
-	for _, child := range graph.Children(id) {
-		if !isFinishedState(child.State) {
-			return false
+		complete = isFinishedState(task.State)
+	} else {
+		for _, child := range graph.Children(id) {
+			if !isFinishedState(child.State) {
+				complete = false
+				break
+			}
 		}
 	}
-	return true
+	return complete
 }
 
 func derivedEpicStateForTasks(children []*Task) string {
@@ -116,10 +131,20 @@ func (graph *Graph) EpicState(id string) string {
 	if graph == nil || !graph.IsEpic(id) {
 		return ""
 	}
+	if graph.derivedCached {
+		return graph.epicStateByID[id]
+	}
 	return derivedEpicStateForTasks(graph.Children(id))
 }
 
 func (graph *Graph) Blockers(id string) []string {
+	if graph.derivedCached {
+		return append([]string(nil), graph.blockersByID[id]...)
+	}
+	return graph.blockersUncached(id)
+}
+
+func (graph *Graph) blockersUncached(id string) []string {
 	task := graph.Tasks[id]
 	if task == nil {
 		return nil
@@ -146,12 +171,41 @@ func (graph *Graph) Blockers(id string) []string {
 }
 
 func (graph *Graph) IsReady(id string) bool {
+	if graph.derivedCached {
+		return graph.readyByID[id]
+	}
+	return graph.isReadyUncached(id)
+}
+
+func (graph *Graph) isReadyUncached(id string) bool {
 	task := graph.Tasks[id]
 	return task != nil &&
 		!graph.IsEpic(id) &&
 		task.State == stateTodo &&
 		task.ClaimedBy == "" &&
 		len(graph.Blockers(id)) == 0
+}
+
+// prepareDerivedQueries calculates stable list-time graph projections once.
+// Mutating code never enables this cache, so direct graph changes stay visible.
+func (graph *Graph) prepareDerivedQueries() {
+	graph.completeByID = make(map[string]bool, len(graph.Tasks))
+	graph.blockersByID = make(map[string][]string, len(graph.Tasks))
+	graph.readyByID = make(map[string]bool, len(graph.Tasks))
+	graph.epicStateByID = make(map[string]string)
+	for id := range graph.Tasks {
+		graph.completeByID[id] = graph.isCompleteUncached(id)
+	}
+	graph.derivedCached = true
+	for id := range graph.Tasks {
+		graph.blockersByID[id] = graph.blockersUncached(id)
+	}
+	for id := range graph.Tasks {
+		graph.readyByID[id] = graph.isReadyUncached(id)
+		if graph.IsEpic(id) {
+			graph.epicStateByID[id] = derivedEpicStateForTasks(graph.Children(id))
+		}
+	}
 }
 
 func (graph *Graph) IsBlocked(id string) bool {

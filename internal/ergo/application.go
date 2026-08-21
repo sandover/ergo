@@ -130,7 +130,7 @@ func (a *Application) ShowBody(request ShowBodyRequest) (ShowBodyOutcome, error)
 	if err := repository.Open(a.repository); err != nil {
 		return ShowBodyOutcome{}, classifyRepositoryError(err)
 	}
-	graph, err := repository.View()
+	graph, err := repository.ViewGraph()
 	if err != nil {
 		return ShowBodyOutcome{}, classifyRepositoryError(err)
 	}

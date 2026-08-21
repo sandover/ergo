@@ -39,14 +39,15 @@ func runPrune(dir string, opts GlobalOptions, apply bool) (PrunePlan, error) {
 	}
 	var plan PrunePlan
 	err := withLock(repository.lockPath, repository.opts, func() error {
-		graph, err := repository.load()
+		graph, eventRead, err := repository.loadWithRead()
 		if err != nil {
 			return err
 		}
-		journal, err := repository.loadJournal()
+		journalRead, err := repository.readJournal()
 		if err != nil {
 			return err
 		}
+		journal := journalRead.entries
 		plan = buildPrunePlan(graph)
 		selected := make(map[string]struct{}, len(plan.PrunedIDs))
 		for _, id := range plan.PrunedIDs {
@@ -63,18 +64,14 @@ func runPrune(dir string, opts GlobalOptions, apply bool) (PrunePlan, error) {
 		if !apply || len(plan.PrunedIDs) == 0 {
 			return nil
 		}
-		base := cloneGraph(graph)
-		if len(plan.PrunedIDs) == 0 {
-			return nil
-		}
 		events, err := buildTombstoneEvents(plan.PrunedIDs, "")
 		if err != nil {
 			return err
 		}
-		if _, err := applyTransaction(base, events); err != nil {
+		if _, err := replayEventsOnto(graph, events); err != nil {
 			return err
 		}
-		if err := repository.append(events); err != nil {
+		if err := repository.appendValidated(events, eventRead); err != nil {
 			return err
 		}
 		if err := repository.replaceJournal(retained); err != nil {

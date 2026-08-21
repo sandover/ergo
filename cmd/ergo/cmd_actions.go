@@ -122,7 +122,7 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 		ready, _ := cmd.Flags().GetBool("ready")
 		all, _ := cmd.Flags().GetBool("all")
 		jsonOutput, _ := cmd.Flags().GetBool("json")
-		out, err := app().List(ergo.ListRequest{EpicID: epic, ReadyOnly: ready, ShowAll: all})
+		out, err := app().List(ergo.ListRequest{EpicID: epic, ReadyOnly: ready, ShowAll: all, OmitJournal: jsonOutput})
 		if err == nil {
 			if jsonOutput {
 				return ergo.RenderListJSON(cmd.OutOrStdout(), out)

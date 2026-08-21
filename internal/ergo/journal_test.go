@@ -93,6 +93,34 @@ func TestCompactMigratesLegacyEvidenceOnce(t *testing.T) {
 	}
 }
 
+func TestMergeLegacyJournalReturnsCurrentJournalWithoutCopy(t *testing.T) {
+	entries := []JournalEntry{newJournalEntry("ABCDEF", "created", "", "", time.Now().UTC())}
+	graph := &Graph{Tasks: map[string]*Task{"ABCDEF": {ID: "ABCDEF"}}}
+	merged := mergeLegacyJournal(entries, graph)
+	if len(merged) != 1 || &merged[0] != &entries[0] {
+		t.Fatal("current journal took the legacy merge and sort path")
+	}
+}
+
+func TestHydrateGraphEvidenceKeepsNewestFirstInLinearPass(t *testing.T) {
+	now := time.Now().UTC()
+	graph := &Graph{Tasks: map[string]*Task{"ABCDEF": {ID: "ABCDEF"}}}
+	entries := []JournalEntry{
+		newJournalEntry("ABCDEF", "result", "", "first", now),
+		newJournalEntry("ABCDEF", "result", "", "second", now.Add(time.Second)),
+		newJournalEntry("ABCDEF", "done", "", "old message", now.Add(2*time.Second)),
+		newJournalEntry("ABCDEF", "release", "", "new message", now.Add(3*time.Second)),
+	}
+	hydrateGraphEvidence(graph, entries)
+	task := graph.Tasks["ABCDEF"]
+	if task.Results[0].Summary != "second" || task.Results[1].Summary != "first" {
+		t.Fatalf("results = %#v", task.Results)
+	}
+	if task.Messages[0].Text != "new message" || task.Messages[1].Text != "old message" {
+		t.Fatalf("messages = %#v", task.Messages)
+	}
+}
+
 func TestCompactFinishesAfterJournalOnlyReplacement(t *testing.T) {
 	project := t.TempDir()
 	if _, err := InitializeRepository(project); err != nil {

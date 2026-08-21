@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -162,20 +163,32 @@ func marshalJournal(entries []JournalEntry) ([]byte, error) {
 }
 
 func (r *Repository) loadJournal() ([]JournalEntry, error) {
-	read, err := readJournal(r.journalPath)
+	read, err := r.readJournal()
 	if err != nil {
-		return nil, &corruptionError{err: err}
+		return nil, err
 	}
 	return read.entries, nil
 }
 
+func (r *Repository) readJournal() (journalRead, error) {
+	read, err := r.io.readJournal(r.journalPath)
+	if err != nil {
+		return journalRead{}, &corruptionError{err: err}
+	}
+	return read, nil
+}
+
 func (r *Repository) appendJournal(entries []JournalEntry) error {
-	data, err := marshalJournal(entries)
-	if err != nil || len(data) == 0 {
+	read, err := r.readJournal()
+	if err != nil {
 		return err
 	}
-	read, err := readJournal(r.journalPath)
-	if err != nil {
+	return r.appendJournalValidated(entries, read)
+}
+
+func (r *Repository) appendJournalValidated(entries []JournalEntry, read journalRead) error {
+	data, err := marshalJournal(entries)
+	if err != nil || len(data) == 0 {
 		return err
 	}
 	file, err := r.io.openFile(r.journalPath, os.O_CREATE|os.O_RDWR, 0644)
@@ -235,6 +248,17 @@ func latestExplicitResult(entries []JournalEntry, taskID string) *JournalEntry {
 }
 
 func mergeLegacyJournal(entries []JournalEntry, graph *Graph) []JournalEntry {
+	hasLegacyEvidence := false
+	for _, task := range graph.Tasks {
+		if len(task.Messages) > 0 || len(task.Results) > 0 {
+			hasLegacyEvidence = true
+			break
+		}
+	}
+	if !hasLegacyEvidence {
+		return entries
+	}
+
 	merged := append([]JournalEntry(nil), entries...)
 	seen := make(map[string]struct{}, len(merged))
 	for _, entry := range merged {
@@ -314,10 +338,14 @@ func hydrateGraphEvidence(graph *Graph, entries []JournalEntry) {
 				result.MtimeAtAttach = entry.File.Mtime
 				result.GitCommitAtAttach = entry.File.GitCommitAtAttach
 			}
-			task.Results = append([]Result{result}, task.Results...)
+			task.Results = append(task.Results, result)
 		} else if entry.Text != "" {
-			task.Messages = append([]Message{{Kind: entry.Kind, Text: entry.Text, CreatedAt: createdAt}}, task.Messages...)
+			task.Messages = append(task.Messages, Message{Kind: entry.Kind, Text: entry.Text, CreatedAt: createdAt})
 		}
+	}
+	for _, task := range graph.Tasks {
+		slices.Reverse(task.Results)
+		slices.Reverse(task.Messages)
 	}
 }
 

@@ -15,7 +15,7 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 
 	var out bulkCreateOutput
 	if _, err := repository.UpdateWithJournal(func(graph *Graph) ([]Event, []JournalEntry, error) {
-		working := cloneGraph(graph)
+		working := graph
 		workingIDs := make(map[string]*Task, len(working.Tasks)+len(tasks)+1)
 		for id, task := range working.Tasks {
 			workingIDs[id] = task

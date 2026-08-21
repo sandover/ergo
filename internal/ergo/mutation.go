@@ -48,7 +48,7 @@ func applyTaskMutation(dir string, opts RepositoryOptions, id string, mutation t
 	}
 	var outcome mutationOutcome
 
-	update, err := repository.UpdateWithJournal(func(graph *Graph) ([]Event, []JournalEntry, error) {
+	build := func(graph *Graph) ([]Event, []JournalEntry, error) {
 		if _, ok := graph.Tombstones[id]; ok {
 			return nil, nil, classified(ErrorNotFound, prunedErr(id))
 		}
@@ -97,7 +97,18 @@ func applyTaskMutation(dir string, opts RepositoryOptions, id string, mutation t
 			outcome.ChangedFields = append(outcome.ChangedFields, "message")
 		}
 		return events, journal, nil
-	})
+	}
+
+	var update UpdateOutcome
+	var err error
+	if isAutomaticJournalKind(mutation.Kind) || mutation.MessageSet {
+		update, err = repository.UpdateWithJournal(build)
+	} else {
+		update, err = repository.Update(func(graph *Graph) ([]Event, error) {
+			events, _, err := build(graph)
+			return events, err
+		})
+	}
 	if err == nil {
 		outcome.Graph = update.Graph
 		outcome.Journal = update.Journal

@@ -2,7 +2,7 @@
 // Exports: Repository.
 // Role: Stable persistence boundary used by application commands.
 // Invariants: A repository has exactly one selected supported log path.
-// Notes: The update seam retains standalone events until transaction records land.
+// Notes: The I/O seam lets tests prove one validated read feeds each append.
 package ergo
 
 import (
@@ -84,15 +84,19 @@ func InitializeRepository(dir string) (InitializeOutcome, error) {
 // persistence tests must be able to fail deterministically. Production code
 // uses the operating-system implementations below.
 type repositoryIO struct {
-	openFile  func(string, int, os.FileMode) (*os.File, error)
-	write     func(*os.File, []byte) (int, error)
-	sync      func(*os.File) error
-	postWrite func() error
+	inspectEvents func(string) (eventLogRead, error)
+	readJournal   func(string) (journalRead, error)
+	openFile      func(string, int, os.FileMode) (*os.File, error)
+	write         func(*os.File, []byte) (int, error)
+	sync          func(*os.File) error
+	postWrite     func() error
 }
 
 func systemRepositoryIO() repositoryIO {
 	return repositoryIO{
-		openFile: os.OpenFile,
+		inspectEvents: inspectEventLog,
+		readJournal:   readJournal,
+		openFile:      os.OpenFile,
 		write: func(file *os.File, data []byte) (int, error) {
 			return file.Write(data)
 		},
@@ -119,7 +123,7 @@ func (r *Repository) openAt(dir string, opts GlobalOptions, io repositoryIO) err
 	if err != nil {
 		return err
 	}
-	if io.openFile == nil || io.write == nil || io.sync == nil || io.postWrite == nil {
+	if io.inspectEvents == nil || io.readJournal == nil || io.openFile == nil || io.write == nil || io.sync == nil || io.postWrite == nil {
 		return errors.New("repository I/O is incomplete")
 	}
 	r.dir = dir
@@ -153,6 +157,21 @@ func (r *Repository) View() (*Graph, error) {
 	return graph, err
 }
 
+// ViewGraph loads only current task and dependency state. Callers that render
+// journal evidence must use View or ViewWithJournal instead.
+func (r *Repository) ViewGraph() (*Graph, error) {
+	if r == nil || r.eventsPath == "" {
+		return nil, errors.New("repository is not open")
+	}
+	var graph *Graph
+	err := withLock(r.lockPath, r.opts, func() error {
+		var err error
+		graph, err = r.load()
+		return err
+	})
+	return graph, err
+}
+
 func (r *Repository) ViewWithJournal() (*Graph, []JournalEntry, error) {
 	if r == nil || r.eventsPath == "" {
 		return nil, nil, errors.New("repository is not open")
@@ -180,10 +199,31 @@ func (r *Repository) ViewWithJournal() (*Graph, []JournalEntry, error) {
 // against the locked snapshot; the pure reducer validates its resulting graph
 // before the transaction is appended.
 func (r *Repository) Update(fn func(*Graph) ([]Event, error)) (UpdateOutcome, error) {
-	return r.UpdateWithJournal(func(graph *Graph) ([]Event, []JournalEntry, error) {
-		events, err := fn(graph)
-		return events, nil, err
+	if r == nil || r.eventsPath == "" {
+		return UpdateOutcome{}, errors.New("repository is not open")
+	}
+	var outcome UpdateOutcome
+	err := withLock(r.lockPath, r.opts, func() error {
+		graph, eventRead, err := r.loadWithRead()
+		if err != nil {
+			return err
+		}
+		working := cloneGraph(graph)
+		events, err := fn(working)
+		if err != nil {
+			return err
+		}
+		candidate, err := replayEventsOnto(graph, events)
+		if err != nil {
+			return err
+		}
+		if err := r.appendValidated(events, eventRead); err != nil {
+			return err
+		}
+		outcome.Graph = candidate
+		return nil
 	})
+	return outcome, err
 }
 
 // UpdateWithJournal writes validated graph state before its journal side effect
@@ -194,30 +234,31 @@ func (r *Repository) UpdateWithJournal(fn func(*Graph) ([]Event, []JournalEntry,
 	}
 	var outcome UpdateOutcome
 	err := withLock(r.lockPath, r.opts, func() error {
-		graph, err := r.load()
+		graph, eventRead, err := r.loadWithRead()
 		if err != nil {
 			return err
 		}
-		existingJournal, err := r.loadJournal()
+		journalRead, err := r.readJournal()
 		if err != nil {
 			return err
 		}
+		existingJournal := journalRead.entries
 		existingJournal = mergeLegacyJournal(existingJournal, graph)
 		hydrateGraphEvidence(graph, existingJournal)
-		base := cloneGraph(graph)
-		events, journal, err := fn(graph)
+		working := cloneGraph(graph)
+		events, journal, err := fn(working)
 		if err != nil {
 			return err
 		}
-		candidate, err := applyTransaction(base, events)
+		candidate, err := replayEventsOnto(graph, events)
 		if err != nil {
 			return err
 		}
-		if err := r.append(events); err != nil {
+		if err := r.appendValidated(events, eventRead); err != nil {
 			return err
 		}
 		outcome.Graph = candidate
-		if err := r.appendJournal(journal); err != nil {
+		if err := r.appendJournalValidated(journal, journalRead); err != nil {
 			return fmt.Errorf("backlog changed, but journal update failed: %w", err)
 		}
 		outcome.Journal = append(existingJournal, journal...)
@@ -277,41 +318,50 @@ func (r *Repository) Dir() string        { return r.dir }
 func (r *Repository) ProjectDir() string { return filepath.Dir(r.dir) }
 
 func (r *Repository) load() (*Graph, error) {
-	read, err := inspectEventLog(r.eventsPath)
+	graph, _, err := r.loadWithRead()
+	return graph, err
+}
+
+func (r *Repository) loadWithRead() (*Graph, eventLogRead, error) {
+	read, err := r.io.inspectEvents(r.eventsPath)
 	if err != nil {
 		var pathError *os.PathError
 		if !errors.As(err, &pathError) {
-			return nil, &corruptionError{err: err}
+			return nil, eventLogRead{}, &corruptionError{err: err}
 		}
-		return nil, err
+		return nil, eventLogRead{}, err
 	}
 	if read.snapshot != nil {
 		graph, err := replayEventsOnto(read.snapshot, read.events)
 		if err != nil {
-			return nil, &corruptionError{err: err}
+			return nil, eventLogRead{}, &corruptionError{err: err}
 		}
-		return graph, nil
+		return graph, read, nil
 	}
 	graph, err := replayEvents(read.events)
 	if err != nil {
-		return nil, &corruptionError{err: err}
+		return nil, eventLogRead{}, &corruptionError{err: err}
 	}
-	return graph, nil
+	return graph, read, nil
 }
 
-func (r *Repository) append(events []Event) error {
+func (r *Repository) appendValidated(events []Event, read eventLogRead) error {
 	data, err := marshalTransaction(events)
 	if err != nil || len(data) == 0 {
 		return err
 	}
-	return appendTransaction(r.eventsPath, data, r.io)
+	return appendTransactionValidated(r.eventsPath, data, read, r.io)
 }
 
 func appendTransaction(path string, transaction []byte, io repositoryIO) error {
-	read, err := inspectEventLog(path)
+	read, err := io.inspectEvents(path)
 	if err != nil {
 		return err
 	}
+	return appendTransactionValidated(path, transaction, read, io)
+}
+
+func appendTransactionValidated(path string, transaction []byte, read eventLogRead, io repositoryIO) error {
 	file, err := io.openFile(path, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		return err

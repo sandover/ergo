@@ -26,10 +26,17 @@ func (a *Application) List(request ListRequest) (ListOutcome, error) {
 	if err := repository.Open(a.repository); err != nil {
 		return ListOutcome{}, classifyRepositoryError(err)
 	}
-	graph, err := repository.View()
+	var graph *Graph
+	var err error
+	if request.OmitJournal {
+		graph, err = repository.ViewGraph()
+	} else {
+		graph, err = repository.View()
+	}
 	if err != nil {
 		return ListOutcome{}, classifyRepositoryError(err)
 	}
+	graph.prepareDerivedQueries()
 	if request.EpicID != "" {
 		epic := graph.Tasks[request.EpicID]
 		if epic == nil || !graph.IsEpic(epic.ID) {

@@ -115,6 +115,21 @@ func TestRepositoryUpdateReturnsPreappliedCandidateWithoutReload(t *testing.T) {
 	}
 }
 
+func TestRepositoryUpdateKeepsCallbackMutationOutOfCandidate(t *testing.T) {
+	repository, _ := newInjectedRepository(t, systemRepositoryIO())
+	event := repositoryTestTaskEvent(t, "CAND01")
+	outcome, err := repository.Update(func(graph *Graph) ([]Event, error) {
+		graph.Tasks["LEAK01"] = &Task{ID: "LEAK01", State: stateTodo}
+		return []Event{event}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Graph.Tasks["LEAK01"] != nil {
+		t.Fatal("callback-only mutation leaked into the validated candidate")
+	}
+}
+
 func TestRepositoryUpdateRejectsInvalidBatchBeforeWrite(t *testing.T) {
 	repository, path := newInjectedRepository(t, systemRepositoryIO())
 	before, err := os.ReadFile(path)
@@ -263,4 +278,103 @@ func newInjectedRepository(t *testing.T, io repositoryIO) (*Repository, string) 
 		t.Fatal(err)
 	}
 	return repository, path
+}
+
+func TestUpdateScansEachLogOnceBeforeAppending(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := InitializeRepository(dir); err != nil {
+		t.Fatal(err)
+	}
+	var repository Repository
+	if err := repository.Open(RepositoryOptions{StartDir: dir}); err != nil {
+		t.Fatal(err)
+	}
+
+	eventReads, journalReads := 0, 0
+	io := systemRepositoryIO()
+	io.inspectEvents = func(path string) (eventLogRead, error) {
+		eventReads++
+		return inspectEventLog(path)
+	}
+	io.readJournal = func(path string) (journalRead, error) {
+		journalReads++
+		return readJournal(path)
+	}
+	repository.io = io
+
+	now := time.Now().UTC()
+	_, err := repository.UpdateWithJournal(func(*Graph) ([]Event, []JournalEntry, error) {
+		event := mustNewEvent("new_task", now, NewTaskEvent{
+			ID: "ABCDEF", UUID: "uuid", State: stateTodo, Title: "Task", CreatedAt: formatTime(now),
+		})
+		journal := newJournalEntry("ABCDEF", "created", "", "", now)
+		return []Event{event}, []JournalEntry{journal}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if eventReads != 1 || journalReads != 1 {
+		t.Fatalf("reads = backlog %d, journal %d; want one each", eventReads, journalReads)
+	}
+}
+
+func TestGraphOnlyReadAndUpdateDoNotReadJournal(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := InitializeRepository(dir); err != nil {
+		t.Fatal(err)
+	}
+	var repository Repository
+	if err := repository.Open(RepositoryOptions{StartDir: dir}); err != nil {
+		t.Fatal(err)
+	}
+	io := systemRepositoryIO()
+	eventReads := 0
+	io.inspectEvents = func(path string) (eventLogRead, error) {
+		eventReads++
+		return inspectEventLog(path)
+	}
+	io.readJournal = func(string) (journalRead, error) {
+		return journalRead{}, errors.New("journal should not be read")
+	}
+	repository.io = io
+
+	if _, err := repository.ViewGraph(); err != nil {
+		t.Fatal(err)
+	}
+	if eventReads != 1 {
+		t.Fatalf("graph-only view read backlog %d times, want 1", eventReads)
+	}
+	eventReads = 0
+	now := time.Now().UTC()
+	if _, err := repository.Update(func(*Graph) ([]Event, error) {
+		return []Event{mustNewEvent("new_task", now, NewTaskEvent{
+			ID: "GRAPH1", UUID: "uuid", State: stateTodo, Title: "Task", CreatedAt: formatTime(now),
+		})}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if eventReads != 1 {
+		t.Fatalf("graph-only update read backlog %d times, want 1", eventReads)
+	}
+}
+
+func TestJournalFreeListIgnoresJournalCorruption(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := InitializeRepository(dir); err != nil {
+		t.Fatal(err)
+	}
+	app := NewApplication(RepositoryOptions{StartDir: dir})
+	if _, err := app.CreateTask(CreateTaskRequest{Title: "Task"}); err != nil {
+		t.Fatal(err)
+	}
+	journalPath := filepath.Join(dir, dataDirName, journalFileName)
+	if err := os.WriteFile(journalPath, []byte("{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.List(ListRequest{OmitJournal: true}); err != nil {
+		t.Fatalf("journal-free list failed: %v", err)
+	}
+	if _, err := app.List(ListRequest{}); err == nil {
+		t.Fatal("evidence-bearing list accepted corrupt journal")
+	}
 }
