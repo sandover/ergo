@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.2] - 2026-08-21
+
+### Changed
+
+- Human-readable list output now puts task IDs in a stable left column, making
+  them easier to scan and copy while preserving the existing tree structure.
+
 ## [5.0.1] - 2026-08-21
 
 ### Fixed
@@ -675,7 +682,8 @@ read that log.
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v5.0.1...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v5.0.2...HEAD
+[5.0.2]: https://github.com/sandover/ergo/compare/v5.0.1...v5.0.2
 [5.0.1]: https://github.com/sandover/ergo/compare/v5.0.0...v5.0.1
 [5.0.0]: https://github.com/sandover/ergo/compare/v4.3.3...v5.0.0
 [4.3.3]: https://github.com/sandover/ergo/compare/v4.3.2...v4.3.3
