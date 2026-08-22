@@ -41,18 +41,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ergo fail <id>` records work that finished without satisfying its objective.
   Failed tasks release dependencies, remain visible as unsuccessful outcomes,
   and can be claimed again for a retry.
-- Epics derive a failed outcome when all children finish and any child failed.
-  Terminal and VS Code views use a red `✗` for failed tasks and epics, and
-  `list --json` exposes the same derived epic state.
+- When every task in an epic has finished, the epic now completes even if some
+  tasks failed. If at least one failed, the epic appears failed too, but it
+  still releases tasks that depend on it. A blocked task still prevents the
+  epic from completing. The terminal, `ergo list --json`, and the VS Code
+  backlog show the same result. Epic state remains calculated from its tasks;
+  Ergo does not store a second copy.
 
 ### Changed
 
 - Lifecycle `-m` text now belongs to the command's journal entry. Result files
   use `ergo result --file`; lifecycle `--result` now returns clean-cutover
   guidance.
-- `compact` migrates legacy messages and results into the journal once, retains
-  every explicit result, and discards superseded automatic history. Prune
-  removes the selected tasks' journal entries and reports the count.
+- When the backlog is compacted, the journal is compacted too. Ergo migrates
+  legacy messages and results once, preserves every explicit result, and
+  removes superseded automatic history. When tasks are pruned, their journal
+  entries are pruned too.
 - Prune treats failed leaves as finished work. Release rejects failed tasks;
   claim resumes them under the same ID.
 
