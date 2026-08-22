@@ -161,19 +161,51 @@ Finish the attempt with the command that states the outcome:
 
 ```sh
 ergo done ABCDEF -m "Implemented and verified"
-ergo result ABCDEF "Captured verification evidence" --file docs/verification.md
 ergo fail ABCDEF -m "The implementation cannot meet the required constraint"
 ergo block ABCDEF -m "Waiting for the staging credential"
 ergo cancel ABCDEF -m "Requirement withdrawn"
 ergo release ABCDEF -m "Ready for another agent"
 ```
 
-Use `done` when the objective succeeded, `fail` when the attempt finished
-unsuccessfully, and `block` when an impediment prevents the attempt from
-finishing. Done and failed tasks both satisfy dependencies. Lifecycle messages
-append to one shared task journal. Results may be recorded in any leaf state and
-refer to existing project-relative files. Lifecycle commands clear the claim
-and never replace the task body.
+Use `done` when the objective succeeded and `block` when an impediment prevents
+the attempt from finishing. Lifecycle commands clear the claim and never
+replace the task body.
+
+### Failed tasks
+
+Use `ergo fail` when the work is finished but the objective was not met:
+
+```sh
+ergo fail ABCDEF -m "The upstream API cannot return the required field"
+```
+
+A failed task:
+
+- satisfies its dependencies because the attempt has finished;
+- remains visible in the backlog as an unsuccessful outcome;
+- can be claimed again under the same task ID when someone is ready to retry it.
+
+An epic finishes when every child task is done, failed, or canceled. A blocked
+task prevents the epic from finishing.
+
+### Task journal
+
+Ergo keeps task history in `.ergo/journal.jsonl`. You can track this file in
+your repository or add it to `.gitignore`.
+
+The journal records task creation, state changes, notes, and results from
+agents. `ergo show <id>` displays both the task and its history.
+
+Use `ergo result` to record as many results as the work requires, without
+changing task state:
+
+```sh
+ergo result ABCDEF "Confirmed the migration preserves all records"
+ergo result ABCDEF "Performance comparison" --file docs/benchmark.md
+```
+
+Results may refer to existing project-relative files. Compacting the backlog
+also compacts its journal. Pruning tasks also removes their journal entries.
 
 Use focused commands to edit existing work:
 
@@ -218,11 +250,10 @@ event batch and append it as one transaction record under that same lock.
 Ready-task selection and claim are one locked update, so concurrent agents
 cannot claim the same task.
 
-The backlog owns current tasks, dependencies, claims, and state. The shared
-journal owns work narrative and results. `ergo show` turns its JSONL records
-into readable Markdown; attached files remain ordinary project files. A project
-may track or ignore the journal. Deleting it loses evidence but leaves backlog
-state intact, and the next journal write recreates it.
+The backlog owns current tasks, dependencies, claims, and state. The journal
+owns work history and results. Deleting the journal loses that history but
+leaves backlog state intact; the next journal write recreates it. Attached
+result files remain ordinary project files.
 
 Run `ergo --help` for the front door and `ergo quickstart` for the complete
 guide. Each command also supports `--help` for syntax and options.
