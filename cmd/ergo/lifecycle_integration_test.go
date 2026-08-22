@@ -40,20 +40,20 @@ func TestLifecycleCommandsFromEveryState(t *testing.T) {
 	}
 }
 
-func TestReleaseLifecycleStates(t *testing.T) {
+func TestOpenLifecycleStates(t *testing.T) {
 	t.Parallel()
-	for _, source := range []string{"todo", "doing", "blocked", "error"} {
+	for _, source := range []string{"todo", "doing", "blocked"} {
 		t.Run(source, func(t *testing.T) {
 			t.Parallel()
 			dir := setupErgo(t)
 			id := createLifecycleTask(t, dir)
 			putLifecycleTaskInState(t, dir, id, source)
-			stdout, stderr, code := runErgo(t, dir, "", "release", id)
+			stdout, stderr, code := runErgo(t, dir, "", "open", id)
 			if code != 0 {
-				t.Fatalf("release failed: %s", stderr)
+				t.Fatalf("open failed: %s", stderr)
 			}
 			if !strings.Contains(stdout, id+" - Lifecycle task\n") || !strings.Contains(stdout, "State: todo\n") {
-				t.Fatalf("release output = %q", stdout)
+				t.Fatalf("open output = %q", stdout)
 			}
 		})
 	}
@@ -63,11 +63,30 @@ func TestReleaseLifecycleStates(t *testing.T) {
 			dir := setupErgo(t)
 			id := createLifecycleTask(t, dir)
 			putLifecycleTaskInState(t, dir, id, source)
-			_, stderr, code := runErgo(t, dir, "", "release", id)
-			if code == 0 || !strings.Contains(stderr, "release cannot apply") {
-				t.Fatalf("expected release rejection, code=%d stderr=%q", code, stderr)
+			_, stderr, code := runErgo(t, dir, "", "open", id)
+			if code == 0 || !strings.Contains(stderr, "open cannot apply") {
+				t.Fatalf("expected open rejection, code=%d stderr=%q", code, stderr)
 			}
 		})
+	}
+}
+
+func TestDraftRequiresOpenBeforeClaim(t *testing.T) {
+	t.Parallel()
+	dir := setupErgo(t)
+	stdout, stderr, code := runNewTask(t, dir, "Staged task", "--draft")
+	if code != 0 {
+		t.Fatalf("draft create failed: %s", stderr)
+	}
+	id := strings.TrimSpace(stdout)
+	if _, stderr, code = runErgo(t, dir, "", "claim", id, "--agent", "agent@local"); code == 0 || !strings.Contains(stderr, "use open "+id+" first") {
+		t.Fatalf("draft claim was not rejected: code=%d stderr=%q", code, stderr)
+	}
+	if _, stderr, code = runErgo(t, dir, "", "open", id); code != 0 {
+		t.Fatalf("open draft failed: %s", stderr)
+	}
+	if _, stderr, code = runErgo(t, dir, "", "claim", id, "--agent", "agent@local"); code != 0 {
+		t.Fatalf("claim after open failed: %s", stderr)
 	}
 }
 
@@ -102,7 +121,7 @@ func TestLifecycleReceiptNamesClaimChangesAndNewlyReadyWork(t *testing.T) {
 
 func TestLifecycleMessageCardinality(t *testing.T) {
 	t.Parallel()
-	for _, verb := range []string{"done", "fail", "block", "cancel", "release"} {
+	for _, verb := range []string{"done", "fail", "block", "cancel", "open"} {
 		for _, messages := range [][]string{nil, {"one note"}, {"first note", "second note"}} {
 			name := verb + "-" + string(rune('0'+len(messages)))
 			t.Run(name, func(t *testing.T) {
@@ -120,6 +139,12 @@ func TestLifecycleMessageCardinality(t *testing.T) {
 				if len(messages) == 0 {
 					if len(logged) != 0 {
 						t.Fatalf("unexpected messages: %#v", logged)
+					}
+					return
+				}
+				if verb == "open" {
+					if len(logged) != 0 {
+						t.Fatalf("idempotent open wrote messages: %#v", logged)
 					}
 					return
 				}
@@ -218,7 +243,7 @@ func TestDoneLifecycleMessagesBodyAndResults(t *testing.T) {
 
 func TestClaimResumesEverySpecificState(t *testing.T) {
 	t.Parallel()
-	for _, source := range []string{"todo", "blocked", "done", "failed", "canceled", "error"} {
+	for _, source := range []string{"todo", "done", "failed", "canceled", "error"} {
 		t.Run(source, func(t *testing.T) {
 			dir := setupErgo(t)
 			id := createLifecycleTask(t, dir)
@@ -276,11 +301,11 @@ func TestFailedLifecyclePublicJourney(t *testing.T) {
 		t.Fatalf("JSON list lacks failed state: stdout=%q stderr=%q", stdout, stderr)
 	}
 	before := countEventLines(t, dir)
-	if _, stderr, code = runErgo(t, dir, "", "release", id); code == 0 || !strings.Contains(stderr, "release cannot apply") {
-		t.Fatalf("release failed task: code=%d stderr=%q", code, stderr)
+	if _, stderr, code = runErgo(t, dir, "", "open", id); code == 0 || !strings.Contains(stderr, "open cannot apply") {
+		t.Fatalf("open failed task: code=%d stderr=%q", code, stderr)
 	}
 	if after := countEventLines(t, dir); after != before {
-		t.Fatalf("rejected release wrote events: before=%d after=%d", before, after)
+		t.Fatalf("rejected open wrote events: before=%d after=%d", before, after)
 	}
 	if _, stderr, code = runErgo(t, dir, "", "claim", id, "--agent", "retry@local"); code != 0 {
 		t.Fatalf("retry claim: %s", stderr)

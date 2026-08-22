@@ -320,7 +320,7 @@ func writeAllWith(w *os.File, data []byte, write func(*os.File, []byte) (int, er
 	return nil
 }
 
-func createTask(dir string, opts RepositoryOptions, epicID string, title, body string) (createOutput, error) {
+func createTask(dir string, opts RepositoryOptions, epicID string, title, body string, draft bool) (createOutput, error) {
 	var repository Repository
 	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
 		return createOutput{}, err
@@ -338,14 +338,8 @@ func createTask(dir string, opts RepositoryOptions, epicID string, title, body s
 			// Reject first-child assignment to a dirty leaf: once promoted to a
 			// container, leaf-only semantics (state/claim/results) no longer apply.
 			if !graph.IsEpic(epic.ID) {
-				if epic.ClaimedBy != "" {
-					return nil, nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: task is claimed by %q", epicID, epic.ClaimedBy))
-				}
-				if epic.State != stateTodo {
-					return nil, nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: state is %q (must be todo to promote to epic)", epicID, epic.State))
-				}
-				if len(epic.Results) > 0 {
-					return nil, nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: task has results attached", epicID))
+				if err := validateEpicPromotion(epic); err != nil {
+					return nil, nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: %w", epicID, err))
 				}
 			}
 		}
@@ -359,11 +353,15 @@ func createTask(dir string, opts RepositoryOptions, epicID string, title, body s
 		}
 		now := time.Now().UTC()
 		createdAt := formatTime(now)
+		state := stateTodo
+		if draft {
+			state = stateDraft
+		}
 		payload := NewTaskEvent{
 			ID:        id,
 			UUID:      uuid,
 			EpicID:    epicID,
-			State:     stateTodo,
+			State:     state,
 			Title:     title,
 			Body:      body,
 			CreatedAt: createdAt,

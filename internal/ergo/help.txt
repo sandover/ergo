@@ -23,8 +23,8 @@ attempt finished without satisfying the objective.
 
 {{HEADER}}COMMANDS{{RESET}}
   init [dir]                                  initialize an Ergo backlog
-  new task "<title>" [--epic <id>]            create a task; optional stdin sets its body
-  new epic "<title>" --file <path>            create an epic and tasks; optional stdin sets epic body
+  new task "<title>" [--epic <id>] [--draft]  create a task; optional stdin sets its body
+  new epic "<title>" --file <path> [--draft]  create an epic and tasks; optional stdin sets epic body
   list [--epic <id>] [--ready | --all] [--json]  list work
   show <id> [--body]                          show a task or epic, or only its body
   claim [<id>] --agent <identity>             claim chosen or ready work
@@ -32,7 +32,7 @@ attempt finished without satisfying the objective.
   fail <id> [-m <text>]                       finish a task unsuccessfully
   block <id> [-m <text>]                      record an impediment
   cancel <id> [-m <text>]                     cancel a task
-  release <id> [-m <text>]                    return unfinished work to todo
+  open <id> [-m <text>]                       return draft or blocked work to todo
   result <id> "<text>" [--file <path>]        record a result without changing state
   title <id> <title>                          replace a title
   body <id> [--append]                        replace or append to a body from stdin

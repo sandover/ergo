@@ -103,7 +103,7 @@ func BenchmarkTombstoneList1000(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		graph.prepareDerivedQueries()
 		roots := buildListRoots(graph, true, false, "")
-		renderTreeView(io.Discard, roots, graph, ".", false)
+		renderTreeView(io.Discard, roots, graph, false)
 	}
 }
 

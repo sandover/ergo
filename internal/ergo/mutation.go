@@ -57,7 +57,7 @@ func applyTaskMutation(dir string, opts RepositoryOptions, id string, mutation t
 			return nil, nil, classified(ErrorNotFound, fmt.Errorf("unknown task id %s", id))
 		}
 		if len(mutation.AllowedStates) > 0 && !containsString(mutation.AllowedStates, task.State) {
-			return nil, nil, classified(ErrorConflict, fmt.Errorf("%s cannot apply to state=%s", mutation.Kind, task.State))
+			return nil, nil, classified(ErrorConflict, lifecycleStateError(mutation.Kind, id, task.State))
 		}
 		if mutation.ClaimConflict && task.ClaimedBy != "" && task.ClaimedBy != mutation.Claim {
 			return nil, nil, classified(ErrorConflict, fmt.Errorf("task %s is already claimed by %s", id, task.ClaimedBy))
@@ -77,6 +77,10 @@ func applyTaskMutation(dir string, opts RepositoryOptions, id string, mutation t
 			if mutation.MessageSet {
 				return nil, nil, classified(ErrorConflict, errors.New("epics cannot have lifecycle messages"))
 			}
+		}
+		if mutation.Kind == "open" && task.State == stateTodo {
+			mutation.MessageSet = false
+			mutation.MessageText = ""
 		}
 
 		now := time.Now().UTC()
@@ -236,12 +240,27 @@ func mutationPostcondition(task *Task, mutation taskMutation, agentID string) (s
 
 func validateForwardState(state string) error {
 	switch state {
-	case stateTodo, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled:
+	case stateTodo, stateDraft, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled:
 		return nil
 	case stateError:
-		return errors.New("state=error is legacy-only; use block or release")
+		return errors.New("state=error is legacy-only; use block or open")
 	default:
 		return fmt.Errorf("invalid state: %s", state)
+	}
+}
+
+func lifecycleStateError(kind, id, state string) error {
+	switch {
+	case kind == "claim" && (state == stateDraft || state == stateBlocked):
+		return fmt.Errorf("claim cannot apply to state=%s; use open %s first", state, id)
+	case kind == "open" && (state == stateDone || state == stateFailed || state == stateCanceled):
+		return fmt.Errorf("open cannot apply to state=%s; use claim %s --agent <identity> to retry", state, id)
+	case kind == "open" && state == stateError:
+		return fmt.Errorf("open cannot apply to state=error; use claim %s --agent <identity> to recover legacy work", id)
+	case state == stateDraft && kind != "cancel" && kind != "open":
+		return fmt.Errorf("%s cannot apply to state=draft; use open %s first", kind, id)
+	default:
+		return fmt.Errorf("%s cannot apply to state=%s", kind, state)
 	}
 }
 

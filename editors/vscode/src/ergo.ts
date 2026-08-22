@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 
-export const minimumErgoVersion = "4.2.0";
+export const minimumErgoVersion = "6.0.0";
 
 export class ErgoCommandError extends Error {
   constructor(message: string) {

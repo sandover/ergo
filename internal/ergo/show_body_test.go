@@ -134,7 +134,7 @@ func TestRenderClaimContractUnaffectedByBodyProjection(t *testing.T) {
 	for _, want := range []string{
 		`id: "ABC123"`, `claimed_by: "agent"`, "# Claimed", "## Next",
 		"- `ergo done ABC123`", "- `ergo block ABC123`",
-		"- `ergo cancel ABC123`", "- `ergo release ABC123`",
+		"- `ergo cancel ABC123`", "- `ergo open ABC123`",
 	} {
 		if !bytes.Contains(output.Bytes(), []byte(want)) {
 			t.Fatalf("claim output missing %q:\n%s", want, text)

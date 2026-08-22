@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.0] - 2026-08-21
+
+### Added
+
+- Draft staging lets planners create visible task graphs that agents cannot
+  claim before placement, dependency, and body setup finish. Use
+  `ergo new task --draft` or `ergo new epic --draft`; draft work appears as `◌`.
+- `ergo open <id>` provides the explicit handoff from staged planning to
+  claimable work.
+
+### Changed
+
+- `ergo open <id>` moves draft, doing, or blocked work to unclaimed `todo`.
+  Opening `todo` is an idempotent no-op. Open each leaf after graph construction
+  finishes, then let ordinary dependency readiness control claims.
+- `ergo list` stays focused on state, ownership, blockers, and readiness. Result
+  evidence remains in the shared journal and the `ergo show <id>` projection.
+- Human-readable list content caps at 120 columns on ultrawide terminals while
+  preserving the physical width of narrower terminals.
+
+### Removed
+
+- **Breaking:** remove `ergo release`. Migrate `release` to `open`; migrate a
+  blocked direct claim to `open` followed by `claim`. Finished work still
+  retries through a specific claim, and historical release journal entries
+  remain readable.
+- Older Ergo binaries cannot read a backlog after the first draft record.
+  Upgrade the CLI used by every agent before enabling staged creation.
+
+### Upgrade from v5
+
+| V5 intent | V6 command |
+| --- | --- |
+| Create work that needs several setup commands | `ergo new task <title> --draft` or `ergo new epic <title> --file <path> --draft` |
+| Make staged work claimable | `ergo open <id>` after placement and dependency setup |
+| Return doing or blocked work to todo | `ergo open <id>` |
+| Resume finished work | `ergo claim <id> --agent <identity>` |
+| Return a blocked task before retrying | `ergo open <id>`, then `ergo claim <id> --agent <identity>` |
+
+### Compatibility
+
+- Existing v5 backlogs remain readable, including historical `release` journal
+  entries and legacy `error` or claimed-blocked states.
+- New draft records require Ergo 6.0.0 or later. Upgrade every agent's CLI
+  before enabling staged creation in a shared repository.
+- The terminal, JSON listing, `show`, and Ergo Backlog extension use one
+  interpretation of draft, readiness, lifecycle, and derived epic state.
+
 ## [5.0.3] - 2026-08-21
 
 ### Changed
@@ -694,7 +742,8 @@ read that log.
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v5.0.3...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v6.0.0...HEAD
+[6.0.0]: https://github.com/sandover/ergo/compare/v5.0.3...v6.0.0
 [5.0.3]: https://github.com/sandover/ergo/compare/v5.0.2...v5.0.3
 [5.0.2]: https://github.com/sandover/ergo/compare/v5.0.1...v5.0.2
 [5.0.1]: https://github.com/sandover/ergo/compare/v5.0.0...v5.0.1

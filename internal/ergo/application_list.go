@@ -10,7 +10,6 @@ type ListOutcome struct {
 	Options      ListOptions
 	Graph        *Graph
 	Roots        []*treeNode
-	ProjectDir   string
 	AllTasks     []*Task
 	ActiveTasks  []*Task
 	ReadyTasks   []*Task
@@ -46,8 +45,8 @@ func (a *Application) List(request ListRequest) (ListOutcome, error) {
 	all := collectNonContainerTasks(graph)
 	outcome := ListOutcome{
 		Options: request, Graph: graph,
-		Roots:      buildListRoots(graph, request.ShowAll, request.ReadyOnly, request.EpicID),
-		ProjectDir: repository.ProjectDir(), AllTasks: all,
+		Roots:       buildListRoots(graph, request.ShowAll, request.ReadyOnly, request.EpicID),
+		AllTasks:    all,
 		ActiveTasks: filterActiveTasks(all), ReadyTasks: filterReadyTasks(all, graph),
 	}
 	if request.EpicID != "" {

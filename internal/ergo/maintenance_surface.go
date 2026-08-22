@@ -83,7 +83,7 @@ func printPrunePreview(w io.Writer, items []PruneItem, useColor bool, termWidth 
 	if useColor {
 		fmt.Fprint(w, colorDim)
 	}
-	fmt.Fprintln(w, "This is a preview. Active work (todo, doing, blocked, error) is never pruned.")
+	fmt.Fprintln(w, "This is a preview. Active work (draft, todo, doing, blocked, error) is never pruned.")
 	if useColor {
 		fmt.Fprint(w, colorReset)
 	}

@@ -43,7 +43,7 @@ func replayTarget(target string) string {
 // into the in-memory task model.
 func isReadableState(state string) bool {
 	switch state {
-	case stateTodo, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled, stateError:
+	case stateTodo, stateDraft, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled, stateError:
 		return true
 	default:
 		return false

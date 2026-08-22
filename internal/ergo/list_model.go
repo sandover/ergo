@@ -21,12 +21,17 @@ const (
 	// Layout contract: every task ID starts in column one, followed by a fixed
 	// gap before tree structure and presentation. Width math uses visibleLen.
 	idContentGap = 2
+
+	// Keep the tree readable on ultrawide terminals; narrower terminals still
+	// determine their own available width.
+	maxListWidth = 120
 )
 
 // State icons
 const (
 	iconDone     = "✓"
 	iconReady    = "○"
+	iconDraft    = "◌"
 	iconWaiting  = "◷"
 	iconDoing    = "↻"
 	iconBlocked  = "!"
@@ -268,6 +273,7 @@ func countTasks(nodes []*treeNode) int {
 // taskStats holds aggregate counts for the summary line.
 type taskStats struct {
 	ready      int
+	draft      int
 	inProgress int
 	blocked    int
 	waiting    int
@@ -282,6 +288,7 @@ type summaryBucket int
 
 const (
 	summaryReady summaryBucket = iota
+	summaryDraft
 	summaryInProgress
 	summaryBlocked
 	summaryWaiting
@@ -317,6 +324,8 @@ func computeStatsForTasks(tasks []*Task, graph *Graph) taskStats {
 			} else {
 				stats.waiting++
 			}
+		case stateDraft:
+			stats.draft++
 		default:
 			stats.blocked++
 		}

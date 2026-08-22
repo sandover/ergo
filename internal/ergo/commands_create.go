@@ -2,7 +2,8 @@
 // Exports: RunInit, RunNewTask, RunNewEpic.
 // Role: Command layer for creation workflows and repo initialization.
 // Invariants: Writes are append-only under lock; create is safe under concurrent writers.
-// Notes: Titles are positional, bodies are optional stdin, and new tasks are todo.
+// Notes: Titles are positional, bodies are optional stdin, and draft creation
+// keeps new work unavailable until a planner explicitly opens it.
 package ergo
 
 import (

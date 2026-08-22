@@ -96,7 +96,7 @@ func TestFailedEpicUsesFailedPresentation(t *testing.T) {
 	}}
 	graph.rebuildIndexes()
 	var output bytes.Buffer
-	renderTreeView(&output, buildTree(graph), graph, t.TempDir(), true, 80)
+	renderTreeView(&output, buildTree(graph), graph, true, 80)
 	if got := output.String(); !strings.Contains(got, iconFailed) || !strings.Contains(got, colorRed) {
 		t.Fatalf("failed epic lacks red failed presentation: %q", got)
 	}
@@ -227,7 +227,7 @@ func TestHideDoneEpicsInActiveView(t *testing.T) {
 
 	var buf bytes.Buffer
 	roots := buildListRoots(graph, false, false, "")
-	renderTreeView(&buf, roots, graph, "/repo", false)
+	renderTreeView(&buf, roots, graph, false)
 
 	output := buf.String()
 	if strings.Contains(output, "E1") {
@@ -248,7 +248,7 @@ func TestRenderTreeRootRowsNoConnectors(t *testing.T) {
 
 	var buf bytes.Buffer
 	roots := buildListRoots(graph, false, false, "")
-	renderTreeView(&buf, roots, graph, "/repo", false)
+	renderTreeView(&buf, roots, graph, false)
 
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
 	findLine := func(needle string) string {
@@ -298,7 +298,7 @@ func TestRenderTreeUsesLiteralAgentStatuses(t *testing.T) {
 	}
 	roots := buildListRoots(graph, false, false, "")
 	var buf bytes.Buffer
-	renderTreeView(&buf, roots, graph, "/repo", false)
+	renderTreeView(&buf, roots, graph, false)
 	output := buf.String()
 	if strings.Contains(output, "[ready]") || strings.Contains(output, "[doing]") || !strings.Contains(output, "@agent@host") {
 		t.Fatalf("list output has noisy labels or lacks terse claim context: %s", output)
@@ -462,5 +462,26 @@ func TestFormatCollapsedEpicLineStartsWithID(t *testing.T) {
 	}
 	if visibleLen(line) > 80 {
 		t.Fatalf("visible line length %d exceeds terminal width: %q", visibleLen(line), line)
+	}
+}
+
+func TestRenderTreeViewCapsWideTerminalContent(t *testing.T) {
+	graph := &Graph{
+		Tasks: map[string]*Task{
+			"ROOT01": {ID: "ROOT01", Title: "A task with a long title that should be clipped instead of stretching across an ultrawide terminal", State: stateDone, Results: []Result{{Path: "notes/" + strings.Repeat("result-", 40) + ".md"}}},
+		},
+		Deps: map[string]map[string]struct{}{},
+	}
+	roots := []*treeNode{{task: graph.Tasks["ROOT01"]}}
+
+	var output strings.Builder
+	renderTreeView(&output, roots, graph, false, 240)
+	for _, line := range strings.Split(strings.TrimSuffix(output.String(), "\n"), "\n") {
+		if got := visibleLen(line); got > maxListWidth {
+			t.Fatalf("wide-terminal line length %d exceeds cap %d: %q", got, maxListWidth, line)
+		}
+	}
+	if strings.Contains(output.String(), "file://") || strings.Contains(output.String(), "→") {
+		t.Fatalf("list should not render attached results inline: %q", output.String())
 	}
 }

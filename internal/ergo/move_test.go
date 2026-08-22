@@ -27,6 +27,7 @@ func TestMovePlacementValidation(t *testing.T) {
 		wantErr string
 	}{
 		{"promote clean root", func(*Graph) {}, "DEST01", ""},
+		{"promote clean draft root", func(g *Graph) { g.Tasks["DEST01"].State = stateDraft }, "DEST01", ""},
 		{"move to root", func(*Graph) {}, "", ""},
 		{"self", func(*Graph) {}, "SOURCE", "itself"},
 		{"missing", func(*Graph) {}, "ABSENT", "unknown epic"},

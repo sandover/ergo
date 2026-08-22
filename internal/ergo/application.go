@@ -44,6 +44,7 @@ type CreateTaskRequest struct {
 	Title  string
 	EpicID string
 	Body   string
+	Draft  bool
 }
 
 type CreateTaskOutcome struct {
@@ -59,7 +60,7 @@ func (a *Application) CreateTask(request CreateTaskRequest) (CreateTaskOutcome, 
 	if err != nil {
 		return CreateTaskOutcome{}, classifyRepositoryError(err)
 	}
-	created, err := createTask(dir, a.repository, request.EpicID, title, request.Body)
+	created, err := createTask(dir, a.repository, request.EpicID, title, request.Body, request.Draft)
 	if err != nil {
 		return CreateTaskOutcome{}, classifyRepositoryError(err)
 	}
@@ -237,8 +238,13 @@ func (a *Application) Lifecycle(request LifecycleRequest) (LifecycleOutcome, err
 		Kind: request.Kind, State: targetState, StateSet: true,
 		MessageKind: request.Kind, MessageText: message, MessageSet: messageSet,
 	}
-	if request.Kind == "release" {
-		mutation.AllowedStates = []string{stateTodo, stateDoing, stateBlocked, stateError}
+	switch request.Kind {
+	case "open":
+		mutation.AllowedStates = []string{stateTodo, stateDraft, stateDoing, stateBlocked}
+	case "done", "fail", "block":
+		mutation.AllowedStates = []string{stateTodo, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled, stateError}
+	case "cancel":
+		mutation.AllowedStates = []string{stateTodo, stateDraft, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled, stateError}
 	}
 	mutated, err := applyTaskMutation(dir, a.repository, id, mutation, "")
 	if err != nil {
@@ -246,7 +252,7 @@ func (a *Application) Lifecycle(request LifecycleRequest) (LifecycleOutcome, err
 	}
 	outcome := LifecycleOutcome{
 		Graph: mutated.Graph, Task: mutated.Graph.Tasks[id],
-		ChangedFields: mutated.ChangedFields, MessageSet: messageSet,
+		ChangedFields: mutated.ChangedFields, MessageSet: messageSet && len(mutated.Journal) > 0,
 	}
 	if ready := readyTasks(mutated.Graph); len(ready) > 0 {
 		outcome.Ready = ready[0]
@@ -281,7 +287,7 @@ func (a *Application) Claim(request ClaimRequest) (ClaimOutcome, error) {
 		mutation := taskMutation{
 			Kind: "claim", State: stateDoing, StateSet: true,
 			Claim: agentID, ClaimSet: true, ClaimConflict: true,
-			AllowedStates: []string{stateTodo, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled, stateError},
+			AllowedStates: []string{stateTodo, stateDoing, stateDone, stateFailed, stateCanceled, stateError},
 		}
 		mutated, err := applyTaskMutation(dir, a.repository, id, mutation, agentID)
 		if err != nil {

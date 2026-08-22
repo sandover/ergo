@@ -152,7 +152,7 @@ func putTaskInState(t *testing.T, dir, id, state, agent string) (string, string,
 	t.Helper()
 	switch state {
 	case "todo":
-		return runErgo(t, dir, "", "release", id)
+		return runErgo(t, dir, "", "open", id)
 	case "doing":
 		if agent == "" {
 			agent = "fixture@local"
@@ -732,7 +732,7 @@ func TestCommandRegistrationMatchesV4(t *testing.T) {
 	for _, command := range root.Commands() {
 		registered[command.Name()] = true
 	}
-	for _, name := range []string{"claim", "done", "block", "cancel", "release", "title", "body", "move", "sequence", "unsequence"} {
+	for _, name := range []string{"claim", "done", "block", "cancel", "open", "title", "body", "move", "sequence", "unsequence"} {
 		if !registered[name] {
 			t.Errorf("missing v4 command %s", name)
 		}
@@ -1033,7 +1033,7 @@ func TestRemovedMutationCommandsGiveDirectHints(t *testing.T) {
 		args []string
 		hint string
 	}{
-		{[]string{"set", "ABCDEF", `{}`}, "use claim, done, block, cancel, release, title, body, or move"},
+		{[]string{"set", "ABCDEF", `{}`}, "use claim, done, fail, block, cancel, open, title, body, or move"},
 		{[]string{"reopen", "ABCDEF"}, "use claim <id> --agent <identity> to resume closed work"},
 	} {
 		_, stderr, code := runErgo(t, dir, "", test.args...)
@@ -1764,7 +1764,7 @@ func TestClaimIncludesTaskAndNextCommands(t *testing.T) {
 			t.Fatalf("claim output missing %q: %s", want, stdout)
 		}
 	}
-	for _, verb := range []string{"done", "block", "cancel", "release"} {
+	for _, verb := range []string{"done", "block", "cancel", "open"} {
 		if !strings.Contains(stdout, "`ergo "+verb+" "+taskID+"`") {
 			t.Fatalf("claim output missing %s command: %s", verb, stdout)
 		}
@@ -1788,7 +1788,7 @@ func TestClaimOldestReadyIncludesNextCommands(t *testing.T) {
 	if !strings.HasPrefix(stdout, "---\nid: \""+taskID+"\"\n") {
 		t.Fatalf("claim ID is not in fixed front matter position: %s", stdout)
 	}
-	if !strings.Contains(stdout, "`ergo done "+taskID+"`") || !strings.Contains(stdout, "`ergo release "+taskID+"`") {
+	if !strings.Contains(stdout, "`ergo done "+taskID+"`") || !strings.Contains(stdout, "`ergo open "+taskID+"`") {
 		t.Fatalf("unexpected next commands: %s", stdout)
 	}
 }

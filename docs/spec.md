@@ -18,6 +18,9 @@ A task is ready when it has state `todo` and every direct and inherited
 dependency has finished. A `todo` task with unfinished dependencies is waiting.
 It is not blocked.
 
+`draft` is visible planning work. It is unfinished, never ready, and remains
+unclaimable until `open` moves the leaf to `todo`.
+
 The claim invariant applies to every current state:
 
 ```text
@@ -26,6 +29,7 @@ claimed_by is present if and only if state is doing
 
 | State | Meaning | Claimed | Finished | Default list | Prunable |
 | --- | --- | --- | --- | --- | --- |
+| `draft` | Staged planning work unavailable to agents. | No | No | Yes | No |
 | `todo` | Open work. | No | No | Yes | No |
 | `doing` | One agent owns the work. | Yes | No | Yes | No |
 | `blocked` | An identified impediment prevents completion. | No | No | Yes | No |
@@ -45,8 +49,8 @@ no epic state.
 
 ```text
 init [dir]
-new task "<title>" [--epic <id>]
-new epic "<title>" --file <path>
+new task "<title>" [--epic <id>] [--draft]
+new epic "<title>" --file <path> [--draft]
 list [--epic <id>] [--ready | --all] [--json]
 show <id> [--body]
 claim [<id>] --agent <identity>
@@ -54,7 +58,7 @@ done <id> [-m <message>]
 fail <id> [-m <message>]
 block <id> [-m <message>]
 cancel <id> [-m <message>]
-release <id> [-m <message>]
+open <id> [-m <message>]
 result <id> "<text>" [--file <path>]
 title <id> <title>
 body <id> [--append]
@@ -89,14 +93,14 @@ missing-repository error outside an Ergo project.
 ## Creation
 
 `new task` requires one nonblank positional title. It creates an unclaimed
-`todo` leaf. Optional piped stdin becomes the literal body. No pipe or an empty
-pipe creates an empty body. Successful creation prints only the generated
-six-character ID.
+`todo` leaf, or a visible but unavailable `draft` leaf with `--draft`. Optional
+piped stdin becomes the literal body. No pipe or an empty pipe creates an empty
+body. Successful creation prints only the generated six-character ID.
 
 `--epic <id>` places the new task in an existing epic or promotes a clean root
-`todo` leaf. The promotion candidate must have no claim, children, results, or
-closed state. Unknown, nested, claimed, closed, and result-bearing destinations
-fail.
+`todo` or `draft` leaf. The promotion candidate must have no claim, children,
+or results. Unknown, nested, claimed, closed, and result-bearing destinations
+fail. The same promotion rule applies to `move`.
 
 `new epic` requires one nonblank positional title and a nonempty `--file`. The
 file contains Markdown chunks separated by a line that is exactly `---`. Each
@@ -105,7 +109,8 @@ must be unique within the file. File order creates no dependencies.
 
 Optional piped stdin becomes the literal epic body. Ergo parses and validates
 the full file before it writes one atomic batch. Empty files, malformed chunks,
-and duplicate titles write nothing. Success names the epic and every child and
+and duplicate titles write nothing. `--draft` gives every child the `draft`
+state in that same atomic batch. Success names the epic and every child and
 reports task and dependency counts.
 
 For both creation commands, Ergo reserves a positional JSON object containing
@@ -116,11 +121,12 @@ titles.
 ## Claim and lifecycle
 
 Without an ID, `claim` selects the oldest ready `todo` leaf. With an ID, it may
-resume any readable leaf, including `failed`, even when automatic readiness
-would not select that task. Claim establishes `doing` and the supplied identity
-under one lock. A repeated claim by the same owner is a no-op. A different
-identity conflicts. An automatic claim with no candidate succeeds without a
-mutation.
+resume `todo`, `doing`, `done`, `failed`, or `canceled` work, including failed
+work, even when automatic readiness would not select that task. Draft and
+blocked work must be opened first. Claim establishes `doing` and the supplied
+identity under one lock. A repeated claim by the same owner is a no-op. A
+different identity conflicts. An automatic claim with no candidate succeeds
+without a mutation.
 
 Claim output contains the complete task document followed by exact lifecycle
 commands.
@@ -131,12 +137,14 @@ commands.
 | `fail` | `failed` | Yes | Yes |
 | `block` | `blocked` | No | No |
 | `cancel` | `canceled` | Yes | Yes |
-| `release` | `todo` | No | No |
+| `open` | `todo` | No | No |
 
-`done`, `fail`, `block`, and `cancel` accept every readable leaf state. Each
-command clears the claim. `release` accepts `todo`, `doing`, `blocked`, and
-legacy `error`. It rejects `done`, `failed`, and `canceled`. A specific claim
-can resume failed work under the same task ID.
+`done`, `fail`, and `block` reject draft work; `cancel` and `open` are its only
+lifecycle routes. `open` accepts `draft`, `doing`, `blocked`, and `todo`, clears
+the claim, and treats `todo` as a no-op. It rejects finished work and legacy
+`error`; a specific claim remains the recovery path for legacy error. The
+`release` command is removed, but historical release journal entries remain
+readable.
 
 A repeated lifecycle postcondition without a new message is a no-op. A repeated
 postcondition with a message records another automatic journal entry.
@@ -171,7 +179,7 @@ current Git commit when available. Journal order is file order; timestamps use
 UTC RFC 3339 with nanoseconds.
 
 The allowed automatic kinds are `created`, `claim`, `done`, `fail`, `block`,
-`cancel`, and `release`. Task and epic creation write `created`. A successful
+`cancel`, and `open`. Task and epic creation write `created`. A successful
 state-changing claim or lifecycle command writes its corresponding kind. Reads,
 title and body changes, moves, dependency changes, and true no-ops write
 nothing. Automatic entries may name the responsible agent when Ergo knows it.
@@ -222,8 +230,9 @@ Removing Ergo-added ANSI decoration from colored `show` or `claim` output produc
 the same text as `--color=never`. Ergo decorates only synthesized text. It never
 decorates stored bodies.
 
-`list` prints a compact tree with state icons, terse claim ownership, actionable
-blocker names or counts, and the newest attached result for each visible leaf.
+`list` prints a compact tree with state icons, terse claim ownership, and
+actionable blocker names or counts. Results remain in the journal-backed `show`
+projection rather than appearing inline in the task tree.
 The default list omits `done` and `canceled` work. It includes `failed` work.
 `--all` includes every readable state.
 `--ready` selects ready leaves and conflicts with `--all`. `--epic <id>` selects
@@ -306,10 +315,13 @@ unsupported versions, invalid kinds, and entries without a task ID or valid
 timestamp. Deleting the journal loses evidence but never corrupts or changes
 the backlog.
 
-Ergo stores `failed` in the existing state string and keeps current transaction,
-snapshot, and list JSON versions. Older Ergo binaries may reject a backlog after
-a current binary records `failed`. Ergo adds no dual encoding or automatic
-downgrade.
+Ergo stores `draft` and `failed` in the existing state string and keeps current
+transaction, snapshot, and list JSON versions. Older Ergo binaries may reject a
+backlog after a current binary records `draft`; upgrade all agents before using
+staging. Ergo adds no dual encoding or automatic downgrade. Ergo 6 removes the
+`release` command: migrate `release` to `open`, and migrate a blocked direct
+claim to `open` followed by `claim`. Historical release journal entries remain
+readable.
 
 ## Pruning, compaction, and concurrency
 

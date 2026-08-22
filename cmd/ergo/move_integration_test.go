@@ -88,8 +88,8 @@ func TestMoveRejectsInvalidPlacement(t *testing.T) {
 		if code == 0 || !strings.Contains(stderr, "claimed") {
 			t.Fatalf("dirty destination: code=%d stderr=%q", code, stderr)
 		}
-		if _, stderr, code := runErgo(t, dir, "", "release", destination); code != 0 {
-			t.Fatalf("release destination failed: %s", stderr)
+		if _, stderr, code := runErgo(t, dir, "", "open", destination); code != 0 {
+			t.Fatalf("open destination failed: %s", stderr)
 		}
 		if _, stderr, code := runErgo(t, dir, "", "sequence", destination, source); code != 0 {
 			t.Fatalf("sequence failed: %s", stderr)

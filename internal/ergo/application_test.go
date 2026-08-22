@@ -39,6 +39,55 @@ func TestApplicationCreateAndShow(t *testing.T) {
 	}
 }
 
+func TestApplicationDraftCreationAndPromotion(t *testing.T) {
+	app := newTestApplication(t)
+	root, err := app.CreateTask(CreateTaskRequest{Title: "Plan this", Draft: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := app.CreateTask(CreateTaskRequest{Title: "First step", EpicID: root.ID, Draft: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shown, err := app.Show(ShowRequest(child))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shown.Task.State != stateDraft || shown.Graph.IsReady(child.ID) {
+		t.Fatalf("draft child = %#v, ready=%v", shown.Task, shown.Graph.IsReady(child.ID))
+	}
+	if got := selectPruneTargets(shown.Graph); len(got) != 0 {
+		t.Fatalf("draft work was selected for pruning: %v", got)
+	}
+	if !shown.Graph.IsEpic(root.ID) {
+		t.Fatal("draft root was not promoted to an epic")
+	}
+}
+
+func TestApplicationBulkCreateDraftChildren(t *testing.T) {
+	app := newTestApplication(t)
+	path := filepath.Join(t.TempDir(), "tasks.md")
+	if err := os.WriteFile(path, []byte("# Configure\n\n---\n\n# Verify\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := app.CreateEpic(CreateEpicRequest{Title: "Staged epic", FilePath: path, Draft: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Children) != 2 {
+		t.Fatalf("created children = %#v", out.Children)
+	}
+	for _, child := range out.Children {
+		shown, err := app.Show(ShowRequest{ID: child.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if shown.Task.State != stateDraft || shown.Graph.IsReady(child.ID) {
+			t.Fatalf("child %s = %#v, ready=%v", child.ID, shown.Task, shown.Graph.IsReady(child.ID))
+		}
+	}
+}
+
 func TestApplicationLifecycleReturnsOutcomeWithoutRendering(t *testing.T) {
 	app := newTestApplication(t)
 	created, err := app.CreateTask(CreateTaskRequest{Title: "Finish this"})

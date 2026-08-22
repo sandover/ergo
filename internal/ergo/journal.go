@@ -45,7 +45,7 @@ func newJournalEntry(taskID, kind, agent, text string, at time.Time) JournalEntr
 
 func isAutomaticJournalKind(kind string) bool {
 	switch kind {
-	case "claim", "done", "fail", "block", "cancel", "release":
+	case "claim", "done", "fail", "block", "cancel", "open", "release":
 		return true
 	default:
 		return false
@@ -60,7 +60,7 @@ func validateJournalEntry(entry JournalEntry) error {
 		return errors.New("journal task_id is required")
 	}
 	switch entry.Kind {
-	case "created", "claim", "done", "fail", "block", "cancel", "release", "result":
+	case "created", "claim", "done", "fail", "block", "cancel", "open", "release", "result":
 	default:
 		return fmt.Errorf("invalid journal kind %q", entry.Kind)
 	}

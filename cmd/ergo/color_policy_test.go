@@ -276,7 +276,7 @@ func TestColorPolicyAppliesToShowAndClaimDocuments(t *testing.T) {
 	if got := ansiColorPattern.ReplaceAllString(claimed, ""); got != plainClaim {
 		t.Fatalf("stripped colored claim differs from plain\ncolored: %q\nplain:   %q", got, plainClaim)
 	}
-	for _, command := range []string{"ergo done " + id, "ergo block " + id, "ergo cancel " + id, "ergo release " + id} {
+	for _, command := range []string{"ergo done " + id, "ergo block " + id, "ergo cancel " + id, "ergo open " + id} {
 		if !strings.Contains(claimed, colorGreenForTest+command+colorResetForTest) {
 			t.Fatalf("claim command is not styled %q:\n%s", command, claimed)
 		}

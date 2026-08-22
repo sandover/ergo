@@ -151,10 +151,12 @@ Task is the only stored entity. A root task becomes an epic when another task's
 parent ID refers to it. Legacy `new_epic` records preserve empty epics that were
 explicitly created by older versions.
 
-A leaf task has one of the current forward states: `todo`, `doing`, `blocked`,
-`done`, `failed`, or `canceled`. The historical `error` state remains readable
-but cannot be written by current commands. `done` and `failed` are finished;
-the latter records an unsuccessful outcome. Forward writes enforce:
+A leaf task has one of the current forward states: `draft`, `todo`, `doing`,
+`blocked`, `done`, `failed`, or `canceled`. The historical `error` state remains
+readable but cannot be written by current commands. `draft` is visible planning
+state, never ready, and cannot be claimed or finished until `open` moves it to
+`todo`. `done` and `failed` are finished; the latter records an unsuccessful
+outcome. Forward writes enforce:
 
 ```text
 state=doing  <=>  claimed_by is nonempty
@@ -163,7 +165,9 @@ state=doing  <=>  claimed_by is nonempty
 Released histories may contain claimed `blocked` or `error` tasks. Replay
 accepts those compatibility forms. Claim and lifecycle commands state their
 target postcondition directly, so acting on one of those tasks normalizes it
-without an intermediate command.
+without an intermediate command. `open` is the only route from draft, blocked,
+or doing to unclaimed `todo`; it is a true no-op for `todo`. Finished work uses
+specific claim for retry, and legacy `error` uses specific claim before open.
 
 The shared mutation path handles lifecycle state, claim ownership, title, body,
 and placement. It suppresses true same-value changes. Meaningful creation,
@@ -172,8 +176,9 @@ lock. Lifecycle text belongs to that entry. Explicit results append only to the
 journal and never change graph state.
 
 Epics remain at the root and cannot nest or move. A clean, unclaimed root
-`todo` task with no results may be promoted when it receives its first child.
-An epic has no direct lifecycle, claim, result, or lifecycle-message behavior.
+`todo` or `draft` task with no results may be promoted when it receives its
+first child. Creation and move call the same promotion validator. An epic has
+no direct lifecycle, claim, result, or lifecycle-message behavior.
 Its completion is derived from its children.
 
 ## Dependencies and readiness
@@ -190,7 +195,10 @@ An explicitly `blocked` task is distinct from a `todo` task waiting on a
 dependency.
 
 Ready work is ordered by creation time and then ID. Automatic claim selects the
-first item in that order while holding the repository lock.
+first item in that order while holding the repository lock. Draft children from
+`new epic --draft` remain unavailable while the planner adds dependencies;
+opening each leaf after graph construction closes the claim window without a
+second transaction or a second source of state.
 
 ## Prune and snapshots
 

@@ -89,7 +89,7 @@ func TestCommandRunnerPreservesRemovedErrorsAndExitCodes(t *testing.T) {
 	}{
 		{name: "summary", args: []string{"done", "ABCDEF", "--summary", "note"}, want: "use -m <message>"},
 		{name: "plan", args: []string{"plan"}, want: "use ergo new epic"},
-		{name: "set", args: []string{"set", "ABCDEF", "{}"}, want: "use claim, done, block"},
+		{name: "set", args: []string{"set", "ABCDEF", "{}"}, want: "use claim, done, fail, block"},
 		{name: "reopen", args: []string{"reopen", "ABCDEF"}, want: "use claim <id> --agent"},
 	}
 	for _, test := range tests {

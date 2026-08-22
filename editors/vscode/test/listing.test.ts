@@ -42,8 +42,8 @@ test("groups roots and epics into compact searchable picker rows", () => {
   });
   assert.deepEqual(picker[1], {
     type: "item",
-    label: "$(sync) Add support-safe plugin diagnostics to server logs",
-    description: "ROOT01 · doing",
+    label: "ROOT01  $(sync) Add support-safe plugin diagnostics to server logs",
+    description: "doing",
     item: document.items[0],
   });
   assert.deepEqual(picker[2], {
@@ -52,22 +52,22 @@ test("groups roots and epics into compact searchable picker rows", () => {
   });
   assert.deepEqual(picker[3], {
     type: "item",
-	label: "$(symbol-structure) Create one Citation from text that spans pages",
-	description: "EPIC01 · 2 tasks",
+    label: "EPIC01  $(symbol-structure) Create one Citation from text that spans pages",
+    description: "2 tasks",
     item: document.items[1],
   });
   assert.deepEqual(picker[4], {
     type: "item",
-    label: "    ↳ $(clock) Define and store multi-page Citation locations",
-    description: "TASK01 · waiting",
+    label: "TASK01  ↳ $(clock) Define and store multi-page Citation locations",
+    description: "waiting",
     item: document.items[2],
   });
-	assert.deepEqual(picker[5], {
-	  type: "item",
-	  label: "    ↳ $(close) Verify the package",
-	  description: "FAIL01 · failed",
-	  item: document.items[3],
-	});
+  assert.deepEqual(picker[5], {
+    type: "item",
+    label: "FAIL01  ↳ $(close) Verify the package",
+    description: "failed",
+    item: document.items[3],
+  });
 });
 
 test("rejects malformed and unsupported listings", () => {
@@ -94,8 +94,22 @@ test("marks an epic failed when every child finishes and one fails", () => {
 	const picker = toPickerItems(document);
 	assert.deepEqual(picker[1], {
 	  type: "item",
-	  label: "$(close) Ship release",
-	  description: "EPIC01 · 2 tasks · failed",
+	  label: "EPIC01  $(close) Ship release",
+	  description: "2 tasks · failed",
 	  item: document.items[0],
 	});
+});
+
+test("keeps draft tasks visible and unavailable in the picker", () => {
+  const document = parseListDocument(JSON.stringify({
+    version: 1,
+    items: [{ id: "DRAFT01", title: "Stage the work", kind: "task", state: "draft", ready: false }],
+  }));
+  const picker = toPickerItems(document);
+  assert.deepEqual(picker[1], {
+    type: "item",
+    label: "DRAFT01  ◌ Stage the work",
+    description: "draft",
+    item: document.items[0],
+  });
 });

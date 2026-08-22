@@ -18,8 +18,11 @@ func (a *Application) Initialize(request InitializeRequest) (InitializeResult, e
 	return outcome, classifyRepositoryError(err)
 }
 
+// CreateEpicRequest describes one atomic epic-and-children creation.
+// Draft applies only to child tasks; epics have no independent lifecycle state.
 type CreateEpicRequest struct {
 	Title, FilePath, Body string
+	Draft                 bool
 }
 type CreateEpicOutcome = bulkCreateOutput
 
@@ -39,7 +42,7 @@ func (a *Application) CreateEpic(request CreateEpicRequest) (CreateEpicOutcome, 
 	if err != nil {
 		return CreateEpicOutcome{}, classifyRepositoryError(err)
 	}
-	outcome, err := runBulkCreate(dir, a.repository, strings.TrimSpace(request.Title), request.Body, tasks)
+	outcome, err := runBulkCreate(dir, a.repository, strings.TrimSpace(request.Title), request.Body, tasks, request.Draft)
 	if err != nil {
 		return CreateEpicOutcome{}, classifyRepositoryError(err)
 	}

@@ -1,3 +1,7 @@
+// This module owns the read-only HTML projection of Ergo's list JSON for VS Code.
+// The CLI listing is authoritative; this renderer may add presentation but not backlog state.
+// IDs stay clickable and escaped, and filtering continues to operate on rendered rows.
+
 import { randomBytes } from "node:crypto";
 import { derivedEpicState, ErgoListDocument, ErgoListItem } from "./listing";
 
@@ -48,12 +52,13 @@ export function renderBacklog(
     .ready-filter input { accent-color: var(--vscode-checkbox-background); cursor: pointer; margin: 0; }
     main { margin-top: 18px; }
     section { margin-bottom: 18px; }
-    .row { align-items: center; border-radius: 3px; display: grid; gap: 12px; grid-template-columns: 18px minmax(0, 1fr) auto; padding: 3px 8px; }
+    .row { align-items: center; border-radius: 3px; display: grid; gap: 12px; grid-template-columns: auto 18px minmax(0, 1fr); padding: 3px 8px; }
     .row:hover, .row:focus-within { background: var(--vscode-list-hoverBackground); }
     button.item { background: none; border: 0; color: var(--vscode-textLink-foreground); cursor: pointer; font: inherit; min-width: 0; overflow: hidden; padding: 0; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
     button.item:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
     button.item:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
     .state { color: var(--vscode-descriptionForeground); font-size: 14px; line-height: 1; text-align: center; }
+    .state[data-state="draft"] { color: var(--vscode-descriptionForeground); }
     .state[data-state="doing"] { color: var(--vscode-progressBar-background); }
     .state[data-state="blocked"] { color: var(--vscode-errorForeground); font-weight: 600; }
     .state[data-state="failed"], .state[data-state="error"] { color: var(--vscode-errorForeground); font-weight: 600; }
@@ -62,10 +67,11 @@ export function renderBacklog(
     details > summary { border-radius: 3px; cursor: pointer; list-style-position: outside; padding: 5px 8px; }
     details > summary:hover, details > summary:focus { background: var(--vscode-list-hoverBackground); outline: none; }
     details > summary::marker { color: var(--vscode-descriptionForeground); }
-    .epic-heading { align-items: baseline; display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) auto; }
+    .epic-heading { align-items: baseline; display: grid; gap: 12px; grid-template-columns: auto minmax(0, 1fr); }
+    .epic-title, .task-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .epic-title { font-weight: 600; }
     .epic-progress { color: var(--vscode-descriptionForeground); display: block; font-size: 12px; margin-top: 3px; }
-    .children { margin: 3px 0 0 22px; }
+    .children { margin: 3px 0 0; }
     .empty { color: var(--vscode-descriptionForeground); padding: 28px 0; text-align: center; }
     [hidden] { display: none !important; }
   </style>
@@ -135,7 +141,7 @@ function renderEpic(epic: ErgoListItem, children: ErgoListItem[]): string {
     counts.set(state, (counts.get(state) ?? 0) + 1);
   }
   const epicState = derivedEpicState(children);
-  const progress = ["ready", "doing", "waiting", "blocked", "failed", "done", "canceled", "error"]
+  const progress = ["ready", "draft", "doing", "waiting", "blocked", "failed", "done", "canceled", "error"]
     .flatMap((state) => {
       const count = counts.get(state);
       return count ? [`${count} ${state}`] : [];
@@ -144,8 +150,8 @@ function renderEpic(epic: ErgoListItem, children: ErgoListItem[]): string {
   return `<details open data-epic-search="${searchText([epic])}">
     <summary>
       <span class="epic-heading">
-        <span class="epic-title">${epicState === "failed" ? '<span class="state" data-state="failed" title="failed">✗</span> ' : ""}${text(epic.title)}</span>
         <button class="item id" data-id="${attribute(epic.id)}">${text(epic.id)}</button>
+        <span class="epic-title">${epicState === "failed" ? '<span class="state" data-state="failed" title="failed">✗</span> ' : ""}${text(epic.title)}</span>
       </span>
       ${progress ? `<span class="epic-progress">${progress}</span>` : ""}
     </summary>
@@ -156,9 +162,9 @@ function renderEpic(epic: ErgoListItem, children: ErgoListItem[]): string {
 function renderTask(item: ErgoListItem): string {
   const state = displayState(item);
   return `<div class="row" data-search="${searchText([item])}" data-ready="${item.ready === true}">
-    <span class="state" data-state="${attribute(state)}" title="${attribute(state)}">${stateSymbol(state)}</span>
-    <span>${text(item.title)}</span>
     <button class="item id" data-id="${attribute(item.id)}">${text(item.id)}</button>
+    <span class="state" data-state="${attribute(state)}" title="${attribute(state)}">${stateSymbol(state)}</span>
+    <span class="task-title">${text(item.title)}</span>
   </div>`;
 }
 
@@ -173,6 +179,7 @@ function stateSymbol(state: string): string {
   return (
     ({
       ready: "○",
+      draft: "◌",
       waiting: "◷",
       doing: "↻",
       blocked: "!",

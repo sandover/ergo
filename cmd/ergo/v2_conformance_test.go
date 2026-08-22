@@ -22,9 +22,13 @@ func TestV2LegacyEventsFileLifecycleNormalization(t *testing.T) {
 		t.Fatalf("claim legacy task failed: %s", stderr)
 	}
 	appendLegacyErrorState(t, dir, errorID)
-	_, stderr, code = runErgo(t, dir, "", "release", errorID)
+	_, stderr, code = runErgo(t, dir, "", "claim", errorID, "--agent", "legacy@local")
 	if code != 0 {
-		t.Fatalf("release legacy error failed: %s", stderr)
+		t.Fatalf("claim legacy error failed: %s", stderr)
+	}
+	_, stderr, code = runErgo(t, dir, "", "open", errorID)
+	if code != 0 {
+		t.Fatalf("open recovered legacy error failed: %s", stderr)
 	}
 	shown := showTaskFields(t, dir, errorID)
 	if shown["state"] != "todo" || shown["claimed_by"] != "" {
@@ -104,7 +108,7 @@ func TestV2MalformedMutationCallsAreActionable(t *testing.T) {
 		{[]string{"done"}, "usage: ergo done"},
 		{[]string{"block"}, "usage: ergo block"},
 		{[]string{"cancel"}, "usage: ergo cancel"},
-		{[]string{"release"}, "usage: ergo release"},
+		{[]string{"open"}, "usage: ergo open"},
 		{[]string{"title", "ABCDEF"}, "usage: ergo title"},
 		{[]string{"body", "A", "B"}, "| ergo body <id>"},
 		{[]string{"move", "ABCDEF"}, "usage: ergo move"},

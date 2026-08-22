@@ -7,7 +7,7 @@ import (
 
 // runBulkCreate creates an epic, its child tasks, and dependency edges.
 // It backs the `new epic` command.
-func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody string, tasks []EpicTaskInput) (bulkCreateOutput, error) {
+func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody string, tasks []EpicTaskInput, draft bool) (bulkCreateOutput, error) {
 	var repository Repository
 	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
 		return bulkCreateOutput{}, err
@@ -72,11 +72,15 @@ func runBulkCreate(dir string, opts GlobalOptions, epicTitle string, epicBody st
 			workingIDs[taskID] = &Task{ID: taskID, EpicID: epicID}
 
 			taskNow := time.Now().UTC()
+			state := stateTodo
+			if draft {
+				state = stateDraft
+			}
 			taskEvent, err := newEvent("new_task", taskNow, NewTaskEvent{
 				ID:        taskID,
 				UUID:      taskUUID,
 				EpicID:    epicID,
-				State:     stateTodo,
+				State:     state,
 				Title:     taskTitle,
 				Body:      taskBody,
 				CreatedAt: formatTime(taskNow),

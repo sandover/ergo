@@ -1,5 +1,12 @@
 # Change Log
 
+## 6.0.0
+
+- Align the extension with Ergo 6.0.0 and require the 6.0.0 CLI contract.
+- Show staged draft work with `◌` while keeping it out of the ready-only view.
+- Keep the overview focused on state and readiness; inspect journal-backed
+  results through the task detail view.
+
 ## 0.1.2
 
 - Tighten backlog typography and spacing so more tasks remain visible.

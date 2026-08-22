@@ -59,6 +59,8 @@ test("renders a clickable searchable overview from realistic backlog data", () =
   assert.match(view.html, /Add support-safe plugin diagnostics to server logs/);
   assert.match(view.html, /Create one Citation from text that spans pages/);
 	assert.match(view.html, /1 ready · 1 waiting · 1 failed · 1 done/);
+	assert.match(view.html, /<button class="item id" data-id="CCKOC2">CCKOC2<\/button>\s*<span class="state"/);
+	assert.match(view.html, /<button class="item id" data-id="BQM4Y5">BQM4Y5<\/button>\s*<span class="epic-title">/);
   assert.match(view.html, /data-id="OKOKSE"/);
   assert.match(view.html, /data-id="BQM4Y5">BQM4Y5<\/button>/);
   assert.doesNotMatch(view.html, /<button[^>]*>Create one Citation/);
@@ -103,4 +105,18 @@ test("marks a finished epic failed when any child failed", () => {
 	}));
 	const view = renderBacklog(document, "vscode-resource:", "fixed-nonce");
 	assert.match(view.html, /data-state="failed" title="failed">✗<\/span> Ship release/);
+});
+
+test("renders draft state in the backlog and epic progress", () => {
+  const document = parseListDocument(JSON.stringify({
+    version: 1,
+    items: [
+      { id: "EPIC01", title: "Stage release", kind: "epic" },
+      { id: "DRAFT01", title: "Configure the release", kind: "task", state: "draft", ready: false, epic_id: "EPIC01" },
+    ],
+  }));
+  const view = renderBacklog(document, "vscode-resource:", "fixed-nonce");
+  assert.match(view.html, /1 draft/);
+  assert.match(view.html, /data-state="draft" title="draft">◌<\/span>/);
+  assert.match(view.html, /data-ready="false"/);
 });

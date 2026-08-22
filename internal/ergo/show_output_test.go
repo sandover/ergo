@@ -158,7 +158,7 @@ func TestColoredClaimDocumentIncludesStyledNextCommandsAndReducesToPlain(t *test
 		t.Fatalf("stripped colored claim differs from plain\ncolored: %q\nplain:   %q", got, plain.String())
 	}
 	for _, command := range []string{
-		"ergo done TASK01", "ergo block TASK01", "ergo cancel TASK01", "ergo release TASK01",
+		"ergo done TASK01", "ergo block TASK01", "ergo cancel TASK01", "ergo open TASK01",
 	} {
 		want := colorGreen + command + colorReset
 		if !strings.Contains(colored.String(), want) {

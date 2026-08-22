@@ -50,13 +50,8 @@ func validateMovePlacement(graph *Graph, task *Task, destinationID string) error
 		return fmt.Errorf("cannot nest under task %s: epics must remain at root", destinationID)
 	}
 	if !graph.IsEpic(destination.ID) {
-		switch {
-		case destination.ClaimedBy != "":
-			return fmt.Errorf("cannot promote task %s: task is claimed by %q", destinationID, destination.ClaimedBy)
-		case destination.State != stateTodo:
-			return fmt.Errorf("cannot promote task %s: state is %q (must be todo)", destinationID, destination.State)
-		case len(destination.Results) > 0:
-			return fmt.Errorf("cannot promote task %s: task has results attached", destinationID)
+		if err := validateEpicPromotion(destination); err != nil {
+			return err
 		}
 	}
 	if graph.Deps[task.ID] != nil {

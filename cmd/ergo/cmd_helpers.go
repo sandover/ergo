@@ -18,7 +18,7 @@ func writeCLIError(w io.Writer, err error, args []string) {
 	} else if errors.As(err, &removed) {
 		switch removed.command {
 		case "set":
-			fmt.Fprintln(w, "hint: use claim, done, block, cancel, release, title, body, or move")
+			fmt.Fprintln(w, "hint: use claim, done, fail, block, cancel, open, title, body, or move")
 		case "reopen":
 			fmt.Fprintln(w, "hint: use claim <id> --agent <identity> to resume closed work")
 		}

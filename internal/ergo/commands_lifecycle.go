@@ -74,7 +74,7 @@ func lifecycleTargetState(kind string) (string, error) {
 		return stateBlocked, nil
 	case "cancel":
 		return stateCanceled, nil
-	case "release":
+	case "open":
 		return stateTodo, nil
 	default:
 		return "", fmt.Errorf("unknown lifecycle command %q", kind)

@@ -1,11 +1,12 @@
 #!/bin/bash
-# Creates a screenshot-safe sample project in /tmp for README captures.
-# Run from repo root: ./testdata/fixtures/create-sample-project-screenshot.sh
+# This script owns the disposable backlog used for README and extension screenshots.
+# It writes only to /tmp/ergo-screenshot and uses the installed CLI as the source of truth.
+# Keep the project compact enough for a screenshot while covering the visible lifecycle states.
 
 set -e
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-ERGO="${ERGO:-$ROOT_DIR/ergo}"
+ERGO="${ERGO:-$ROOT_DIR/bin/ergo}"
 FIXTURE_DIR="/tmp/ergo-screenshot"
 
 rm -rf "$FIXTURE_DIR"
@@ -23,109 +24,82 @@ new_task() {
 }
 
 # ============================================
-# PHASE 1: Research & Design
+# Lantern beta launch
 # ============================================
-DESIGN_EPIC=$(new_task "Research & Design")
+LAUNCH_EPIC=$(new_task "Lantern public beta")
 
-REQ_TASK=$(new_task "Define product requirements" "$DESIGN_EPIC")
-mkdir -p docs
-cat > docs/prd.md << 'EOF'
-# Product Requirements Document
+STORY_TASK=$(new_task "Write the 90-second launch story" "$LAUNCH_EPIC")
+mkdir -p notes
+cat > notes/launch-story.md << 'EOF'
+# Lantern public beta
 
-## Problem Statement
-Teams need a lightweight task tracker that works well with AI coding agents.
+Lantern gives small teams a calm, shared place to see what needs attention next.
 
-## Goals
-1. Minimal footprint - single binary, no database
-2. Agent-friendly - clear output and task states
-3. Human-friendly - readable CLI output, intuitive commands
+The beta story focuses on three promises: a clear first step, visible ownership,
+and a work history that does not disappear when the meeting ends.
 EOF
-$ERGO done "$REQ_TASK"
-$ERGO result "$REQ_TASK" "Captured product requirements" --file docs/prd.md
+$ERGO done "$STORY_TASK"
+$ERGO result "$STORY_TASK" "Drafted the beta launch story" --file notes/launch-story.md
 
-COMP_TASK=$(new_task "Competitor analysis" "$DESIGN_EPIC")
-$ERGO done "$COMP_TASK"
+TIMELINE_TASK=$(new_task "Polish the shared activity timeline" "$LAUNCH_EPIC")
+$ERGO claim "$TIMELINE_TASK" --agent "pixel@lantern"
+cat << 'EOF' | $ERGO body "$TIMELINE_TASK"
+## Goal
+- Make the activity timeline feel calm and useful during a busy launch week.
 
-INTERVIEW_TASK=$(new_task "User interviews (3 customers)" "$DESIGN_EPIC")
-$ERGO done "$INTERVIEW_TASK"
-
-DESIGN_TASK=$(new_task "Write technical design doc" "$DESIGN_EPIC")
-$ERGO sequence "$REQ_TASK" "$DESIGN_TASK"
-
-# ============================================
-# PHASE 2: Implementation (blocked by Design)
-# ============================================
-IMPL_EPIC=$(new_task "Implementation")
-$ERGO sequence "$DESIGN_EPIC" "$IMPL_EPIC"
-
-SCAFFOLD_TASK=$(new_task "Set up project scaffolding" "$IMPL_EPIC")
-
-MODEL_TASK=$(new_task "Implement core data model" "$IMPL_EPIC")
-$ERGO sequence "$SCAFFOLD_TASK" "$MODEL_TASK"
-
-API_TASK=$(new_task "Build REST API endpoints" "$IMPL_EPIC")
-$ERGO sequence "$MODEL_TASK" "$API_TASK"
-
-UI_TASK=$(new_task "Build web frontend" "$IMPL_EPIC")
-$ERGO sequence "$API_TASK" "$UI_TASK"
-
-TEST_TASK=$(new_task "Write integration tests" "$IMPL_EPIC")
-$ERGO sequence "$API_TASK" "$TEST_TASK"
-
-SEC_TASK=$(new_task "Security review" "$IMPL_EPIC")
-$ERGO sequence "$API_TASK" "$SEC_TASK"
-cat <<'EOF' | $ERGO body "$SEC_TASK"
-Goal: Perform a focused security review of the new REST API endpoints and data model, identifying risks and required fixes before launch.
-
-Acceptance criteria:
-- Review authn/authz for all endpoints; list any missing checks.
-- Verify input validation on public-facing endpoints; note any gaps.
-- Check data model invariants and ensure no sensitive fields are exposed in responses.
-- Produce a short report with findings and severity tags.
-
-Validation:
-- Automated: run `go test ./...` and confirm all tests pass.
-- Manual: spot-check at least 3 endpoints with malformed input and document behavior.
-
-Consultation: If you find a critical security issue, pause and consult before proposing a fix.
+## Acceptance criteria
+- Keep the latest action visible without hiding older context.
+- Make ownership and next steps scannable at a glance.
+- Preserve keyboard navigation in the compact layout.
 EOF
 
-# ============================================
-# PHASE 3: Launch (blocked by Implementation)
-# ============================================
-LAUNCH_EPIC=$(new_task "Launch")
-$ERGO sequence "$IMPL_EPIC" "$LAUNCH_EPIC"
+A11Y_TASK=$(new_task "Run the keyboard and screen-reader pass" "$LAUNCH_EPIC")
+$ERGO sequence "$TIMELINE_TASK" "$A11Y_TASK"
 
-STAGING_TASK=$(new_task "Deploy to staging" "$LAUNCH_EPIC")
-$ERGO sequence "$UI_TASK" "$STAGING_TASK"
-$ERGO sequence "$TEST_TASK" "$STAGING_TASK"
+BETA_TASK=$(new_task "Cut the beta release candidate" "$LAUNCH_EPIC")
+cat << 'EOF' | $ERGO body "$BETA_TASK"
+## Goal
+- Package the first invite-only beta for the five launch teams.
 
-QA_TASK=$(new_task "QA sign-off" "$LAUNCH_EPIC")
-$ERGO sequence "$STAGING_TASK" "$QA_TASK"
+## Release checklist
+- Confirm the onboarding copy.
+- Verify the export path.
+- Attach the short rollback note.
+EOF
 
-NOTES_TASK=$(new_task "Write release notes" "$LAUNCH_EPIC")
-$ERGO sequence "$UI_TASK" "$NOTES_TASK"
-
-PROD_TASK=$(new_task "Production deploy" "$LAUNCH_EPIC")
-$ERGO sequence "$QA_TASK" "$PROD_TASK"
-$ERGO sequence "$NOTES_TASK" "$PROD_TASK"
-
-SOCIAL_TASK=$(new_task "Announce on social media" "$LAUNCH_EPIC")
-$ERGO sequence "$PROD_TASK" "$SOCIAL_TASK"
+ONBOARDING_TASK=$(new_task "Test first-run onboarding with five teams" "$LAUNCH_EPIC")
+$ERGO claim "$ONBOARDING_TASK" --agent "mara@lantern"
+$ERGO fail "$ONBOARDING_TASK" -m "The invite flow still loses the workspace name after the second step."
 
 # ============================================
-# Standalone tasks (no epic)
+# Sustainable hosting
 # ============================================
-README_TASK=$(new_task "Update README with new features")
-$ERGO sequence "$PROD_TASK" "$README_TASK"
+OPS_EPIC=$(new_task "Sustainable hosting")
 
-TYPO_TASK=$(new_task "Fix typo in CLI help")
-$ERGO done "$TYPO_TASK"
+RETENTION_TASK=$(new_task "Choose the default retention window" "$OPS_EPIC")
+$ERGO done "$RETENTION_TASK"
 
-DB_TASK=$(new_task "Evaluate alternative database (decided against)")
-$ERGO cancel "$DB_TASK"
+BACKUP_TASK=$(new_task "Exercise restore from a cold backup" "$OPS_EPIC")
+$ERGO done "$BACKUP_TASK"
 
-echo ""
-echo "✓ Screenshot sample project created in $FIXTURE_DIR"
-echo ""
-$ERGO list
+DOCS_TASK=$(new_task "Publish the internal cost playbook" "$OPS_EPIC")
+$ERGO cancel "$DOCS_TASK" -m "Superseded by the shorter launch checklist."
+
+BUDGET_TASK=$(new_task "Set a weekly beta budget alert" "$OPS_EPIC")
+$ERGO claim "$BUDGET_TASK" --agent "jo@lantern"
+
+# ============================================
+# Standalone work around the launch
+# ============================================
+README_TASK=$(new_task "Capture the README tour")
+
+SECURITY_TASK=$(new_task "Resolve the staging secret rotation warning")
+$ERGO block "$SECURITY_TASK" -m "Waiting for the hosting provider's rotation window."
+
+DEMO_TASK=$(new_task "Record the two-minute product tour")
+$ERGO sequence "$LAUNCH_EPIC" "$DEMO_TASK"
+
+printf '%s\n' "✓ Screenshot sample project created in $FIXTURE_DIR"
+printf '%s\n' "  Open $FIXTURE_DIR/.ergo/backlog.jsonl in VS Code or run:"
+printf '%s\n' "  $ERGO --dir $FIXTURE_DIR list"
+$ERGO --dir "$FIXTURE_DIR" list

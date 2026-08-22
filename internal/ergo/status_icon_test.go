@@ -11,6 +11,7 @@ func TestStateIconsDistinguishLifecycleAndReadiness(t *testing.T) {
 	}{
 		{name: "ready", state: stateTodo, ready: true, want: "○"},
 		{name: "waiting", state: stateTodo, ready: false, want: "◷"},
+		{name: "draft", state: stateDraft, want: "◌"},
 		{name: "doing", state: stateDoing, want: "↻"},
 		{name: "blocked", state: stateBlocked, want: "!"},
 		{name: "failed", state: stateFailed, want: "✗"},

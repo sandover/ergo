@@ -20,7 +20,7 @@ import (
 
 var publicCommandPaths = []string{
 	"init", "new", "new task", "new epic", "list", "show", "claim", "done",
-	"fail", "block", "cancel", "release", "result", "title", "body", "move", "sequence",
+	"fail", "block", "cancel", "open", "result", "title", "body", "move", "sequence",
 	"unsequence", "where", "info", "compact", "prune", "quickstart", "version",
 }
 
@@ -44,7 +44,7 @@ func TestRootHelpIsTheFrontDoor(t *testing.T) {
 	for _, signature := range []string{
 		"init [dir]", `new task "<title>"`, `new epic "<title>" --file <path>`,
 		"list [--epic <id>] [--ready | --all] [--json]", "show <id> [--body]", "claim [<id>]", "done <id>",
-		"block <id>", "cancel <id>", "release <id>", `result <id> "<text>"`, "title <id> <title>",
+		"block <id>", "cancel <id>", "open <id>", `result <id> "<text>"`, "title <id> <title>",
 		"body <id> [--append]", "move <id> <epic-id>", "sequence <A> <B>",
 		"unsequence <A> <B>", "where", "prune [--yes]", "compact",
 		"quickstart", "version",
@@ -151,7 +151,6 @@ func TestColorDocumentationHasClearOwnership(t *testing.T) {
 
 	repositoryRoot := filepath.Join("..", "..")
 	surfaces := map[string][]string{
-		"README.md": {"--color=always", "--color=never", "NO_COLOR", "TERM=dumb"},
 		"docs/spec.md": {"Color is presentation metadata", "stdout is a terminal",
 			"Removing Ergo-added ANSI decoration", "without adding ANSI decoration"},
 		"CHANGELOG.md": {"easier to scan", "--color=auto|always|never",
@@ -277,7 +276,6 @@ func TestShowBodyDocumentationHasClearOwnership(t *testing.T) {
 
 	repositoryRoot := filepath.Join("..", "..")
 	surfaces := map[string][]string{
-		"README.md": {"lossless body edit", "ergo show ABCDEF --body", `ergo body ABCDEF <"$tmp"`},
 		"docs/spec.md": {"synthesized document", "projects only the stored body",
 			"byte-preserving", "emits zero bytes for an empty body"},
 		"CHANGELOG.md": {"show <id> --body", "lossless read-edit-write"},
@@ -317,7 +315,7 @@ func TestAgentFlagBelongsOnlyToClaim(t *testing.T) {
 func TestMaintainedSurfacesUseCurrentVocabularyAndSyntax(t *testing.T) {
 	root := filepath.Join("..", "..")
 	files := []string{
-		"README.md", "internal/ergo/help.txt", "internal/ergo/quickstart.txt",
+		"internal/ergo/help.txt", "internal/ergo/quickstart.txt",
 		"skills/ergo-backlog-planning/SKILL.md", "docs/spec.md",
 		"docs/release.md", "docs/suggested-hooks/pre-commit",
 	}

@@ -34,11 +34,11 @@ func RenderClaim(w io.Writer, outcome ClaimOutcome, useColor bool) {
 	}
 	id := task.ID
 	next := map[string]string{
-		"done":    "ergo done " + id,
-		"fail":    "ergo fail " + id,
-		"block":   "ergo block " + id,
-		"cancel":  "ergo cancel " + id,
-		"release": "ergo release " + id,
+		"done":   "ergo done " + id,
+		"fail":   "ergo fail " + id,
+		"block":  "ergo block " + id,
+		"cancel": "ergo cancel " + id,
+		"open":   "ergo open " + id,
 	}
 	printTaskDocument(w, task, graph, outcome.Journal, repoDir, useColor)
 	writeGeneratedLine(w, "## Next", colorBold+colorCyan, useColor)
@@ -47,7 +47,7 @@ func RenderClaim(w io.Writer, outcome ClaimOutcome, useColor bool) {
 	writeNextCommand(w, next["fail"], useColor)
 	writeNextCommand(w, next["block"], useColor)
 	writeNextCommand(w, next["cancel"], useColor)
-	writeNextCommand(w, next["release"], useColor)
+	writeNextCommand(w, next["open"], useColor)
 }
 
 func writeNextCommand(w io.Writer, command string, useColor bool) {

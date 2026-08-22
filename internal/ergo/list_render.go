@@ -1,3 +1,7 @@
+// This module owns the human-readable list projection of the backlog.
+// The graph and derived readiness state remain authoritative; rendering only
+// truncates presentation. Every tree line must fit the selected content width
+// so a wide terminal cannot turn the list into a stretched table.
 package ergo
 
 import (
@@ -8,13 +12,16 @@ import (
 )
 
 // renderTreeView outputs tasks in a hierarchical tree format.
-func renderTreeView(w io.Writer, roots []*treeNode, graph *Graph, repoDir string, useColor bool, widths ...int) {
+func renderTreeView(w io.Writer, roots []*treeNode, graph *Graph, useColor bool, widths ...int) {
 	termWidth := 80
 	if len(widths) > 0 && widths[0] > 0 {
 		termWidth = widths[0]
 	}
+	if termWidth > maxListWidth {
+		termWidth = maxListWidth
+	}
 	for i, root := range roots {
-		renderNode(w, root, "", i == len(roots)-1, true, graph, repoDir, useColor, nil, termWidth)
+		renderNode(w, root, "", i == len(roots)-1, true, graph, useColor, nil, termWidth)
 	}
 }
 
@@ -32,6 +39,10 @@ func renderSummary(w io.Writer, stats taskStats, useColor bool, buckets []summar
 			count = stats.ready
 			label = "ready"
 			color = colorYellow
+		case summaryDraft:
+			count = stats.draft
+			label = "draft"
+			color = colorDim
 		case summaryInProgress:
 			count = stats.inProgress
 			label = "in progress"
@@ -82,7 +93,7 @@ func renderSummary(w io.Writer, stats taskStats, useColor bool, buckets []summar
 
 // renderNode renders a single node and its children.
 // parentBlockers tracks blockers already shown at a parent level to avoid repetition.
-func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot bool, graph *Graph, repoDir string, useColor bool, parentBlockers map[string]bool, termWidth int) {
+func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot bool, graph *Graph, useColor bool, parentBlockers map[string]bool, termWidth int) {
 	task := node.task
 
 	// Determine connector
@@ -148,21 +159,6 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 	line := formatTreeLine(prefix, connector, showConnector, icon, task.ID, title, annotations, blockerAnnotation, displayTask, node.isReady, node.isEpic, useColor, termWidth)
 	fmt.Fprintln(w, line)
 
-	// Show result file URL on separate line for done tasks
-	if latest, ok := latestAttachedResult(task.Results); ok {
-		fileURL := deriveFileURL(latest.Path, repoDir)
-		resultPrefix := strings.Repeat(" ", visibleLen(task.ID)+idContentGap) + prefix
-		if isRoot {
-			resultPrefix += "  "
-		} else if isLast {
-			resultPrefix += "  "
-		} else {
-			resultPrefix += "│ "
-		}
-		resultLine := formatResultLine(resultPrefix, fileURL, useColor)
-		fmt.Fprintln(w, resultLine)
-	}
-
 	// Render children, passing down our blockers so they don't repeat
 	childPrefix := prefix
 	if isRoot {
@@ -183,17 +179,8 @@ func renderNode(w io.Writer, node *treeNode, prefix string, isLast bool, isRoot 
 	}
 
 	for i, child := range node.children {
-		renderNode(w, child, childPrefix, i == len(node.children)-1, false, graph, repoDir, useColor, childBlockers, termWidth)
+		renderNode(w, child, childPrefix, i == len(node.children)-1, false, graph, useColor, childBlockers, termWidth)
 	}
-}
-
-func latestAttachedResult(results []Result) (Result, bool) {
-	for _, result := range results {
-		if result.Path != "" {
-			return result, true
-		}
-	}
-	return Result{}, false
 }
 
 // abbreviate truncates a string to maxLen, adding "…" if truncated.
@@ -233,6 +220,8 @@ func stateIcon(task *Task, isReady, isEpic bool) string {
 			return iconReady
 		}
 		return iconWaiting
+	case stateDraft:
+		return iconDraft
 	default:
 		return "?"
 	}
@@ -510,21 +499,6 @@ func formatTreeLine(prefix, connector string, showConnector bool, icon, id, titl
 	return sb.String()
 }
 
-// formatResultLine formats the result file line - just arrow and file link.
-func formatResultLine(prefix, fileURL string, useColor bool) string {
-	var sb strings.Builder
-	sb.WriteString(prefix)
-	sb.WriteString("  → ")
-	if useColor {
-		sb.WriteString(colorCyan)
-	}
-	sb.WriteString(fileURL)
-	if useColor {
-		sb.WriteString(colorReset)
-	}
-	return sb.String()
-}
-
 // stateColor returns the ANSI color for a task's state.
 func stateColor(task *Task) string {
 	switch task.State {
@@ -542,6 +516,8 @@ func stateColor(task *Task) string {
 		return colorDim
 	case stateTodo:
 		return colorYellow
+	case stateDraft:
+		return colorDim
 	default:
 		return ""
 	}

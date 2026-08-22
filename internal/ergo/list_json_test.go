@@ -97,6 +97,20 @@ func TestRenderListJSONDerivesEpicStateFromFullGraph(t *testing.T) {
 	}
 }
 
+func TestRenderListJSONPreservesDraftStateAndReadiness(t *testing.T) {
+	draft := &Task{ID: "DRAFT01", Title: "Draft", State: stateDraft}
+	graph := &Graph{Tasks: map[string]*Task{draft.ID: draft}, Deps: map[string]map[string]struct{}{}}
+	graph.rebuildIndexes()
+	outcome := ListOutcome{Graph: graph, Roots: []*treeNode{{task: draft}}, Options: ListOptions{}}
+	var output strings.Builder
+	if err := RenderListJSON(&output, outcome); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), `"state":"draft"`) || strings.Contains(output.String(), `"ready":true`) {
+		t.Fatalf("draft JSON = %s", output.String())
+	}
+}
+
 func TestRenderListJSONEmptyItemsAndWriterError(t *testing.T) {
 	var output bytes.Buffer
 	if err := RenderListJSON(&output, ListOutcome{}); err != nil {

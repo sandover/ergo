@@ -69,6 +69,7 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	newTaskCmd := &cobra.Command{Use: `task "<title>"`, Short: "Create a task", Args: exactArgs(1, ergo.NewTaskUsage),
 		Annotations: map[string]string{commandInputHelp: "Optional piped stdin becomes the initial task body; no pipe creates an empty body."}}
 	newTaskCmd.Flags().String("epic", "", "Create the task in this epic")
+	newTaskCmd.Flags().Bool("draft", false, "Create the task as unavailable draft work")
 	newTaskCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if keys := legacyCreationKeys(args[0]); len(keys) > 0 {
 			guidance := `creation JSON is not accepted; use ergo new task "<title>"`
@@ -76,16 +77,17 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 				guidance += " --epic <id>"
 			}
 			if hasAnyString(keys, "state", "claim", "result") {
-				guidance += ", then use claim, done, block, cancel, or release for lifecycle data"
+				guidance += ", then use claim, done, fail, block, cancel, or open for lifecycle data"
 			}
 			return errors.New(guidance)
 		}
 		epic, _ := cmd.Flags().GetString("epic")
+		draft, _ := cmd.Flags().GetBool("draft")
 		body, err := commandInput(cmd, streams, false, "")
 		if err != nil {
 			return err
 		}
-		out, err := app().CreateTask(ergo.CreateTaskRequest{Title: args[0], EpicID: epic, Body: body})
+		out, err := app().CreateTask(ergo.CreateTaskRequest{Title: args[0], EpicID: epic, Body: body, Draft: draft})
 		if err == nil {
 			ergo.RenderCreateTask(cmd.OutOrStdout(), out)
 		}
@@ -95,16 +97,18 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	newEpicCmd := &cobra.Command{Use: `epic "<title>" --file <path>`, Short: "Create an epic and its tasks from Markdown", Args: exactArgs(1, ergo.NewEpicUsage),
 		Annotations: map[string]string{commandInputHelp: "Optional piped stdin becomes the epic body; --file supplies the child tasks."}}
 	newEpicCmd.Flags().String("file", "", "Markdown file with # Title chunks separated by ---")
+	newEpicCmd.Flags().Bool("draft", false, "Create every child as unavailable draft work")
 	newEpicCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if keys := legacyCreationKeys(args[0]); len(keys) > 0 {
 			return errors.New(`creation JSON is not accepted; use ergo new epic "<title>" --file <path>`)
 		}
 		file, _ := cmd.Flags().GetString("file")
+		draft, _ := cmd.Flags().GetBool("draft")
 		body, err := commandInput(cmd, streams, false, "")
 		if err != nil {
 			return err
 		}
-		out, err := app().CreateEpic(ergo.CreateEpicRequest{Title: args[0], FilePath: file, Body: body})
+		out, err := app().CreateEpic(ergo.CreateEpicRequest{Title: args[0], FilePath: file, Body: body, Draft: draft})
 		if err == nil {
 			ergo.RenderCreateEpic(cmd.OutOrStdout(), out)
 		}
@@ -312,7 +316,7 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	}
 
 	root.AddCommand(initCmd, newCmd, listCmd, showCmd, claimCmd,
-		lifecycle("done", "Mark a task done"), lifecycle("fail", "Mark finished work failed"), lifecycle("block", "Mark a task blocked"), lifecycle("cancel", "Cancel a task"), lifecycle("release", "Return unfinished work to todo"),
+		lifecycle("done", "Mark a task done"), lifecycle("fail", "Mark finished work failed"), lifecycle("block", "Mark a task blocked"), lifecycle("cancel", "Cancel a task"), lifecycle("open", "Return draft or blocked work to todo"),
 		resultCmd, titleCmd, bodyCmd, moveCmd, sequence("sequence", "link", "Enforce task order (A then B then C)"), sequence("unsequence", "unlink", "Remove task order (A then B then C)"),
 		whereCmd, infoCmd, compactCmd, pruneCmd, quickCmd, versionCmd)
 }

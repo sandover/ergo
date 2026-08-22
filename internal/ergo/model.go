@@ -14,6 +14,7 @@ import (
 
 const (
 	stateTodo     = "todo"
+	stateDraft    = "draft"
 	stateDoing    = "doing"
 	stateDone     = "done"
 	stateFailed   = "failed"
@@ -144,11 +145,27 @@ type Message struct {
 
 func validateMessageKind(kind string) error {
 	switch kind {
-	case "done", "fail", "block", "cancel", "release":
+	case "done", "fail", "block", "cancel", "open", "release":
 		return nil
 	default:
 		return fmt.Errorf("invalid lifecycle message kind: %s", kind)
 	}
+}
+
+func validateEpicPromotion(destination *Task) error {
+	if destination == nil {
+		return errors.New("epic destination is missing")
+	}
+	if destination.ClaimedBy != "" {
+		return fmt.Errorf("cannot promote task %s: task is claimed by %q", destination.ID, destination.ClaimedBy)
+	}
+	if destination.State != stateTodo && destination.State != stateDraft {
+		return fmt.Errorf("cannot promote task %s: state is %q (must be todo or draft)", destination.ID, destination.State)
+	}
+	if len(destination.Results) > 0 {
+		return fmt.Errorf("cannot promote task %s: task has results attached", destination.ID)
+	}
+	return nil
 }
 
 const maxResultSummaryLen = 120

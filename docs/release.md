@@ -7,10 +7,18 @@ in `ergo --help`, `ergo quickstart`, and `docs/spec.md`.
 
 - Start from a clean, current main branch.
 - Update `CHANGELOG.md` with user-visible behavior and upgrade notes.
+- Manually review `README.md` before tagging or publishing. Confirm its concise
+  overview, examples, and links still describe the current CLI and point readers
+  to the authoritative quickstart. Keep this as a release check, not an
+  automated README contract test.
 - Draft deliberate release notes before tagging. Lead with what changed and why,
   then include useful examples, behavioral boundaries, compatibility, and the
   upgrade path. A generated commit list is never acceptable as final notes.
-- Confirm help, quickstart, spec, architecture, README, and shipped skill agree.
+- Confirm help, quickstart, spec, architecture, and shipped skill agree.
+- For the 6.0.0 cutover, verify the notes explain draft staging, the `◌`
+  presentation, `open` replacing `release`, blocked-work migration, retry by
+  specific claim, and incompatibility with older binaries after the first
+  draft record.
 - Run `task ci`.
 - Run `task build` and smoke `./bin/ergo --help`, quickstart, readable output, and one lifecycle loop.
 - Run `goreleaser check`.
@@ -59,7 +67,8 @@ new version.
 
 - Download the archives and verify them against `checksums.txt`.
 - Run the released binary's version, help, and quickstart commands.
-- Verify one readable lifecycle from claim through an exit.
+- Verify one staged lifecycle: create draft work, configure it, open the leaf,
+  claim it, and finish the attempt.
 - Verify one copied legacy log containing error or claimed-blocked state.
 - Install through Homebrew and invoke `$(brew --prefix)/bin/ergo` explicitly.
 - Verify WinGet too when its publisher is configured.

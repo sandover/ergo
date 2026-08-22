@@ -7,16 +7,21 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo/v4)](https://goreportcard.com/report/github.com/sandover/ergo/v4)
 [![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo/v4.svg)](https://pkg.go.dev/github.com/sandover/ergo/v4)
 
-Ergo keeps an implementation backlog in the repository. Agents create tasks,
-order them with dependencies, claim ready work, and record successful or failed
-outcomes through direct commands. Humans see the same backlog and its work
-history. A repository lock keeps concurrent claims and mutations safe.
+You (and your agent) use Ergo to manage an implementation backlog in your repo.  You have the agent write plans to ergo, instead of to markdown files or the plan mode inside of agent harnesses. 
 
-Ergo is deliberately small: tasks, epics, dependencies, lifecycle state, and
-results. The backlog and its shared task journal are plain, git-friendly JSONL.
+Why do this? 
 
-Inspired by [beads (bd)](https://github.com/steveyegge/beads), with a smaller
-command and storage model.
+Because it turns your work backlog into something readable, storable, interruptible, resumable, shareable, portable, and rewindable. And you can track the whole thing in git. It's just a couple of JSONL files.
+
+ergo is just a CLI. 
+
+So, instead of plan mode, agents use the ergo CLI to create tasks, order them with dependencies, claim them, and report results. Multiple agents can be working in parallel -- ergo is built for this.
+
+We humans can also use the ergo CLI to view or update the backlog. Plus there's a VS Code plugin. 
+
+Ergo is deliberately small and sound. The backlog and its shared task journal are plain, git-friendly JSONL stored in a `.ergo/` directory in your repo, which you can track with git or add to `.gitignore`.
+
+Ergo is inspired by [beads (bd)](https://github.com/steveyegge/beads), but built for simplicity and speed. 
 
 ## Install
 
@@ -40,220 +45,43 @@ Add a short repository instruction for your coding agent:
 > Use Ergo to manage the implementation backlog. Run `ergo --help` and
 > `ergo quickstart` to learn it.
 
-The repository also ships an
-[Ergo backlog-planning skill](skills/ergo-backlog-planning/SKILL.md) for shaping
-and executing larger backlogs.
+That's it!
 
-## Browse in VS Code
+The repository also ships an [Ergo backlog-planning skill](skills/ergo-backlog-planning/SKILL.md).
 
-[Ergo Backlog](https://marketplace.visualstudio.com/items?itemName=sandover.ergo-backlog)
-gives humans a clear, read-only view of the same repository backlog used by
-coding agents. Open `.ergo/backlog.jsonl` to scan active work, see which tasks
-are ready or waiting, and follow the structure of an epic without reading the
-underlying JSONL.
+## Seeing your backlog
 
-![An Ergo backlog open in VS Code](docs/img/ergo-vscode-backlog.png)
+Once your agent has written out a backlog, you can view it with `ergo list`
 
-Run **Ergo: Backlog** from the Command Palette to find a task or epic by title
-or six-character ID:
+![An Ergo backlog in the terminal](docs/img/ergo-list-screenshot.png)
 
-![Searching an Ergo backlog from the VS Code Command Palette](docs/img/ergo-vscode-search.png)
+or in VS Code with the [Ergo Backlog](https://marketplace.visualstudio.com/items?itemName=sandover.ergo-backlog) plugin available in the VS Code Extension Marketplace. If you click on `.ergo/backlog.jsonl` you'll see something like this:
 
-Select an item to open its state, dependencies, and body as a readable Markdown
-preview:
+![An Ergo backlog in VS Code](docs/img/ergo-vscode-backlog-overview.png)
 
-![A dependency-aware Ergo task open in VS Code](docs/img/ergo-vscode-task.png)
+## Tasks and epics
 
-Install the CLI first, then
-[install Ergo Backlog from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=sandover.ergo-backlog).
-The extension requires Ergo 4.2.0 or later and is available as a Preview.
+- **Tasks** can be in draft, todo, doing, blocked, done, failed, or canceled.
 
-## Start
+- **Epics** don't have their own state. An epic finishes when all its children
+  finish, and its outcome reflects their outcomes.
 
-```sh
-ergo init
-ergo new task "Add login"
-# => ABCDEF
+- Tasks can depend on other tasks, including across epic boundaries.
 
-ergo list --ready
-ergo claim ABCDEF --agent model@host
-ergo done ABCDEF -m "Implemented and verified"
-```
+## Journal
 
-Interactive output is colored automatically; pipes and redirects stay plain.
-Force color for a capable viewer or suppress it explicitly:
+- Ergo keeps task history in `.ergo/journal.jsonl`. 
 
-```sh
-ergo --color=always list --ready | less -R
-ergo --color=never show ABCDEF
-```
+- The journal records task creation, state changes, notes, and results from
+  agents. 
 
-Ergo also honors `NO_COLOR` and `TERM=dumb`. `ergo quickstart` describes the
-complete presentation policy.
+- Agents can use `ergo result` to record what they changed, how they verified
+  it, or where they left supporting evidence.
 
-Use a concise title. Pipe longer context into the initial body:
+- You can track the journal in git with the backlog, or add it to `.gitignore`
+  if you don't want to keep the work history.
 
-```sh
-printf '%s\n' 'Use bcrypt with cost 12.' |
-  ergo new task "Add password hashing"
-```
+## Learn more
 
-## Create an epic
-
-An epic is a root task with children. Create one from a Markdown file:
-
-```sh
-cat > tasks.md <<'EOF'
-# Password hashing
-Use bcrypt with cost 12.
----
-# Session tokens
-Use 1-hour access and 24-hour refresh tokens.
-EOF
-
-ergo new epic "User login" --file tasks.md
-```
-
-Each `# Title` chunk becomes a child task. File order does not create
-dependencies. Add order explicitly:
-
-```sh
-ergo sequence TASK_HASHING TASK_TOKENS
-```
-
-Optional piped stdin becomes free-form context on the epic.
-
-You can also build an epic incrementally:
-
-```sh
-EPIC_ID=$(ergo new task "User login")
-ergo new task "Password hashing" --epic "$EPIC_ID"
-```
-
-The first child promotes a clean root todo task to an epic.
-
-## Work with the backlog
-
-```sh
-ergo list
-ergo list --ready
-ergo list --epic ABCDEF
-ergo show ABCDEF
-ergo info
-```
-
-Task IDs stay in a stable left column so they remain easy to scan and copy:
-
-```text
-GXINY7  ◈  Automate verified Windows distribution
-ZVCH3H  ├ ○ Add Windows to the CI test matrix
-IXQVYN  └ ○ Configure automated WinGet manifest pull requests
-```
-
-Claim a known task or the oldest ready task:
-
-```sh
-ergo claim ABCDEF --agent model@host
-ergo claim --agent model@host
-```
-
-Finish the attempt with the command that states the outcome:
-
-```sh
-ergo done ABCDEF -m "Implemented and verified"
-ergo fail ABCDEF -m "The implementation cannot meet the required constraint"
-ergo block ABCDEF -m "Waiting for the staging credential"
-ergo cancel ABCDEF -m "Requirement withdrawn"
-ergo release ABCDEF -m "Ready for another agent"
-```
-
-Use `done` when the objective succeeded and `block` when an impediment prevents
-the attempt from finishing. Lifecycle commands clear the claim and never
-replace the task body.
-
-### Failed tasks
-
-Use `ergo fail` when the work is finished but the objective was not met:
-
-```sh
-ergo fail ABCDEF -m "The upstream API cannot return the required field"
-```
-
-A failed task:
-
-- satisfies its dependencies because the attempt has finished;
-- remains visible in the backlog as an unsuccessful outcome;
-- can be claimed again under the same task ID when someone is ready to retry it.
-
-An epic finishes when every child task is done, failed, or canceled. A blocked
-task prevents the epic from finishing.
-
-### Task journal
-
-Ergo keeps task history in `.ergo/journal.jsonl`. You can track this file in
-your repository or add it to `.gitignore`.
-
-The journal records task creation, state changes, notes, and results from
-agents. `ergo show <id>` displays both the task and its history.
-
-Use `ergo result` to record as many results as the work requires, without
-changing task state:
-
-```sh
-ergo result ABCDEF "Confirmed the migration preserves all records"
-ergo result ABCDEF "Performance comparison" --file docs/benchmark.md
-```
-
-Results may refer to existing project-relative files. Compacting the backlog
-also compacts its journal. Pruning tasks also removes their journal entries.
-
-Use focused commands to edit existing work:
-
-```sh
-ergo title ABCDEF "Clarify authentication failure"
-printf '%s\n' '## Goal' '- Clarify the failure' | ergo body ABCDEF
-printf '\n## New context\n' | ergo body ABCDEF --append
-ergo move ABCDEF GHIJKL
-ergo move ABCDEF --root
-```
-
-`body --append` adds the piped bytes literally under the backlog write lock. It
-does not add a separator or newline, so include the desired boundary in the
-input. An empty append is a no-op.
-
-For a lossless body edit, project the stored body to a temporary file before
-writing it back:
-
-```sh
-tmp=$(mktemp) || exit
-trap 'rm -f "$tmp"' 0
-ergo show ABCDEF --body >"$tmp" || exit
-${EDITOR:-vi} "$tmp" || exit
-ergo body ABCDEF <"$tmp"
-```
-
-`ergo quickstart` explains the full projection and empty-body semantics.
-
-## Storage
-
-```text
-.ergo/
-├── backlog.jsonl  # transactions and compacted snapshots
-├── journal.jsonl  # shared work history and results for every task
-└── lock           # write and coherent-read serialization
-```
-
-New repositories use `backlog.jsonl`; an existing `plans.jsonl` or
-`events.jsonl` remains in place. Exactly one supported log may exist. Repository
-reads load a coherent graph under the lock. Mutations validate their complete
-event batch and append it as one transaction record under that same lock.
-Ready-task selection and claim are one locked update, so concurrent agents
-cannot claim the same task.
-
-The backlog owns current tasks, dependencies, claims, and state. The journal
-owns work history and results. Deleting the journal loses that history but
-leaves backlog state intact; the next journal write recreates it. Attached
-result files remain ordinary project files.
-
-Run `ergo --help` for the front door and `ergo quickstart` for the complete
-guide. Each command also supports `--help` for syntax and options.
+The manual lives in the CLI. `ergo --help` gives you the overview, `ergo
+quickstart` gives you the complete guide, and every command has its own help.

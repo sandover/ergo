@@ -7,7 +7,7 @@ Ergo Backlog turns a repository's dependency-aware [Ergo](https://github.com/san
 ## What you can do
 
 - **Scan the active backlog.** See tasks grouped under their epics, with compact status and dependency cues.
-- **Focus on ready work.** Filter out blocked and in-progress tasks while keeping their epic context visible.
+- **Focus on ready work.** Filter out blocked, draft, and in-progress tasks while keeping their epic context visible.
 - **Find anything quickly.** Search tasks and epics by title or six-character Ergo ID.
 - **Read task and epic details.** Open the selected item as a formatted Markdown preview in its own editor tab.
 - **Open the backlog naturally.** Select `.ergo/backlog.jsonl` in the Explorer to see the backlog view instead of the raw event log.
@@ -16,7 +16,7 @@ Ergo Backlog is read-only. Planning and lifecycle changes remain explicit CLI ac
 
 ## Get started
 
-1. Install [Ergo 4.2.0 or later](https://github.com/sandover/ergo).
+1. Install [Ergo 6.0.0 or later](https://github.com/sandover/ergo).
 2. Open a folder that contains an Ergo backlog.
 3. Open the Command Palette and run **Ergo: Backlog**.
 
@@ -41,6 +41,8 @@ The overview preserves the structure that helps you choose and understand work:
 - Epics remain visible as stable landmarks.
 - Tasks appear beneath their epic or at the top level.
 - Status glyphs distinguish ready, blocked, active, and completed work.
+- Draft work uses `◌`: it remains searchable and visible, but the ready-only
+  filter excludes it until `ergo open <id>` makes it ordinary todo work.
 - The **Ready tasks only** filter narrows the task list without hiding its epic context.
 - Clicking an Ergo ID opens that task or epic in a readable detail tab.
 
@@ -54,13 +56,13 @@ The extension normally resolves `ergo` from the extension host's `PATH`. To use 
 /opt/homebrew/bin/ergo
 ```
 
-If Ergo is missing or older than 4.2.0, the extension reports the path it tried and explains how to install or select a compatible executable.
+If Ergo is missing or older than 6.0.0, the extension reports the path it tried and explains how to install or select a compatible executable.
 
 ## Read-only by design
 
 Ergo Backlog asks the installed Ergo CLI to interpret the repository's event log. It does not parse or write `.ergo/backlog.jsonl`, mutate tasks, invoke commands through a shell, add telemetry, or send backlog content to an Ergo service.
 
-Use the Ergo CLI to create, claim, complete, block, reorder, or otherwise change work.
+Use the Ergo CLI to create, stage, open, claim, complete, block, reorder, or otherwise change work. `ergo open <id>` replaces the removed `ergo release <id>` command.
 
 ## Preview
 

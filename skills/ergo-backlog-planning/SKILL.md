@@ -10,6 +10,13 @@ Ergo is a CLI tool for writing and managing a task graph at the repository level
 
 The basic usage model is that you take the feature or goal assigned to you by the user and methodically break it down into tasks, file those tasks in ergo. One or more agents or subagents (perhaps working in parallel) will later claim and implement the tasks.
 
+When graph construction takes more than one command, create the new task or
+epic with `--draft`. Draft work stays visible for review but never appears in
+`ergo list --ready` and cannot be claimed. Add children and dependency edges,
+then run `ergo open <id>` once per leaf after its placement and ordering are
+safe. Use `open` instead of the removed `release` command; blocked work must be
+opened before claim, while finished work retries through a specific claim.
+
 The tasks should establish *guardrails* that help an implementing agent avoid undesirable outcomes and *speedrails* that help that agent move quickly and confidently.
 
 Follow a principle of parsimony. Add plan complexity only when it helps an agent decide, order, or verify work.

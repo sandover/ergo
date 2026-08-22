@@ -1,3 +1,7 @@
+// This module owns the picker projection of Ergo's versioned list JSON.
+// The CLI document is authoritative; the extension must not infer or mutate backlog state.
+// Picker labels keep IDs and status visible while item identity stays bound to the source record.
+
 export const supportedListVersion = 1;
 
 export type ErgoItemKind = "epic" | "task";
@@ -75,8 +79,8 @@ export function toPickerItems(document: ErgoListDocument): PickerEntry[] {
       const state = derivedEpicState(children);
       entries.push({
         type: "item",
-        label: `${state === "failed" ? statusIcon(state) : "$(symbol-structure)"} ${epic.title}`,
-        description: `${epic.id} · ${children.length} ${children.length === 1 ? "task" : "tasks"}${state === "failed" ? " · failed" : ""}`,
+        label: `${epic.id}  ${state === "failed" ? statusIcon(state) : "$(symbol-structure)"} ${epic.title}`,
+        description: `${children.length} ${children.length === 1 ? "task" : "tasks"}${state === "failed" ? " · failed" : ""}`,
         item: epic,
       });
       for (const child of children) {
@@ -101,11 +105,11 @@ export function derivedEpicState(children: ErgoListItem[]): string {
 function taskPickerItem(item: ErgoListItem, child: boolean): PickerItem {
   const status =
     item.state === "todo" ? (item.ready ? "ready" : "waiting") : item.state ?? "task";
-  const prefix = child ? "    ↳ " : "";
+  const prefix = child ? "↳ " : "";
   return {
     type: "item",
-    label: `${prefix}${statusIcon(status)} ${item.title}`,
-    description: `${item.id} · ${status}`,
+    label: `${item.id}  ${prefix}${statusIcon(status)} ${item.title}`,
+    description: status,
     item,
   };
 }
@@ -116,6 +120,8 @@ function statusIcon(status: string): string {
       return "$(circle-outline)";
     case "waiting":
       return "$(clock)";
+    case "draft":
+      return "◌";
     case "doing":
       return "$(sync)";
     case "blocked":

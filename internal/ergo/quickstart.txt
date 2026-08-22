@@ -21,6 +21,7 @@ every dependency is complete.
 
 The lifecycle states are:
 
+  draft      staged planning work; visible but unavailable to agents
   todo       open and unclaimed
   doing      claimed by one agent
   blocked    an identified impediment requires action
@@ -28,10 +29,11 @@ The lifecycle states are:
   failed     attempt finished without satisfying the objective
   canceled   objective no longer wanted
 
-A todo task with unmet dependencies is waiting, not blocked. A claim exists
-only while a task is doing. Done and failed are both finished states: either
-one satisfies a dependency, but only done records success. Blocked remains
-unfinished and does not satisfy dependencies.
+A draft is unfinished and never ready. A todo task with unmet dependencies is
+waiting, not blocked. A claim exists only while a task is doing. Done and
+failed are both finished states: either one satisfies a dependency, but only
+done records success. Blocked remains unfinished and does not satisfy
+dependencies.
 
 An epic is a root task with children. It has no lifecycle state, claim, message,
 or result of its own. It finishes when every child is done, failed, or canceled.
@@ -91,10 +93,13 @@ write:
 
 {{HEADER}}4. CREATE AND ORGANIZE{{RESET}}
 
-Create an unclaimed todo task with a positional title:
+Create ordinary todo work, or stage it as draft work while you assemble the
+graph:
 
   {{CMD}}ergo new task "Add login"{{RESET}}
+  {{CMD}}ergo new task "Add login" --draft{{RESET}}
   {{CMD}}ergo new task "Session tokens" --epic ABCDEF{{RESET}}
+  {{CMD}}ergo new task "Session tokens" --epic ABCDEF --draft{{RESET}}
 
 Piped stdin becomes the literal initial body. No pipe or an empty pipe creates
 an empty body.
@@ -106,9 +111,11 @@ use directly:
 
   {{CMD}}ergo show "$(ergo new task "Investigate timeout")"{{RESET}}
 
-Create an epic and its children from a Markdown file:
+Create an epic and its children from a Markdown file. `--draft` stages every
+child in the atomic batch; the epic itself has no lifecycle state:
 
   {{CMD}}ergo new epic "Authentication" --file tasks.md{{RESET}}
+  {{CMD}}ergo new epic "Authentication" --file tasks.md --draft{{RESET}}
 
 `tasks.md` contains one or more chunks separated by a line that is exactly
 `---`. Each chunk starts with `# Title`; its remaining text is the child body.
@@ -137,8 +144,16 @@ pipe clears it. `--append` instead adds the input bytes literally to the stored
 body under the write lock. It adds no separator or newline, so include any
 desired boundary in the input. Empty append input is a no-op. Move accepts
 leaves only. Its destination must be an epic or a clean,
-unclaimed root todo task with no results; the latter becomes an epic when it
-receives its first child.
+unclaimed root todo or draft task with no results; the latter becomes an epic
+when it receives its first child. A staged graph is safe to configure because
+draft children cannot be claimed. Once dependency and placement work is done,
+open each leaf explicitly:
+
+  {{CMD}}ergo open CHILD01{{RESET}}
+  {{CMD}}ergo open CHILD02{{RESET}}
+
+Opening is intentionally one task at a time. It keeps graph construction
+atomic at the command level without adding a second transaction mechanism.
 
 {{HEADER}}5. CLAIM AND RESUME{{RESET}}
 
@@ -147,22 +162,28 @@ Use a stable identity such as `model@host`:
   {{CMD}}ergo claim ABCDEF --agent model@host{{RESET}}   claim a known task
   {{CMD}}ergo claim --agent model@host{{RESET}}          claim the oldest ready task
 
-Automatic claim selects a ready todo task. A specific claim can resume todo,
-blocked, done, failed, or canceled work under the same ID, even if its
-dependencies are incomplete. This is how work retries after failure. Repeating
-a claim as its owner succeeds; another identity gets a conflict.
+Automatic claim selects a ready todo task. Draft and blocked work must be opened
+first. A specific claim can resume todo, doing, done, failed, or canceled work
+under the same ID, even if its dependencies are incomplete. This is how work
+retries after failure. Repeating a claim as its owner succeeds; another
+identity gets a conflict. A legacy error record can still recover through a
+specific claim, but `open` rejects legacy error directly.
 
-{{HEADER}}6. FINISH, BLOCK, CANCEL, OR RELEASE{{RESET}}
+{{HEADER}}6. OPEN, FINISH, BLOCK, OR CANCEL{{RESET}}
 
+  {{CMD}}ergo open ABCDEF{{RESET}}       draft, doing, or blocked work to todo
   {{CMD}}ergo done ABCDEF{{RESET}}       objective satisfied
   {{CMD}}ergo fail ABCDEF{{RESET}}       attempt finished unsuccessfully
   {{CMD}}ergo block ABCDEF{{RESET}}      impediment requires action
   {{CMD}}ergo cancel ABCDEF{{RESET}}     objective no longer wanted
-  {{CMD}}ergo release ABCDEF{{RESET}}    unfinished work returns to todo
 
-Done, fail, block, and cancel accept any readable task state. Release accepts
-unfinished work and rejects done, failed, or canceled work. Every lifecycle
-command clears the claim.
+Draft accepts only `open` and `cancel` as lifecycle transitions. Done, fail,
+and block reject draft until it is opened. Open accepts draft, doing, blocked,
+and todo; opening todo is an idempotent no-op and writes no journal entry.
+Every lifecycle command clears the claim when it changes state. Done, fail,
+block, cancel, and open also record the resulting state; opening an already-todo
+task remains a no-op unless it carries a message.
+Finished work remains retryable through a specific claim, not open.
 
 Use `-m` for terse outcome or attempt context on the automatic journal entry:
 
@@ -171,9 +192,14 @@ Use `-m` for terse outcome or attempt context on the automatic journal entry:
   {{CMD}}ergo done ABCDEF -m "Implemented" -m "Verified with task ci"{{RESET}}
 
 Repeated `-m` values form paragraphs in one entry. Successful task creation and
-state-changing claim, done, fail, block, cancel, and release calls each append
-one automatic entry. Reads, structural changes, and no-ops do not. Lifecycle
+state-changing claim, done, fail, block, cancel, and open calls each append one
+automatic entry. Reads, structural changes, and no-ops do not. Lifecycle
 commands do not read stdin and never replace the task body.
+
+Ergo 6 removes the `release` command. Migrate `release` to `open`; migrate a
+blocked direct claim to `open` followed by `claim`. Historical release journal
+entries remain readable, but an older Ergo binary cannot read the first draft
+record, so upgrade the CLI used by every agent before staging work.
 
 Record any number of explicit results without changing task state:
 
@@ -234,8 +260,8 @@ task, and migrates legacy messages and results out of the backlog once.
 Every task shares `.ergo/journal.jsonl`; the readable Journal section in `show`
 is a filtered rendering of that JSONL, not another file. Leaf show includes the
 retained task journal. Epic show includes only each child's latest result. List
-shows the newest attached result file for visible leaves, while `list --json`
-remains a journal-free task-picker projection.
+keeps the task tree focused on state and readiness, while `list --json` remains
+a journal-free task-picker projection.
 
 Projects may track or ignore `journal.jsonl`. Deleting it loses work evidence
 but does not corrupt the backlog; the next journal write recreates it. Older
