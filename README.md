@@ -8,12 +8,12 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo/v4.svg)](https://pkg.go.dev/github.com/sandover/ergo/v4)
 
 Ergo keeps an implementation backlog in the repository. Agents create tasks,
-order them with dependencies, claim ready work, and record outcomes through
-direct commands. Humans see the same backlog. A repository lock keeps concurrent
-claims and mutations safe.
+order them with dependencies, claim ready work, and record successful or failed
+outcomes through direct commands. Humans see the same backlog and its work
+history. A repository lock keeps concurrent claims and mutations safe.
 
 Ergo is deliberately small: tasks, epics, dependencies, lifecycle state, and
-results. Its transaction and snapshot records are plain, git-friendly JSONL.
+results. The backlog and its shared task journal are plain, git-friendly JSONL.
 
 Inspired by [beads (bd)](https://github.com/steveyegge/beads), with a smaller
 command and storage model.
@@ -32,6 +32,9 @@ Any supported platform with Go:
 go install github.com/sandover/ergo/v4/cmd/ergo@latest
 ```
 
+Prebuilt archives for macOS, Linux, and Windows are available from the
+[latest GitHub release](https://github.com/sandover/ergo/releases/latest).
+
 Add a short repository instruction for your coding agent:
 
 > Use Ergo to manage the implementation backlog. Run `ergo --help` and
@@ -47,7 +50,7 @@ and executing larger backlogs.
 gives humans a clear, read-only view of the same repository backlog used by
 coding agents. Open `.ergo/backlog.jsonl` to scan active work, see which tasks
 are ready or waiting, and follow the structure of an epic without reading the
-event log.
+underlying JSONL.
 
 ![An Ergo backlog open in VS Code](docs/img/ergo-vscode-backlog.png)
 
@@ -139,7 +142,13 @@ ergo show ABCDEF
 ergo info
 ```
 
-![Example output of ergo list](docs/img/ergo-list-screenshot.jpg)
+Task IDs stay in a stable left column so they remain easy to scan and copy:
+
+```text
+GXINY7  ◈  Automate verified Windows distribution
+ZVCH3H  ├ ○ Add Windows to the CI test matrix
+IXQVYN  └ ○ Configure automated WinGet manifest pull requests
+```
 
 Claim a known task or the oldest ready task:
 
