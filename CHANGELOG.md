@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.1] - 2026-08-24
+
+### Fixed
+
+- Read commands now share the repository lock, so independent list, show, and
+  prune-preview operations can run concurrently. Writes remain exclusive,
+  snapshots remain coherent, and the existing bounded lock wait is unchanged.
+
 ## [6.0.0] - 2026-08-21
 
 ### Added

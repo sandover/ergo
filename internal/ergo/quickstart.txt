@@ -269,5 +269,8 @@ but does not corrupt the backlog; the next journal write recreates it. Older
 Ergo versions do not understand the split journal or newly written failed-state
 records.
 
-Reads and writes use the repository lock. Claim selection and mutation happen
-under the same lock, so concurrent agents cannot claim the same task.
+Read commands share the repository lock and may run concurrently while each
+returns a coherent snapshot. This includes a prune preview.
+Writes use the lock exclusively; confirmed prune is a write. Claim selection
+and mutation happen under one exclusive lock, so concurrent agents cannot claim
+the same task. Commands retain the bounded wait for an incompatible lock.

@@ -3,7 +3,8 @@
 // Purpose: Provide non-blocking advisory file locks on Unix hosts.
 // Exports: none (package-internal helpers).
 // Role: Platform implementation used by withLock.
-// Invariants: Locks are exclusive and held for the lifetime of the open file.
+// Invariants: Locks use the requested shared or exclusive mode and are held for
+// the lifetime of the open file.
 package ergo
 
 import (
@@ -12,8 +13,12 @@ import (
 	"syscall"
 )
 
-func tryFileLock(file *os.File) (bool, error) {
-	err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+func tryFileLock(file *os.File, mode repositoryLockMode) (bool, error) {
+	operation := syscall.LOCK_SH
+	if mode == repositoryLockExclusive {
+		operation = syscall.LOCK_EX
+	}
+	err := syscall.Flock(int(file.Fd()), operation|syscall.LOCK_NB)
 	if err == nil {
 		return true, nil
 	}

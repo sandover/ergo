@@ -94,10 +94,11 @@ and the interrupted-tail rule repairs only an incomplete final JSON record.
 
 ## Locking and repository updates
 
-`View` acquires `.ergo/lock`, loads the selected backlog and journal, and returns a coherent
-graph. List and show therefore cannot observe the middle of a transaction.
+`View` acquires `.ergo/lock` in shared mode, loads the selected backlog and
+journal, and returns a coherent graph. Multiple views may overlap. List and show
+therefore cannot observe the middle of a transaction.
 
-`Update` holds the same lock for its entire operation:
+`Update` holds the same lock exclusively for its entire operation:
 
 1. Load the current graph.
 2. Ask the use case to build its complete event batch from that graph.
@@ -110,9 +111,9 @@ The repository does not reload after append. Validation completes before any
 new bytes are written. Short writes are retried until the transaction is
 complete or writing stops making progress.
 
-The lock operation retries with jitter for up to ten seconds. The lock file is
-a synchronization inode, not application state. The operating system releases
-the advisory lock when a process exits.
+An incompatible lock operation retries with jitter for up to ten seconds. The
+lock file is a synchronization inode, not application state. The operating
+system releases the advisory lock when a process exits.
 
 Oldest-ready selection and claim occur inside one `Update`, so concurrent
 agents cannot claim the same task. Confirmed prune also computes its targets
@@ -203,10 +204,10 @@ second transaction or a second source of state.
 ## Prune and snapshots
 
 Prune is logical deletion. A dry run computes a deterministic plan under a
-coherent read lock. Confirmed prune selects done, failed, and canceled leaves
-and then epics with no remaining children. It appends the resulting tombstones
-as one transaction, then removes every journal entry for the selected IDs. The
-dry run reports that entry count.
+shared read lock. Confirmed prune holds the lock exclusively while it selects
+done, failed, and canceled leaves and then epics with no remaining children. It
+appends the resulting tombstones as one transaction, then removes every journal
+entry for the selected IDs. The dry run reports that entry count.
 
 Compact is the only operation that replaces the selected log. While holding
 the lock, it loads the current graph and creates a deterministic snapshot block:

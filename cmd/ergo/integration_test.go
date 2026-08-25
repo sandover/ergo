@@ -1577,6 +1577,60 @@ func TestLockWaitsThenSucceeds(t *testing.T) {
 	}
 }
 
+func TestSharedLockAllowsReadersButBlocksWriter(t *testing.T) {
+	dir := setupErgo(t)
+	stdout, _, code := runNewTask(t, dir, "Task A")
+	if code != 0 {
+		t.Fatalf("new task failed: exit %d", code)
+	}
+	taskID := strings.TrimSpace(stdout)
+
+	lockPath := filepath.Join(dir, ".ergo", "lock")
+	lockFile, err := os.OpenFile(lockPath, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatalf("open lock file: %v", err)
+	}
+	defer lockFile.Close()
+	if err := lockTestFileShared(lockFile); err != nil {
+		t.Fatalf("acquire shared lock: %v", err)
+	}
+
+	for _, args := range [][]string{{"list", "--all"}, {"show", taskID}} {
+		out, errOut, exit := runErgo(t, dir, "", args...)
+		if exit != 0 || strings.Contains(errOut, "lock busy") || !strings.Contains(out, taskID) {
+			t.Fatalf("reader %v behind shared lock: code=%d stdout=%q stderr=%q", args, exit, out, errOut)
+		}
+	}
+
+	type result struct {
+		stdout string
+		stderr string
+		code   int
+	}
+	writerDone := make(chan result, 1)
+	go func() {
+		out, errOut, exit := runErgo(t, dir, "", "title", taskID, "Renamed")
+		writerDone <- result{stdout: out, stderr: errOut, code: exit}
+	}()
+	select {
+	case result := <-writerDone:
+		t.Fatalf("writer completed while shared lock was held: %+v", result)
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	if err := unlockTestFile(lockFile); err != nil {
+		t.Fatalf("release shared lock: %v", err)
+	}
+	select {
+	case result := <-writerDone:
+		if result.code != 0 || strings.Contains(result.stderr, "lock busy") {
+			t.Fatalf("writer after shared unlock: %+v", result)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("writer did not complete after shared lock release")
+	}
+}
+
 func TestPrune_ConcurrentRuns(t *testing.T) {
 	dir := setupErgo(t)
 

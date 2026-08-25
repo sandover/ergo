@@ -135,13 +135,13 @@ func (r *Repository) openAt(dir string, opts GlobalOptions, io repositoryIO) err
 	return nil
 }
 
-// View loads a coherent snapshot while holding the repository lock.
+// View loads a coherent snapshot while holding a shared repository lock.
 func (r *Repository) View() (*Graph, error) {
 	if r == nil || r.eventsPath == "" {
 		return nil, errors.New("repository is not open")
 	}
 	var graph *Graph
-	err := withLock(r.lockPath, r.opts, func() error {
+	err := withReadLock(r.lockPath, r.opts, func() error {
 		var err error
 		graph, err = r.load()
 		if err != nil {
@@ -164,7 +164,7 @@ func (r *Repository) ViewGraph() (*Graph, error) {
 		return nil, errors.New("repository is not open")
 	}
 	var graph *Graph
-	err := withLock(r.lockPath, r.opts, func() error {
+	err := withReadLock(r.lockPath, r.opts, func() error {
 		var err error
 		graph, err = r.load()
 		return err
@@ -178,7 +178,7 @@ func (r *Repository) ViewWithJournal() (*Graph, []JournalEntry, error) {
 	}
 	var graph *Graph
 	var journal []JournalEntry
-	err := withLock(r.lockPath, r.opts, func() error {
+	err := withReadLock(r.lockPath, r.opts, func() error {
 		var err error
 		graph, err = r.load()
 		if err != nil {

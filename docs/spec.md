@@ -345,15 +345,17 @@ Confirmed prune removes every journal entry for each selected task. Its dry run
 reports both selected tasks and the number of journal entries that confirmation
 would remove.
 
-Every repository and journal view or update acquires `.ergo/lock`. An update
+Every repository and journal view or update acquires `.ergo/lock`. Views share
+the lock with other views and return coherent snapshots; a prune dry run is a
+view. Updates hold the lock exclusively, including confirmed prune. An update
 loads the current graph, validates its complete event batch against an isolated
 copy, and appends one backlog transaction while it holds the lock. For mutations
 that require an automatic journal entry, Ergo writes the backlog first and then
 the journal under that same lock. If the journal append fails, Ergo returns an
 explicit partial-success error stating that the backlog changed; it adds no
-cross-file transaction or recovery protocol. List and show return coherent
-views. Oldest-ready selection and claim occur in one update, so concurrent
-agents cannot claim the same task.
+cross-file transaction or recovery protocol. Commands retain a bounded wait for
+an incompatible lock. Oldest-ready selection and claim occur in one update, so
+concurrent agents cannot claim the same task.
 
 Projects may track or ignore `journal.jsonl` independently of backlog policy.
 Ergo does not choose that repository policy. Older binaries do not understand

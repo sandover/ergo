@@ -11,7 +11,11 @@ func appendEvents(path string, events []Event) error {
 }
 
 func withLock(path string, opts GlobalOptions, fn func() error) error {
-	return repositoryWithLock(path, opts, fn)
+	return repositoryWithLock(path, opts, repositoryLockExclusive, fn)
+}
+
+func withReadLock(path string, opts GlobalOptions, fn func() error) error {
+	return repositoryWithLock(path, opts, repositoryLockShared, fn)
 }
 
 func (r *Repository) update(fn func(*Graph) ([]Event, error)) error {

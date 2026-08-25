@@ -187,6 +187,8 @@ func TestReaderJourneyHasNoDeadEnd(t *testing.T) {
 	for _, fact := range []string{
 		"BACKLOG MODEL", "waiting, not blocked", "CLAIM AND RESUME",
 		"DEPENDENCIES", "Piped stdin becomes", "prints only the task ID",
+		"Read commands share the repository lock", "prune preview",
+		"Writes use the lock exclusively", "bounded wait",
 	} {
 		if !strings.Contains(quickstart, fact) {
 			t.Errorf("quickstart lacks cross-command fact %q", fact)

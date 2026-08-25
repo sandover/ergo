@@ -8,7 +8,18 @@ import (
 
 const defaultLockTimeout = 10 * time.Second
 
-func repositoryWithLock(path string, opts GlobalOptions, fn func() error) error {
+type repositoryLockMode uint8
+
+const (
+	repositoryLockShared repositoryLockMode = iota
+	repositoryLockExclusive
+)
+
+func repositoryWithLock(path string, opts GlobalOptions, mode repositoryLockMode, fn func() error) error {
+	return repositoryWithLockTimeout(path, opts, mode, defaultLockTimeout, fn)
+}
+
+func repositoryWithLockTimeout(path string, opts GlobalOptions, mode repositoryLockMode, timeout time.Duration, fn func() error) error {
 	_ = opts
 	lockFile, err := os.Open(path)
 	if err != nil && os.IsNotExist(err) {
@@ -22,9 +33,9 @@ func repositoryWithLock(path string, opts GlobalOptions, fn func() error) error 
 	}
 	defer lockFile.Close()
 
-	deadline := time.Now().Add(defaultLockTimeout)
+	deadline := time.Now().Add(timeout)
 	for {
-		locked, err := tryFileLock(lockFile)
+		locked, err := tryFileLock(lockFile, mode)
 		if err != nil {
 			return err
 		}
@@ -32,7 +43,7 @@ func repositoryWithLock(path string, opts GlobalOptions, fn func() error) error 
 			break
 		}
 		if !time.Now().Before(deadline) {
-			return fmt.Errorf("%w after %s", ErrLockBusy, defaultLockTimeout)
+			return fmt.Errorf("%w after %s", ErrLockBusy, timeout)
 		}
 		time.Sleep(lockRetryDelay(deadline))
 	}

@@ -38,7 +38,11 @@ func runPrune(dir string, opts GlobalOptions, apply bool) (PrunePlan, error) {
 		return PrunePlan{}, err
 	}
 	var plan PrunePlan
-	err := withLock(repository.lockPath, repository.opts, func() error {
+	lock := withReadLock
+	if apply {
+		lock = withLock
+	}
+	err := lock(repository.lockPath, repository.opts, func() error {
 		graph, eventRead, err := repository.loadWithRead()
 		if err != nil {
 			return err
