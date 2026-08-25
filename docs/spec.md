@@ -81,9 +81,11 @@ Color mode accepts `auto`, `always`, or `never`. It defaults to `auto`.
 ## Repository discovery and initialization
 
 Ergo discovers `.ergo` by walking upward from the current directory or from
-`--dir <path>`. `init [dir]` creates the repository at its target. Repeating
+`--dir <path>`. `init [dir]` creates the repository at the positional directory,
+then `--dir`, then the current directory, in that order of precedence. Repeating
 `init` preserves an existing valid repository and repairs a missing selected
-backlog file.
+backlog file. For initialization, `--dir` may name either the project directory
+or its `.ergo` directory.
 
 `where` prints the resolved `.ergo` path. `info` prints the running executable
 and version, the project path, the `.ergo` path, and the selected backlog path.

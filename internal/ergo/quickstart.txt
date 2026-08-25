@@ -48,9 +48,10 @@ any child was canceled, and done otherwise. Epics cannot be nested.
   {{CMD}}ergo info{{RESET}}
 
 Ergo discovers `.ergo` by walking upward from the current directory or from
-`--dir <path>`. `where` prints the active `.ergo` directory. `info` reports the
-running executable and version together with the active project and backlog
-paths.
+`--dir <path>`. For `init`, a positional directory takes precedence over
+`--dir`; without either, Ergo initializes the current directory. `where` prints
+the active `.ergo` directory. `info` reports the running executable and version
+together with the active project and backlog paths.
 
   {{CMD}}ergo list{{RESET}}                 active work and failed outcomes
   {{CMD}}ergo list --ready{{RESET}}         tasks available to claim

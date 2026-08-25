@@ -3,6 +3,7 @@ package ergo
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -12,7 +13,13 @@ type InitializeResult = InitializeOutcome
 func (a *Application) Initialize(request InitializeRequest) (InitializeResult, error) {
 	dir := request.Dir
 	if dir == "" {
-		dir = "."
+		dir = a.repository.StartDir
+		if filepath.Base(filepath.Clean(dir)) == dataDirName {
+			dir = filepath.Dir(filepath.Clean(dir))
+		}
+		if dir == "" {
+			dir = "."
+		}
 	}
 	outcome, err := InitializeRepository(dir)
 	return outcome, classifyRepositoryError(err)

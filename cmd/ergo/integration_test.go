@@ -781,6 +781,57 @@ func TestPathAndCreationConfirmations(t *testing.T) {
 	}
 }
 
+func TestInitDirectorySelection(t *testing.T) {
+	t.Run("global dir", func(t *testing.T) {
+		workingDir := t.TempDir()
+		targetDir := t.TempDir()
+		stdout, stderr, code := runErgo(t, workingDir, "", "--dir", targetDir, "init")
+		wantPath := filepath.Join(targetDir, ".ergo")
+		if code != 0 || stderr != "" || !strings.Contains(stdout, "Initialized Ergo at "+wantPath) {
+			t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+		if _, err := os.Stat(filepath.Join(wantPath, "backlog.jsonl")); err != nil {
+			t.Fatalf("global --dir was not initialized: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(workingDir, ".ergo")); !os.IsNotExist(err) {
+			t.Fatalf("working directory was initialized: %v", err)
+		}
+	})
+
+	t.Run("positional dir overrides global dir", func(t *testing.T) {
+		workingDir := t.TempDir()
+		globalDir := t.TempDir()
+		positionalDir := t.TempDir()
+		stdout, stderr, code := runErgo(t, workingDir, "", "--dir", globalDir, "init", positionalDir)
+		wantPath := filepath.Join(positionalDir, ".ergo")
+		if code != 0 || stderr != "" || !strings.Contains(stdout, "Initialized Ergo at "+wantPath) {
+			t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+		if _, err := os.Stat(filepath.Join(globalDir, ".ergo")); !os.IsNotExist(err) {
+			t.Fatalf("global directory was initialized instead of positional directory: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(workingDir, ".ergo")); !os.IsNotExist(err) {
+			t.Fatalf("working directory was initialized: %v", err)
+		}
+	})
+
+	t.Run("global dir accepts ergo directory", func(t *testing.T) {
+		workingDir := t.TempDir()
+		targetDir := t.TempDir()
+		ergoDir := filepath.Join(targetDir, ".ergo")
+		stdout, stderr, code := runErgo(t, workingDir, "", "--dir", ergoDir, "init")
+		if code != 0 || stderr != "" || !strings.Contains(stdout, "Initialized Ergo at "+ergoDir) {
+			t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+		if _, err := os.Stat(filepath.Join(ergoDir, "backlog.jsonl")); err != nil {
+			t.Fatalf("direct .ergo target was not initialized: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(ergoDir, ".ergo")); !os.IsNotExist(err) {
+			t.Fatalf("nested .ergo directory was initialized: %v", err)
+		}
+	})
+}
+
 func TestNoReadyClaimIsReadable(t *testing.T) {
 	dir := setupErgo(t)
 	stdout, stderr, code := runErgo(t, dir, "", "claim", "--agent", "agent@local")
