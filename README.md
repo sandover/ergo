@@ -57,7 +57,7 @@ Once your agent has written out a backlog, you can view it with `ergo list`
 
 or in VS Code with the [Ergo Backlog](https://marketplace.visualstudio.com/items?itemName=sandover.ergo-backlog) plugin available in the VS Code Extension Marketplace. If you click on `.ergo/backlog.jsonl` you'll see something like this:
 
-![An Ergo backlog in VS Code](docs/img/ergo-vscode-backlog-overview.png)
+![An Ergo backlog in VS Code](docs/img/ergo-vscode-backlog.png)
 
 ## Tasks and epics
 
