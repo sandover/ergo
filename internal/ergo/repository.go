@@ -268,6 +268,140 @@ func (r *Repository) UpdateWithJournal(fn func(*Graph) ([]Event, []JournalEntry,
 	return outcome, err
 }
 
+func transactionByteLength(events []Event, read eventLogRead) (int64, error) {
+	data, err := marshalTransaction(events)
+	if err != nil || len(data) == 0 {
+		return 0, err
+	}
+	transaction := data
+	if read.needsSeparator && !read.truncatedTail {
+		transaction = append([]byte{'\n'}, transaction...)
+	}
+	return int64(len(transaction)), nil
+}
+
+func advanceEventLogRead(read eventLogRead, events []Event) (eventLogRead, error) {
+	delta, err := transactionByteLength(events, read)
+	if err != nil {
+		return eventLogRead{}, err
+	}
+	read.validBytes += delta
+	read.needsSeparator = false
+	read.truncatedTail = false
+	return read, nil
+}
+
+func (r *Repository) reconcileLoadedGraph(graph *Graph, read eventLogRead) (*Graph, eventLogRead, error) {
+	info, err := os.Stat(r.eventsPath)
+	if err != nil {
+		return nil, eventLogRead{}, err
+	}
+	if info.Size() == read.validBytes {
+		return graph, read, nil
+	}
+	currentRead, err := r.io.inspectEvents(r.eventsPath)
+	if err != nil {
+		return nil, eventLogRead{}, err
+	}
+	currentGraph, err := replayGraphFromRead(currentRead)
+	if err != nil {
+		return nil, eventLogRead{}, err
+	}
+	return currentGraph, currentRead, nil
+}
+
+// updateLoaded applies a mutation against a graph already loaded in memory.
+func (r *Repository) updateLoaded(graph *Graph, read eventLogRead, fn func(*Graph) ([]Event, error)) (UpdateOutcome, eventLogRead, error) {
+	if r == nil || r.eventsPath == "" {
+		return UpdateOutcome{}, eventLogRead{}, errors.New("repository is not open")
+	}
+	var outcome UpdateOutcome
+	var nextRead eventLogRead
+	err := withLock(r.lockPath, r.opts, func() error {
+		currentGraph, currentRead, err := r.reconcileLoadedGraph(graph, read)
+		if err != nil {
+			return err
+		}
+		working := cloneGraph(currentGraph)
+		events, err := fn(working)
+		if err != nil {
+			return err
+		}
+		candidate, err := replayEventsOnto(currentGraph, events)
+		if err != nil {
+			return err
+		}
+		if err := r.appendValidated(events, currentRead); err != nil {
+			return err
+		}
+		outcome.Graph = candidate
+		nextRead, err = advanceEventLogRead(currentRead, events)
+		return err
+	})
+	return outcome, nextRead, err
+}
+
+// updateLoadedWithJournal applies a mutation and journal side effect against a loaded graph.
+func (r *Repository) updateLoadedWithJournal(graph *Graph, read eventLogRead, journal []JournalEntry, fn func(*Graph) ([]Event, []JournalEntry, error)) (UpdateOutcome, eventLogRead, []JournalEntry, error) {
+	if r == nil || r.eventsPath == "" {
+		return UpdateOutcome{}, eventLogRead{}, nil, errors.New("repository is not open")
+	}
+	var outcome UpdateOutcome
+	var nextRead eventLogRead
+	var mergedJournal []JournalEntry
+	err := withLock(r.lockPath, r.opts, func() error {
+		currentGraph, currentRead, err := r.reconcileLoadedGraph(graph, read)
+		if err != nil {
+			return err
+		}
+		journalRead, err := r.readJournal()
+		if err != nil {
+			return err
+		}
+		existingJournal := mergeLegacyJournal(journalRead.entries, currentGraph)
+		if len(journal) > 0 {
+			existingJournal = mergeLegacyJournal(journal, currentGraph)
+		}
+		hydrateGraphEvidence(currentGraph, existingJournal)
+		working := cloneGraph(currentGraph)
+		events, newJournal, err := fn(working)
+		if err != nil {
+			return err
+		}
+		candidate, err := replayEventsOnto(currentGraph, events)
+		if err != nil {
+			return err
+		}
+		if err := r.appendValidated(events, currentRead); err != nil {
+			return err
+		}
+		outcome.Graph = candidate
+		nextRead, err = advanceEventLogRead(currentRead, events)
+		if err != nil {
+			return err
+		}
+		if len(newJournal) > 0 {
+			if err := r.appendJournalValidated(newJournal, journalRead); err != nil {
+				return fmt.Errorf("backlog changed, but journal update failed: %w", err)
+			}
+			mergedJournal = append(existingJournal, newJournal...)
+		} else {
+			mergedJournal = existingJournal
+		}
+		outcome.Journal = mergedJournal
+		hydrateGraphEvidence(outcome.Graph, mergedJournal)
+		return nil
+	})
+	return outcome, nextRead, mergedJournal, err
+}
+
+func replayGraphFromRead(read eventLogRead) (*Graph, error) {
+	if read.snapshot != nil {
+		return replayEventsOnto(read.snapshot, read.events)
+	}
+	return replayEvents(read.events)
+}
+
 func (r *Repository) Compact() (CompactOutcome, error) {
 	if r == nil || r.eventsPath == "" {
 		return CompactOutcome{}, errors.New("repository is not open")

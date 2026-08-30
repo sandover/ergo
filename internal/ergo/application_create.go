@@ -37,21 +37,17 @@ func (a *Application) CreateEpic(request CreateEpicRequest) (CreateEpicOutcome, 
 	if strings.TrimSpace(request.FilePath) == "" || strings.TrimSpace(request.Title) == "" {
 		return CreateEpicOutcome{}, classified(ErrorUsage, errors.New(NewEpicUsage))
 	}
-	tasks, err := ParseEpicFile(request.FilePath)
-	if err != nil {
+	if _, err := ParseEpicFile(request.FilePath); err != nil {
 		var pathError *os.PathError
 		if errors.As(err, &pathError) {
 			return CreateEpicOutcome{}, classifyRepositoryError(err)
 		}
 		return CreateEpicOutcome{}, classified(ErrorUsage, err)
 	}
-	dir, err := ergoDir(a.repository)
+	session, err := a.OpenSession()
 	if err != nil {
-		return CreateEpicOutcome{}, classifyRepositoryError(err)
+		return CreateEpicOutcome{}, err
 	}
-	outcome, err := runBulkCreate(dir, a.repository, strings.TrimSpace(request.Title), request.Body, tasks, request.Draft)
-	if err != nil {
-		return CreateEpicOutcome{}, classifyRepositoryError(err)
-	}
-	return outcome, nil
+	defer session.Close()
+	return session.CreateEpic(request)
 }

@@ -21,7 +21,7 @@ import (
 var publicCommandPaths = []string{
 	"init", "new", "new task", "new epic", "list", "show", "claim", "done",
 	"fail", "block", "cancel", "open", "result", "title", "body", "move", "sequence",
-	"unsequence", "where", "info", "compact", "prune", "quickstart", "version",
+	"unsequence", "where", "info", "compact", "prune", "quickstart", "version", "serve",
 }
 
 func TestRootHelpIsTheFrontDoor(t *testing.T) {

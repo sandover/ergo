@@ -22,13 +22,10 @@ func (a *Application) Sequence(request SequenceRequest) (SequenceOutcome, error)
 	if len(request.IDs) < 2 {
 		return SequenceOutcome{}, classified(ErrorUsage, errors.New(usage))
 	}
-	dir, err := ergoDir(a.repository)
+	session, err := a.OpenSession()
 	if err != nil {
-		return SequenceOutcome{}, classifyRepositoryError(err)
+		return SequenceOutcome{}, err
 	}
-	changed, err := writeLinkEvents(dir, a.repository, request.EventType, buildSequenceEdges(request.IDs))
-	if err != nil {
-		return SequenceOutcome{}, classifyRepositoryError(err)
-	}
-	return SequenceOutcome{EventType: request.EventType, Edges: changed}, nil
+	defer session.Close()
+	return session.Sequence(request)
 }

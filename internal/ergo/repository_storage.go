@@ -327,60 +327,12 @@ func createTask(dir string, opts RepositoryOptions, epicID string, title, body s
 	}
 	var output createOutput
 	update, err := repository.UpdateWithJournal(func(graph *Graph) ([]Event, []JournalEntry, error) {
-		if epicID != "" {
-			epic, ok := graph.Tasks[epicID]
-			if !ok {
-				return nil, nil, classified(ErrorNotFound, fmt.Errorf("unknown epic id %s", epicID))
-			}
-			if epic.EpicID != "" {
-				return nil, nil, classified(ErrorConflict, fmt.Errorf("task %s is not an epic", epicID))
-			}
-			// Reject first-child assignment to a dirty leaf: once promoted to a
-			// container, leaf-only semantics (state/claim/results) no longer apply.
-			if !graph.IsEpic(epic.ID) {
-				if err := validateEpicPromotion(epic); err != nil {
-					return nil, nil, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: %w", epicID, err))
-				}
-			}
-		}
-		id, err := newShortID(graph.Tasks)
+		events, journal, planned, err := planCreateTask(graph, epicID, title, body, draft)
 		if err != nil {
 			return nil, nil, err
 		}
-		uuid, err := newUUID()
-		if err != nil {
-			return nil, nil, err
-		}
-		now := time.Now().UTC()
-		createdAt := formatTime(now)
-		state := stateTodo
-		if draft {
-			state = stateDraft
-		}
-		payload := NewTaskEvent{
-			ID:        id,
-			UUID:      uuid,
-			EpicID:    epicID,
-			State:     state,
-			Title:     title,
-			Body:      body,
-			CreatedAt: createdAt,
-		}
-		event, err := newEvent("new_task", now, payload)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		output = createOutput{
-			ID:        id,
-			UUID:      uuid,
-			EpicID:    payload.EpicID,
-			State:     payload.State,
-			Title:     payload.Title,
-			Body:      payload.Body,
-			CreatedAt: createdAt,
-		}
-		return []Event{event}, []JournalEntry{newJournalEntry(id, "created", "", "", now)}, nil
+		output = planned
+		return events, journal, nil
 	})
 	if err != nil {
 		return createOutput{}, err
@@ -390,6 +342,60 @@ func createTask(dir string, opts RepositoryOptions, epicID string, title, body s
 	}
 	output.State = update.Graph.Tasks[output.ID].State
 	return output, nil
+}
+
+func planCreateTask(graph *Graph, epicID, title, body string, draft bool) ([]Event, []JournalEntry, createOutput, error) {
+	if epicID != "" {
+		epic, ok := graph.Tasks[epicID]
+		if !ok {
+			return nil, nil, createOutput{}, classified(ErrorNotFound, fmt.Errorf("unknown epic id %s", epicID))
+		}
+		if epic.EpicID != "" {
+			return nil, nil, createOutput{}, classified(ErrorConflict, fmt.Errorf("task %s is not an epic", epicID))
+		}
+		if !graph.IsEpic(epic.ID) {
+			if err := validateEpicPromotion(epic); err != nil {
+				return nil, nil, createOutput{}, classified(ErrorConflict, fmt.Errorf("cannot add child to task %s: %w", epicID, err))
+			}
+		}
+	}
+	id, err := newShortID(graph.Tasks)
+	if err != nil {
+		return nil, nil, createOutput{}, err
+	}
+	uuid, err := newUUID()
+	if err != nil {
+		return nil, nil, createOutput{}, err
+	}
+	now := time.Now().UTC()
+	createdAt := formatTime(now)
+	state := stateTodo
+	if draft {
+		state = stateDraft
+	}
+	payload := NewTaskEvent{
+		ID:        id,
+		UUID:      uuid,
+		EpicID:    epicID,
+		State:     state,
+		Title:     title,
+		Body:      body,
+		CreatedAt: createdAt,
+	}
+	event, err := newEvent("new_task", now, payload)
+	if err != nil {
+		return nil, nil, createOutput{}, err
+	}
+	output := createOutput{
+		ID:        id,
+		UUID:      uuid,
+		EpicID:    payload.EpicID,
+		State:     payload.State,
+		Title:     payload.Title,
+		Body:      payload.Body,
+		CreatedAt: createdAt,
+	}
+	return []Event{event}, []JournalEntry{newJournalEntry(id, "created", "", "", now)}, output, nil
 }
 
 // ResultEvidence holds evidence metadata captured when attaching a result.
