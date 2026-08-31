@@ -16,7 +16,7 @@ Ergo Backlog is read-only. Planning and lifecycle changes remain explicit CLI ac
 
 ## Get started
 
-1. Install [Ergo 6.0.0 or later](https://github.com/sandover/ergo).
+1. Install the [latest Ergo release](https://github.com/sandover/ergo/releases/latest).
 2. Open a folder that contains an Ergo backlog.
 3. Open the Command Palette and run **Ergo: Backlog**.
 
@@ -56,7 +56,9 @@ The extension normally resolves `ergo` from the extension host's `PATH`. To use 
 /opt/homebrew/bin/ergo
 ```
 
-If Ergo is missing or older than 6.0.0, the extension reports the path it tried and explains how to install or select a compatible executable.
+Ergo Backlog supports Ergo 6.0.0 and later. The latest release is recommended.
+If Ergo is missing or incompatible, the extension reports the path it tried and
+explains how to install or select a compatible executable.
 
 ## Read-only by design
 
@@ -64,9 +66,11 @@ Ergo Backlog asks the installed Ergo CLI to interpret the repository's event log
 
 Use the Ergo CLI to create, stage, open, claim, complete, block, reorder, or otherwise change work. `ergo open <id>` replaces the removed `ergo release <id>` command.
 
-## Preview
+## Support
 
-Ergo Backlog is an early Preview focused on fast, dependable backlog reading. The current release provides the backlog overview, ready-work filter, task and epic search, and formatted detail previews.
+Ergo Backlog is stable and focused on fast, dependable backlog reading. It
+provides the backlog overview, ready-work filter, task and epic search, and
+formatted detail views.
 
 Found a problem or have an idea? Open an issue in the [Ergo issue tracker](https://github.com/sandover/ergo/issues). Include your operating system, VS Code version, extension version, and `ergo --version`. Do not attach a private backlog.
 

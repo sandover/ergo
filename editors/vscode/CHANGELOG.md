@@ -1,5 +1,13 @@
 # Change Log
 
+## 6.0.1
+
+- Publish Ergo Backlog as a stable extension aligned with the latest Ergo
+  6.0.1 release.
+- Keep compatibility with Ergo 6.0.0 and later, including draft and failed task
+  states, journal-backed details, and concurrent backlog readers.
+- Refresh Marketplace setup and support guidance for the stable release.
+
 ## 6.0.0
 
 - Align the extension with Ergo 6.0.0 and require the 6.0.0 CLI contract.
