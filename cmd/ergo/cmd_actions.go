@@ -34,7 +34,7 @@ func commandInput(cmd *cobra.Command, streams Streams, required bool, id string)
 	return string(body), err
 }
 
-func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, options *ergo.RepositoryOptions, color *colorMode, buildVersion string) {
+func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, options *ergo.RepositoryOptions, color *colorMode, noServer *bool, buildVersion string) {
 	app := func() *ergo.Application { return base.WithRepository(*options) }
 	render := func(cmd *cobra.Command) ergo.RenderOptions { return commandRender(cmd, streams, *color) }
 
@@ -87,7 +87,11 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 		if err != nil {
 			return err
 		}
-		out, err := app().CreateTask(ergo.CreateTaskRequest{Title: args[0], EpicID: epic, Body: body, Draft: draft})
+		req := ergo.CreateTaskRequest{Title: args[0], EpicID: epic, Body: body, Draft: draft}
+		if handled, err := tryProxy(cmd, streams, options, noServer, color, "create_task", req, ""); handled {
+			return err
+		}
+		out, err := app().CreateTask(req)
 		if err == nil {
 			ergo.RenderCreateTask(cmd.OutOrStdout(), out)
 		}
@@ -108,7 +112,11 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 		if err != nil {
 			return err
 		}
-		out, err := app().CreateEpic(ergo.CreateEpicRequest{Title: args[0], FilePath: file, Body: body, Draft: draft})
+		req := ergo.CreateEpicRequest{Title: args[0], FilePath: file, Body: body, Draft: draft}
+		if handled, err := tryProxy(cmd, streams, options, noServer, color, "create_epic", req, ""); handled {
+			return err
+		}
+		out, err := app().CreateEpic(req)
 		if err == nil {
 			ergo.RenderCreateEpic(cmd.OutOrStdout(), out)
 		}
@@ -121,12 +129,26 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	listCmd.Flags().Bool("ready", false, "Show only ready tasks (conflicts with --all)")
 	listCmd.Flags().Bool("all", false, "Show all tasks, including canceled/done (conflicts with --ready)")
 	listCmd.Flags().Bool("json", false, "Write a versioned JSON task listing")
+	listCmd.Flags().Bool("with-meta", false, "With --json, include timestamps, claim, and depends_on (list JSON version 2)")
+	listCmd.Flags().Bool("with-body", false, "With --json, include stored body bytes (list JSON version 2)")
 	listCmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		epic, _ := cmd.Flags().GetString("epic")
 		ready, _ := cmd.Flags().GetBool("ready")
 		all, _ := cmd.Flags().GetBool("all")
 		jsonOutput, _ := cmd.Flags().GetBool("json")
-		out, err := app().List(ergo.ListRequest{EpicID: epic, ReadyOnly: ready, ShowAll: all, OmitJournal: jsonOutput})
+		withMeta, _ := cmd.Flags().GetBool("with-meta")
+		withBody, _ := cmd.Flags().GetBool("with-body")
+		if err := validateListJSONFlags(jsonOutput, withMeta, withBody); err != nil {
+			return err
+		}
+		req := ergo.ListRequest{
+			EpicID: epic, ReadyOnly: ready, ShowAll: all, OmitJournal: jsonOutput,
+			JSONWithMeta: withMeta, JSONWithBody: withBody,
+		}
+		if handled, err := tryProxy(cmd, streams, options, noServer, color, "list", req, ""); handled {
+			return err
+		}
+		out, err := app().List(req)
 		if err == nil {
 			if jsonOutput {
 				return ergo.RenderListJSON(cmd.OutOrStdout(), out)
@@ -141,13 +163,21 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	showCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		bodyOnly, _ := cmd.Flags().GetBool("body")
 		if bodyOnly {
-			out, err := app().ShowBody(ergo.ShowBodyRequest{ID: args[0]})
+			req := ergo.ShowBodyRequest{ID: args[0]}
+			if handled, err := tryProxy(cmd, streams, options, noServer, color, "show_body", req, ""); handled {
+				return err
+			}
+			out, err := app().ShowBody(req)
 			if err != nil {
 				return err
 			}
 			return ergo.RenderShowBody(cmd.OutOrStdout(), out)
 		}
-		out, err := app().Show(ergo.ShowRequest{ID: args[0]})
+		req := ergo.ShowRequest{ID: args[0]}
+		if handled, err := tryProxy(cmd, streams, options, noServer, color, "show", req, ""); handled {
+			return err
+		}
+		out, err := app().Show(req)
 		if err == nil {
 			ergo.RenderShow(cmd.OutOrStdout(), out, render(cmd).Color)
 		}
@@ -168,7 +198,11 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 		if len(args) == 1 {
 			id = args[0]
 		}
-		out, err := app().Claim(ergo.ClaimRequest{ID: id, AgentID: agent})
+		req := ergo.ClaimRequest{ID: id, AgentID: agent}
+		if handled, err := tryProxy(cmd, streams, options, noServer, color, "claim", req, ""); handled {
+			return err
+		}
+		out, err := app().Claim(req)
 		if err == nil {
 			ergo.RenderClaim(cmd.OutOrStdout(), out, render(cmd).Color)
 		}
@@ -187,7 +221,11 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 				return fmt.Errorf("%s does not read stdin; use ergo body %s to replace the body or -m <message> to add a lifecycle note", kind, args[0])
 			}
 			messages, _ := cmd.Flags().GetStringArray("message")
-			out, err := app().Lifecycle(ergo.LifecycleRequest{Kind: kind, ID: args[0], Messages: messages})
+			req := ergo.LifecycleRequest{Kind: kind, ID: args[0], Messages: messages}
+			if handled, err := tryProxy(cmd, streams, options, noServer, color, "lifecycle", req, ""); handled {
+				return err
+			}
+			out, err := app().Lifecycle(req)
 			if err == nil {
 				ergo.RenderLifecycle(cmd.OutOrStdout(), out)
 			}
@@ -200,7 +238,11 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	resultCmd.Flags().String("file", "", "Attach an existing project-relative file")
 	resultCmd.RunE = func(cmd *cobra.Command, args []string) error {
 		filePath, _ := cmd.Flags().GetString("file")
-		out, err := app().Result(ergo.ResultRequest{ID: args[0], Text: args[1], FilePath: filePath, FileSet: cmd.Flags().Changed("file")})
+		req := ergo.ResultRequest{ID: args[0], Text: args[1], FilePath: filePath, FileSet: cmd.Flags().Changed("file")}
+		if handled, err := tryProxy(cmd, streams, options, noServer, color, "result", req, ""); handled {
+			return err
+		}
+		out, err := app().Result(req)
 		if err == nil {
 			ergo.RenderResult(cmd.OutOrStdout(), out)
 		}
@@ -209,7 +251,11 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 
 	titleCmd := &cobra.Command{Use: "title <id> <title>", Short: "Replace a task title", Args: exactArgs(2, "usage: ergo title <id> <title>")}
 	titleCmd.RunE = func(cmd *cobra.Command, args []string) error {
-		out, err := app().UpdateTitle(ergo.UpdateTitleRequest{ID: args[0], Title: args[1]})
+		req := ergo.UpdateTitleRequest{ID: args[0], Title: args[1]}
+		if handled, err := tryProxy(cmd, streams, options, noServer, color, "title", req, ""); handled {
+			return err
+		}
+		out, err := app().UpdateTitle(req)
 		if err == nil {
 			ergo.RenderTitle(cmd.OutOrStdout(), out)
 		}
@@ -224,7 +270,12 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 			return err
 		}
 		appendBody, _ := cmd.Flags().GetBool("append")
-		out, err := app().UpdateBody(ergo.UpdateBodyRequest{ID: args[0], Body: []byte(body), Append: appendBody})
+		req := ergo.UpdateBodyRequest{ID: args[0], Body: []byte(body), Append: appendBody}
+		payload := ergo.WireBodyPayload{ID: args[0], Append: appendBody}
+		if handled, err := tryProxy(cmd, streams, options, noServer, color, "body", payload, body); handled {
+			return err
+		}
+		out, err := app().UpdateBody(req)
 		if err == nil {
 			ergo.RenderBody(cmd.OutOrStdout(), out)
 		}
@@ -249,7 +300,11 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 		if !rootFlag {
 			dest = args[1]
 		}
-		out, err := app().Move(ergo.MoveRequest{ID: args[0], DestinationID: dest, ToRoot: rootFlag})
+		req := ergo.MoveRequest{ID: args[0], DestinationID: dest, ToRoot: rootFlag}
+		if handled, err := tryProxy(cmd, streams, options, noServer, color, "move", req, ""); handled {
+			return err
+		}
+		out, err := app().Move(req)
 		if err == nil {
 			ergo.RenderMove(cmd.OutOrStdout(), out)
 		}
@@ -259,7 +314,11 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	sequence := func(command, event, short string) *cobra.Command {
 		cmd := &cobra.Command{Use: command + " <A> <B> [<C>...]", Short: short}
 		cmd.RunE = func(cmd *cobra.Command, args []string) error {
-			out, err := app().Sequence(ergo.SequenceRequest{Command: command, EventType: event, IDs: args})
+			req := ergo.SequenceRequest{Command: command, EventType: event, IDs: args}
+			if handled, err := tryProxy(cmd, streams, options, noServer, color, "sequence", req, ""); handled {
+				return err
+			}
+			out, err := app().Sequence(req)
 			if err == nil {
 				ergo.RenderSequence(cmd.OutOrStdout(), out)
 			}
@@ -289,6 +348,9 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	}
 	compactCmd := &cobra.Command{Use: "compact", Short: "Compact the event log", Args: noArgs("compact")}
 	compactCmd.RunE = func(cmd *cobra.Command, _ []string) error {
+		if handled, err := tryProxy(cmd, streams, options, noServer, color, "compact", struct{}{}, ""); handled {
+			return err
+		}
 		out, err := app().Compact()
 		if err == nil {
 			ergo.RenderCompact(cmd.OutOrStdout(), out)
@@ -299,7 +361,11 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	pruneCmd.Flags().Bool("yes", false, "Apply prune (default is dry-run)")
 	pruneCmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		yes, _ := cmd.Flags().GetBool("yes")
-		out, err := app().Prune(ergo.PruneRequest{Confirm: yes})
+		req := ergo.PruneRequest{Confirm: yes}
+		if handled, err := tryProxy(cmd, streams, options, noServer, color, "prune", req, ""); handled {
+			return err
+		}
+		out, err := app().Prune(req)
 		if err == nil {
 			ergo.RenderPrune(cmd.OutOrStdout(), out, render(cmd).Color, render(cmd).Width)
 		}
@@ -318,7 +384,7 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	root.AddCommand(initCmd, newCmd, listCmd, showCmd, claimCmd,
 		lifecycle("done", "Mark a task done"), lifecycle("fail", "Mark finished work failed"), lifecycle("block", "Mark a task blocked"), lifecycle("cancel", "Cancel a task"), lifecycle("open", "Return draft or blocked work to todo"),
 		resultCmd, titleCmd, bodyCmd, moveCmd, sequence("sequence", "link", "Enforce task order (A then B then C)"), sequence("unsequence", "unlink", "Remove task order (A then B then C)"),
-		whereCmd, infoCmd, compactCmd, pruneCmd, quickCmd, versionCmd)
+		whereCmd, infoCmd, compactCmd, pruneCmd, quickCmd, versionCmd, serveCmd(app(), options), batchShowCmd(app, streams, options, noServer, color))
 }
 
 func hasString(values []string, target string) bool {

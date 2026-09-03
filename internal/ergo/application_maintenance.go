@@ -8,12 +8,12 @@ import (
 type CompactOutcomeResult = CompactOutcome
 
 func (a *Application) Compact() (CompactOutcomeResult, error) {
-	var repository Repository
-	if err := repository.Open(a.repository); err != nil {
-		return CompactOutcome{}, classifyRepositoryError(err)
+	session, err := a.OpenSession()
+	if err != nil {
+		return CompactOutcome{}, err
 	}
-	outcome, err := repository.Compact()
-	return outcome, classifyRepositoryError(err)
+	defer session.Close()
+	return session.Compact()
 }
 
 type WhereOutcome struct{ Path string }
@@ -45,18 +45,10 @@ type PruneOutcome struct {
 }
 
 func (a *Application) Prune(request PruneRequest) (PruneOutcome, error) {
-	dir, err := ergoDir(a.repository)
+	session, err := a.OpenSession()
 	if err != nil {
-		return PruneOutcome{}, classifyRepositoryError(err)
+		return PruneOutcome{}, err
 	}
-	var plan PrunePlan
-	if request.Confirm {
-		plan, err = RunPruneApply(dir, a.repository)
-	} else {
-		plan, err = RunPrunePlan(dir)
-	}
-	if err != nil {
-		return PruneOutcome{}, classifyRepositoryError(err)
-	}
-	return PruneOutcome{Confirmed: request.Confirm, Items: plan.Items, JournalEntries: plan.JournalEntries}, nil
+	defer session.Close()
+	return session.Prune(request)
 }

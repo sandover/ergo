@@ -6,10 +6,12 @@ import (
 )
 
 type ListOptions struct {
-	EpicID      string
-	ReadyOnly   bool
-	ShowAll     bool
-	OmitJournal bool
+	EpicID       string
+	ReadyOnly    bool
+	ShowAll      bool
+	OmitJournal  bool
+	JSONWithMeta bool
+	JSONWithBody bool
 }
 
 func RunList(listOpts ListOptions, opts GlobalOptions, render RenderOptions) error {

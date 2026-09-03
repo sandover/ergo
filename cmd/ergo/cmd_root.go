@@ -32,6 +32,7 @@ func NewRootCommand(app *ergo.Application, streams Streams, buildVersion string)
 	}
 	options := ergo.RepositoryOptions{}
 	color := colorModeAuto
+	noServer := false
 	root := &cobra.Command{
 		Use: "ergo", Short: "A dependency-aware backlog for coding agents.",
 		Long:         "Ergo manages a repository-local backlog shared by agents and humans.\nTasks and dependencies persist across sessions and remain safe under\nconcurrent work.",
@@ -42,6 +43,7 @@ func NewRootCommand(app *ergo.Application, streams Streams, buildVersion string)
 	root.SetErr(streams.Err)
 	root.PersistentFlags().StringVar(&options.StartDir, "dir", "", "Run in a specific directory")
 	root.PersistentFlags().Var(&color, "color", "Color output: auto, always, or never")
+	root.PersistentFlags().BoolVar(&noServer, "no-server", false, "Ignore .ergo/ergo.sock and run in-process")
 	root.SetHelpFunc(func(cmd *cobra.Command, _ []string) {
 		if cmd == root {
 			usage := ergo.UsageText(resolveColor(color, streams))
@@ -56,7 +58,7 @@ func NewRootCommand(app *ergo.Application, streams Streams, buildVersion string)
 			fmt.Fprintf(cmd.OutOrStdout(), "\nInput:\n  %s\n", input)
 		}
 	})
-	addCommands(root, app, streams, &options, &color, buildVersion)
+	addCommands(root, app, streams, &options, &color, &noServer, buildVersion)
 	return root
 }
 
@@ -150,7 +152,7 @@ func removedArgumentError(args []string) error {
 func rootInvocation(args []string) string {
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
-		if arg == "--dir" || arg == "--color" {
+		if arg == "--dir" || arg == "--color" || arg == "--no-server" {
 			index++
 			continue
 		}

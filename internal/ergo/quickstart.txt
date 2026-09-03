@@ -70,6 +70,22 @@ This writes one versioned JSON document containing an ordered `items` array.
 It is a small task-picker projection, not a complete graph export. Normal
 `list` output remains the human-readable view.
 
+With `--json`, optional enrichment flags add fields without changing the default
+document shape when omitted:
+
+  {{CMD}}ergo list --ready --json --with-meta --with-body{{RESET}}
+
+`--with-meta` adds timestamps, claim fields, and prerequisite ids (`depends_on`).
+`--with-body` adds the literal stored body for each row. Either flag selects
+JSON version 2.
+
+For a bounded set of known task ids, fetch header fields and bodies in one
+round trip:
+
+  {{CMD}}ergo batch-show --json GATE1 GATE2{{RESET}}
+
+Missing ids are omitted from the JSON map and warned on stderr once each.
+
 `show` normally produces a complete task document. For a leaf, that document
 combines stored fields with synthesized metadata and relationships. For an epic,
 it also describes the epic's children. Use `--body` when only the stored body is
