@@ -125,6 +125,87 @@ func TestRenderListJSONEmptyItemsAndWriterError(t *testing.T) {
 	}
 }
 
+func TestRenderListJSONWithMeta(t *testing.T) {
+	pred := &Task{ID: "PRED01", Title: "Prerequisite", State: stateDone}
+	task := &Task{ID: "TASK01", Title: "Ready task", State: stateTodo, EpicID: "EPIC01"}
+	epic := &Task{ID: "EPIC01", Title: "An epic"}
+	graph := &Graph{
+		Tasks: map[string]*Task{epic.ID: epic, pred.ID: pred, task.ID: task},
+		Deps:  map[string]map[string]struct{}{task.ID: {pred.ID: {}}},
+	}
+	graph.rebuildIndexes()
+	outcome := ListOutcome{
+		Graph: graph,
+		Roots: []*treeNode{{
+			task: epic, isEpic: true,
+			children: []*treeNode{{task: task, isReady: true}},
+		}},
+		Options: ListOptions{JSONWithMeta: true},
+	}
+	var output bytes.Buffer
+	if err := RenderListJSON(&output, outcome); err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Version int              `json:"version"`
+		Items   []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if document.Version != 2 || len(document.Items) != 2 {
+		t.Fatalf("document = %#v", document)
+	}
+	row := document.Items[1]
+	if row["created_at"] == nil || row["updated_at"] == nil {
+		t.Fatalf("timestamps missing: %#v", row)
+	}
+	if row["claimed_at"] != nil || row["claimed_by"] != nil {
+		t.Fatalf("claim fields = %#v", row)
+	}
+	deps, ok := row["depends_on"].([]any)
+	if !ok || len(deps) != 1 || deps[0] != "PRED01" {
+		t.Fatalf("depends_on = %#v", row["depends_on"])
+	}
+	if _, hasBody := row["body"]; hasBody {
+		t.Fatalf("body should be omitted without --with-body: %#v", row)
+	}
+}
+
+func TestRenderListJSONWithBody(t *testing.T) {
+	app := newTestApplication(t)
+	body := "stored body\n"
+	created, err := app.CreateTask(CreateTaskRequest{Title: "Task", Body: body})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := app.List(ListOptions{OmitJournal: true, JSONWithBody: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := RenderListJSON(&output, listed); err != nil {
+		t.Fatal(err)
+	}
+	showBody, err := app.ShowBody(ShowBodyRequest(created))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Version int              `json:"version"`
+		Items   []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if document.Version != 2 || len(document.Items) != 1 {
+		t.Fatalf("document = %#v", document)
+	}
+	if got, _ := document.Items[0]["body"].(string); got != showBody.Body {
+		t.Fatalf("list body = %q, show body = %q", got, showBody.Body)
+	}
+}
+
 type failingListJSONWriter struct{}
 
 func (failingListJSONWriter) Write([]byte) (int, error) {

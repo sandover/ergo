@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +11,89 @@ import (
 	"testing"
 	"time"
 )
+
+func TestServeRoundtripEnrichedListMatchesNoServer(t *testing.T) {
+	dir := setupErgo(t)
+	if _, stderr, code := runErgo(t, dir, "hydrate body\n", "new", "task", "Hydrate task"); code != 0 {
+		t.Fatalf("create task: %s", stderr)
+	}
+
+	serve := exec.Command(ergoBinary, "serve")
+	serve.Dir = dir
+	if err := serve.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer stopServe(t, serve)
+	time.Sleep(200 * time.Millisecond)
+
+	proxied, proxiedErr, code := runErgo(t, dir, "", "list", "--json", "--with-meta", "--with-body")
+	if code != 0 {
+		t.Fatalf("proxied list failed: %s", proxiedErr)
+	}
+	direct, directErr, code := runErgo(t, dir, "", "--no-server", "list", "--json", "--with-meta", "--with-body")
+	if code != 0 {
+		t.Fatalf("direct list failed: %s", directErr)
+	}
+	if normalizeJSON(proxied) != normalizeJSON(direct) {
+		t.Fatalf("proxied != direct\nproxied: %s\ndirect: %s", proxied, direct)
+	}
+}
+
+func TestServeRoundtripBatchShowMatchesNoServer(t *testing.T) {
+	dir := setupErgo(t)
+	stdout, stderr, code := runErgo(t, dir, "batch body\n", "new", "task", "Batch task")
+	if code != 0 {
+		t.Fatalf("create task: %s", stderr)
+	}
+	id := strings.TrimSpace(stdout)
+	if len(id) != 6 {
+		t.Fatalf("task id = %q", id)
+	}
+
+	serve := exec.Command(ergoBinary, "serve")
+	serve.Dir = dir
+	if err := serve.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer stopServe(t, serve)
+	time.Sleep(200 * time.Millisecond)
+
+	proxiedOut, proxiedErr, code := runErgo(t, dir, "", "batch-show", "--json", id, "ZZZZZZ")
+	if code != 0 {
+		t.Fatalf("proxied batch-show failed: %s", proxiedErr)
+	}
+	if !strings.Contains(proxiedErr, "unknown task id ZZZZZZ") {
+		t.Fatalf("proxied stderr = %q", proxiedErr)
+	}
+	directOut, directErr, code := runErgo(t, dir, "", "--no-server", "batch-show", "--json", id, "ZZZZZZ")
+	if code != 0 {
+		t.Fatalf("direct batch-show failed: %s", directErr)
+	}
+	if !strings.Contains(directErr, "unknown task id ZZZZZZ") {
+		t.Fatalf("direct stderr = %q", directErr)
+	}
+	if normalizeJSON(proxiedOut) != normalizeJSON(directOut) {
+		t.Fatalf("proxied != direct\nproxied: %s\ndirect: %s", proxiedOut, directOut)
+	}
+}
+
+func stopServe(t *testing.T, serve *exec.Cmd) {
+	t.Helper()
+	_ = serve.Process.Kill()
+	_, _ = serve.Process.Wait()
+}
+
+func normalizeJSON(raw string) string {
+	var value any
+	if err := json.Unmarshal([]byte(raw), &value); err != nil {
+		return strings.TrimSpace(raw)
+	}
+	normalized, err := json.Marshal(value)
+	if err != nil {
+		return strings.TrimSpace(raw)
+	}
+	return string(normalized)
+}
 
 func TestServeRoundtripMatchesNoServer(t *testing.T) {
 	dir := setupErgo(t)

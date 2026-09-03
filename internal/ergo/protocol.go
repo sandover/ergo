@@ -79,8 +79,8 @@ func writeWireError(conn net.Conn, stderr string, code int) error {
 	return writeWire(conn, WireResponse{V: protocolVersion, OK: false, Stderr: stderr, Code: code})
 }
 
-func writeWireOK(conn net.Conn, stdout string, code int) error {
-	return writeWire(conn, WireResponse{V: protocolVersion, OK: true, Stdout: stdout, Code: code})
+func writeWireOK(conn net.Conn, stdout, stderr string, code int) error {
+	return writeWire(conn, WireResponse{V: protocolVersion, OK: true, Stdout: stdout, Stderr: stderr, Code: code})
 }
 
 func writeWireRequest(conn net.Conn, request WireRequest) error {

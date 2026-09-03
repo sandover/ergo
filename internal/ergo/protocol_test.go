@@ -25,7 +25,7 @@ func TestWireBodyPayloadRoundtrip(t *testing.T) {
 		if payload.ID != "ABC" || !payload.Append || request.Stdin != "{\nline\n" {
 			t.Errorf("payload = %+v stdin=%q", payload, request.Stdin)
 		}
-		_ = writeWireOK(server, "ABC body: 7 bytes\n", 0)
+		_ = writeWireOK(server, "ABC body: 7 bytes\n", "", 0)
 	}()
 
 	raw, _ := json.Marshal(WireRequest{

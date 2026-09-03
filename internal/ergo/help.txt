@@ -25,7 +25,8 @@ attempt finished without satisfying the objective.
   init [dir]                                  initialize an Ergo backlog
   new task "<title>" [--epic <id>] [--draft]  create a task; optional stdin sets its body
   new epic "<title>" --file <path> [--draft]  create an epic and tasks; optional stdin sets epic body
-  list [--epic <id>] [--ready | --all] [--json]  list work
+  list [--epic <id>] [--ready | --all] [--json] [--with-meta] [--with-body]  list work
+  batch-show [--json] <id> [<id>…]              show many tasks as one JSON document
   show <id> [--body]                          show a task or epic, or only its body
   claim [<id>] --agent <identity>             claim chosen or ready work
   done <id> [-m <text>]                       complete a task

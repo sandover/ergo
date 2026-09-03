@@ -55,14 +55,14 @@ func ServeSession(session *Session, conn net.Conn) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	stdout, code, err := dispatchSessionRequestLocked(session, request)
+	stdout, stderr, code, err := dispatchSessionRequestLocked(session, request)
 	if err != nil {
 		logServeRequest(client, method, start, false, err.Error())
 		_ = writeWireError(conn, err.Error(), code)
 		return
 	}
 	logServeRequest(client, method, start, true, "")
-	_ = writeWireOK(conn, stdout, code)
+	_ = writeWireOK(conn, stdout, stderr, code)
 }
 
 func logServeRequest(client WireClient, method string, start time.Time, ok bool, detail string) {
@@ -86,7 +86,7 @@ func isBenignWireClose(err error) bool {
 	return errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed)
 }
 
-func dispatchSessionRequestLocked(session *Session, request WireRequest) (stdout string, code int, err error) {
+func dispatchSessionRequestLocked(session *Session, request WireRequest) (stdout, stderr string, code int, err error) {
 	render := RenderOptions{Writer: &bytes.Buffer{}, Color: request.Color, Width: request.Width}
 	if render.Width <= 0 {
 		render.Width = 80
@@ -96,183 +96,197 @@ func dispatchSessionRequestLocked(session *Session, request WireRequest) (stdout
 	case "list":
 		payload, err := decodePayload[ListRequest](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		out, err := session.listLocked(payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		if payload.OmitJournal {
 			if err := RenderListJSON(render.Writer, out); err != nil {
-				return "", 1, err
+				return "", "", 1, err
 			}
 		} else {
 			RenderList(render.Writer, out, render.Color, render.Width)
 		}
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "show":
 		payload, err := decodePayload[ShowRequest](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		out, err := session.showLocked(payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		RenderShow(render.Writer, out, render.Color)
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "show_body":
 		payload, err := decodePayload[ShowBodyRequest](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		out, err := session.showBodyLocked(payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		if err := RenderShowBody(render.Writer, out); err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "claim":
 		payload, err := decodePayload[ClaimRequest](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		out, err := session.claimLocked(payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		RenderClaim(render.Writer, out, render.Color)
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "lifecycle":
 		payload, err := decodePayload[LifecycleRequest](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		out, err := session.lifecycleLocked(payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		RenderLifecycle(render.Writer, out)
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "result":
 		payload, err := decodePayload[ResultRequest](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		out, err := session.resultLocked(payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		RenderResult(render.Writer, out)
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "title":
 		payload, err := decodePayload[UpdateTitleRequest](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		out, err := session.updateTitleLocked(payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		RenderTitle(render.Writer, out)
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "body":
 		payload, err := decodePayload[WireBodyPayload](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		out, err := session.updateBodyLocked(UpdateBodyRequest{ID: payload.ID, Body: []byte(request.Stdin), Append: payload.Append})
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		RenderBody(render.Writer, out)
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "move":
 		payload, err := decodePayload[MoveRequest](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		out, err := session.moveLocked(payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		RenderMove(render.Writer, out)
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "sequence":
 		payload, err := decodePayload[SequenceRequest](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		out, err := session.sequenceLocked(payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		RenderSequence(render.Writer, out)
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "create_task":
 		payload, err := decodePayload[CreateTaskRequest](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		if payload.Body == "" && request.Stdin != "" {
 			payload.Body = request.Stdin
 		}
 		out, err := session.createTaskLocked(payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		RenderCreateTask(render.Writer, out)
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "create_epic":
 		payload, err := decodePayload[CreateEpicRequest](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		if payload.Body == "" && request.Stdin != "" {
 			payload.Body = request.Stdin
 		}
 		out, err := session.createEpicLocked(payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		RenderCreateEpic(render.Writer, out)
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "compact":
 		out, err := session.compactLocked()
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		RenderCompact(render.Writer, out)
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
 
 	case "prune":
 		payload, err := decodePayload[PruneRequest](request.Payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		out, err := session.pruneLocked(payload)
 		if err != nil {
-			return "", 1, err
+			return "", "", 1, err
 		}
 		RenderPrune(render.Writer, out, render.Color, render.Width)
-		return render.Writer.(*bytes.Buffer).String(), 0, nil
+		return render.Writer.(*bytes.Buffer).String(), "", 0, nil
+
+	case "batch_show":
+		payload, err := decodePayload[BatchShowRequest](request.Payload)
+		if err != nil {
+			return "", "", 1, err
+		}
+		out, err := session.batchShowLocked(payload)
+		if err != nil {
+			return "", "", 1, err
+		}
+		if err := RenderBatchShowJSON(render.Writer, out); err != nil {
+			return "", "", 1, err
+		}
+		return render.Writer.(*bytes.Buffer).String(), FormatBatchShowWarnings(out.Missing), 0, nil
 
 	default:
-		return "", 1, fmt.Errorf("unknown method %q", request.Method)
+		return "", "", 1, fmt.Errorf("unknown method %q", request.Method)
 	}
 }
 

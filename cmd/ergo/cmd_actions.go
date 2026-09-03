@@ -129,12 +129,22 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	listCmd.Flags().Bool("ready", false, "Show only ready tasks (conflicts with --all)")
 	listCmd.Flags().Bool("all", false, "Show all tasks, including canceled/done (conflicts with --ready)")
 	listCmd.Flags().Bool("json", false, "Write a versioned JSON task listing")
+	listCmd.Flags().Bool("with-meta", false, "With --json, include timestamps, claim, and depends_on (list JSON version 2)")
+	listCmd.Flags().Bool("with-body", false, "With --json, include stored body bytes (list JSON version 2)")
 	listCmd.RunE = func(cmd *cobra.Command, _ []string) error {
 		epic, _ := cmd.Flags().GetString("epic")
 		ready, _ := cmd.Flags().GetBool("ready")
 		all, _ := cmd.Flags().GetBool("all")
 		jsonOutput, _ := cmd.Flags().GetBool("json")
-		req := ergo.ListRequest{EpicID: epic, ReadyOnly: ready, ShowAll: all, OmitJournal: jsonOutput}
+		withMeta, _ := cmd.Flags().GetBool("with-meta")
+		withBody, _ := cmd.Flags().GetBool("with-body")
+		if err := validateListJSONFlags(jsonOutput, withMeta, withBody); err != nil {
+			return err
+		}
+		req := ergo.ListRequest{
+			EpicID: epic, ReadyOnly: ready, ShowAll: all, OmitJournal: jsonOutput,
+			JSONWithMeta: withMeta, JSONWithBody: withBody,
+		}
 		if handled, err := tryProxy(cmd, streams, options, noServer, color, "list", req, ""); handled {
 			return err
 		}
@@ -374,7 +384,7 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	root.AddCommand(initCmd, newCmd, listCmd, showCmd, claimCmd,
 		lifecycle("done", "Mark a task done"), lifecycle("fail", "Mark finished work failed"), lifecycle("block", "Mark a task blocked"), lifecycle("cancel", "Cancel a task"), lifecycle("open", "Return draft or blocked work to todo"),
 		resultCmd, titleCmd, bodyCmd, moveCmd, sequence("sequence", "link", "Enforce task order (A then B then C)"), sequence("unsequence", "unlink", "Remove task order (A then B then C)"),
-		whereCmd, infoCmd, compactCmd, pruneCmd, quickCmd, versionCmd, serveCmd(app(), options))
+		whereCmd, infoCmd, compactCmd, pruneCmd, quickCmd, versionCmd, serveCmd(app(), options), batchShowCmd(app, streams, options, noServer, color))
 }
 
 func hasString(values []string, target string) bool {

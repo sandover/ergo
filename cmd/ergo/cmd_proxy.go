@@ -54,6 +54,11 @@ func tryProxy(
 		return false, nil
 	}
 	if response.OK {
+		if response.Stderr != "" {
+			if _, err := io.WriteString(cmd.ErrOrStderr(), response.Stderr); err != nil {
+				return true, err
+			}
+		}
 		if response.Stdout != "" {
 			if _, err := io.WriteString(cmd.OutOrStdout(), response.Stdout); err != nil {
 				return true, err
