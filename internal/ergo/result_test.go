@@ -241,7 +241,13 @@ func initResultTestRepository(t *testing.T) (string, string) {
 func runGitForResultTest(t *testing.T, repoDir string, args ...string) string {
 	t.Helper()
 	commandArgs := append([]string{"-C", repoDir}, args...)
-	output, err := exec.Command("git", commandArgs...).CombinedOutput()
+	command := exec.Command("git", commandArgs...)
+	for _, variable := range os.Environ() {
+		if !strings.HasPrefix(variable, "GIT_INDEX_FILE=") {
+			command.Env = append(command.Env, variable)
+		}
+	}
+	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
 	}

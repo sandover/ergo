@@ -6,9 +6,9 @@ preserve. `ergo --help` and `ergo quickstart` are the user manual.
 
 ## System shape
 
-Ergo is a repository-local, dependency-aware backlog. It uses a JSONL file and
+Ergo is a repository-local, dependency-aware backlog. It uses JSONL files and
 an advisory lock instead of a database or daemon. Each command discovers a
-repository, reconstructs a task graph, performs one use case, and writes readable
+repository, loads a task graph, performs one use case, and writes readable
 output.
 
 The runtime dependencies flow in one direction:
@@ -91,6 +91,35 @@ This policy provides replay-visible transaction atomicity, not rollback of
 every operating-system write. A command that reports a late write or sync
 failure may have placed bytes on disk. The next read validates what is present,
 and the interrupted-tail rule repairs only an incomplete final JSON record.
+
+## Disposable replay cache
+
+Large repositories may contain `.ergo/cache.jsonl`. It is a local performance
+artifact, never an authoritative log or selectable backlog. The cache stores a
+versioned, integrity-checked copy of raw reducer state at one newline-terminated
+backlog byte offset. It excludes derived indexes and journal hydration.
+
+A possible hit validates the cache, selected source basename, platform file
+identity, saved offset, and record boundary. The loader then seeks to that
+offset and replays only the appended tail. It deliberately does not read or hash
+the represented prefix. An in-place external edit that preserves the cheap
+identity signals can therefore remain unnoticed. Replacement, truncation,
+compaction, invalid boundaries, and normal cache corruption cause a miss.
+
+Every accelerated-path failure returns to the unchanged full loader. Only that
+loader reports authoritative corruption. Deleting the cache always restores
+full replay.
+
+Successful reads and writes may publish a checkpoint under their existing
+shared or exclusive lock. Publication writes a unique complete temporary file,
+closes it, and atomically replaces the cache. It does not sync disposable data.
+Cache work is best-effort and cannot change command output, exit status, backlog
+durability, or journal failure behavior. Internal thresholds create at 4 MiB
+and refresh after a 1 MiB or 256-record tail.
+
+Before publication, Ergo best-effort appends `/cache.jsonl` and `/cache.tmp-*`
+to `.ergo/.gitignore` while preserving unrelated content. It never invokes Git
+or changes the index. A successful compact removes the old cache.
 
 ## Locking and repository updates
 

@@ -62,6 +62,50 @@ func TestCompatibilityReleasedBacklogs(t *testing.T) {
 	}
 }
 
+func TestCompatibilityReleasedBacklogsThroughCache(t *testing.T) {
+	for _, fixture := range releasedFixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			project := t.TempDir()
+			ergoDir := filepath.Join(project, dataDirName)
+			if err := os.Mkdir(ergoDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := ensureFileExists(filepath.Join(ergoDir, "lock"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := ensureFileExists(filepath.Join(ergoDir, journalFileName), 0644); err != nil {
+				t.Fatal(err)
+			}
+			copyReleasedFixture(t, fixture.file, filepath.Join(ergoDir, fixture.logName))
+			var repository Repository
+			if err := repository.Open(RepositoryOptions{StartDir: project}); err != nil {
+				t.Fatal(err)
+			}
+			before, err := repository.View()
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, read, err := repository.loadWithRead()
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := marshalCache(read.cacheGraph, read.cacheSource)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(ergoDir, cacheFileName), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			after, err := repository.View()
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertReleasedFixture(t, after, fixture)
+			assertGraphStateEqual(t, before, after)
+		})
+	}
+}
+
 func TestCompatibilityReleasedBacklogsCompactWithoutSemanticLoss(t *testing.T) {
 	for _, fixture := range releasedFixtures {
 		t.Run(fixture.name, func(t *testing.T) {

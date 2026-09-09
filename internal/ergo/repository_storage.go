@@ -32,7 +32,12 @@ const (
 type eventLogRead struct {
 	events         []Event
 	snapshot       *Graph
+	cacheGraph     *Graph
+	cacheSource    cacheSource
+	cacheBase      cacheSource
+	cacheHit       bool
 	recordCount    int
+	lineCount      int
 	validBytes     int64
 	truncatedTail  bool
 	needsSeparator bool
@@ -123,9 +128,14 @@ func inspectEventLog(path string) (eventLogRead, error) {
 	defer file.Close()
 
 	endsWithNewline := false
-	if info, err := file.Stat(); err == nil && info.Size() > 0 {
+	startInfo, startInfoErr := file.Stat()
+	startIdentity := ""
+	if startInfoErr == nil {
+		startIdentity, _ = sourceFileIdentity(file, startInfo)
+	}
+	if startInfoErr == nil && startInfo.Size() > 0 {
 		last := make([]byte, 1)
-		if _, err := file.ReadAt(last, info.Size()-1); err == nil {
+		if _, err := file.ReadAt(last, startInfo.Size()-1); err == nil {
 			endsWithNewline = last[0] == '\n'
 		}
 	}
@@ -206,6 +216,7 @@ func inspectEventLog(path string) (eventLogRead, error) {
 		pending = line
 		pendingNo = currentNo
 	}
+	result.lineCount = currentNo
 	if err := scanner.Err(); err != nil {
 		if errors.Is(err, bufio.ErrTooLong) {
 			return eventLogRead{}, fmt.Errorf("%s: event record too long (> %d bytes); file may be corrupted (e.g. missing newlines)", path, maxLogRecordBytes)
@@ -235,6 +246,14 @@ func inspectEventLog(path string) (eventLogRead, error) {
 	if snapshotDecoder != nil && snapshotDecoder.seen != snapshotDecoder.total() {
 		return eventLogRead{}, fmt.Errorf("%s:%d: incomplete snapshot: got %d of %d data records",
 			path, snapshotDecoder.line, snapshotDecoder.seen, snapshotDecoder.total())
+	}
+	if !result.truncatedTail && !result.needsSeparator && startInfoErr == nil && startIdentity != "" {
+		if endInfo, err := file.Stat(); err == nil && endInfo.Size() == startInfo.Size() && endInfo.ModTime() == startInfo.ModTime() {
+			if endIdentity, ok := sourceFileIdentity(file, endInfo); ok && endIdentity == startIdentity && result.validBytes == endInfo.Size() {
+				result.cacheSource = cacheSource{Name: filepath.Base(path), Identity: endIdentity, Bytes: endInfo.Size(),
+					Lines: result.lineCount, Records: result.recordCount, ModifiedNS: endInfo.ModTime().UnixNano()}
+			}
+		}
 	}
 	return result, nil
 }

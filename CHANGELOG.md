@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.3] - 2026-09-09
+
+### Fixed
+
+- Large append-only backlogs now build and refresh an automatic disposable
+  replay cache. On the 30,380-transaction reference fixture, warm commands take
+  about 72-98 ms instead of roughly one second while preserving the complete
+  authoritative history.
+- Cache absence, corruption, replacement failure, or an unreadable cache falls
+  back to full replay without changing command output or exit status. The cache
+  is safe to delete and adds no command, flag, setting, or maintenance step.
+- Ergo keeps `cache.jsonl` and its temporary files out of Git through local
+  `.ergo/.gitignore` rules without invoking Git or changing its index.
+
+## [6.0.2] - 2026-09-09
+
 ### Fixed
 
 - The Go module now uses the required `/v6` major-version suffix. After the
@@ -764,7 +780,10 @@ read that log.
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v6.0.0...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v6.0.3...HEAD
+[6.0.3]: https://github.com/sandover/ergo/compare/v6.0.2...v6.0.3
+[6.0.2]: https://github.com/sandover/ergo/compare/v6.0.1...v6.0.2
+[6.0.1]: https://github.com/sandover/ergo/compare/v6.0.0...v6.0.1
 [6.0.0]: https://github.com/sandover/ergo/compare/v5.0.3...v6.0.0
 [5.0.3]: https://github.com/sandover/ergo/compare/v5.0.2...v5.0.3
 [5.0.2]: https://github.com/sandover/ergo/compare/v5.0.1...v5.0.2

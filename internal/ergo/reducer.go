@@ -167,6 +167,19 @@ func cloneGraph(graph *Graph) *Graph {
 }
 
 func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
+	graph, err := replayEventsOntoRaw(graph, events)
+	if err != nil {
+		return nil, err
+	}
+	applyLegacyTitleMigration(graph)
+	graph.rebuildIndexes()
+	return graph, nil
+}
+
+// replayEventsOntoRaw preserves the pre-migration reducer state used by the
+// disposable backlog cache. Callers must finalize it with replayEventsOnto
+// before exposing the graph to commands.
+func replayEventsOntoRaw(graph *Graph, events []Event) (*Graph, error) {
 	taskSource := map[string]replayEventSource{}
 	lifecycleSource := map[string]replayEventSource{}
 	parentSource := map[string]replayEventSource{}
@@ -444,7 +457,6 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 		return nil, err
 	}
 
-	applyLegacyTitleMigration(graph)
 	graph.rebuildIndexes()
 
 	return graph, nil

@@ -66,6 +66,7 @@ func runPrune(dir string, opts GlobalOptions, apply bool) (PrunePlan, error) {
 			retained = append(retained, entry)
 		}
 		if !apply || len(plan.PrunedIDs) == 0 {
+			repository.publishCache(eventRead)
 			return nil
 		}
 		events, err := buildTombstoneEvents(plan.PrunedIDs, "")
@@ -81,6 +82,7 @@ func runPrune(dir string, opts GlobalOptions, apply bool) (PrunePlan, error) {
 		if err := repository.replaceJournal(retained); err != nil {
 			return fmt.Errorf("backlog changed, but journal update failed: %w", err)
 		}
+		repository.publishCache(eventRead)
 		return nil
 	})
 	return plan, err

@@ -41,6 +41,15 @@ func sortedMapKeys(items map[string]map[string]struct{}) []string {
 	return keys
 }
 
+func sortedValueMapKeys[T any](items map[string]T) []string {
+	keys := make([]string, 0, len(items))
+	for key := range items {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func ensureFileExists(path string, mode os.FileMode) error {
 	info, err := os.Stat(path)
 	if err == nil {

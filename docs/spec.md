@@ -305,6 +305,13 @@ Existing repositories continue to use `plans.jsonl` or `events.jsonl` in place.
 Exactly one supported backlog file may exist. Repository opening does not
 rename or rewrite the selected file.
 
+For a sufficiently large backlog, commands may maintain an ignored local
+`.ergo/cache.jsonl` file. It is a disposable performance artifact, not part of
+the backlog or journal contract. Cache presence, absence, invalidation, or write
+failure does not change command output or exit status. Deleting it restores
+ordinary full replay. Ergo adds local cache patterns to `.ergo/.gitignore`
+before publication without invoking Git or changing the index.
+
 Backlog replay constructs current tasks, epics, dependencies, metadata, and
 tombstones. It accepts every released event shape covered by the compatibility
 fixtures, including legacy messages and results until compaction migrates them.
@@ -340,6 +347,9 @@ compaction preserves every explicit `result` for surviving tasks and only the
 newest automatic entry needed to explain each surviving task's current state.
 It removes entries for pruned tasks. Explicit results may therefore grow
 without limit; Ergo 5 adds no rotation, indexing, or retention policy.
+
+Successful compaction invalidates any disposable replay cache. It does not
+otherwise change cache settings or create a cache maintenance workflow.
 
 Confirmed prune removes every journal entry for each selected task. Its dry run
 reports both selected tasks and the number of journal entries that confirmation

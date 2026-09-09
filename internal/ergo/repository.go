@@ -143,7 +143,8 @@ func (r *Repository) View() (*Graph, error) {
 	var graph *Graph
 	err := withReadLock(r.lockPath, r.opts, func() error {
 		var err error
-		graph, err = r.load()
+		var read eventLogRead
+		graph, read, err = r.loadWithRead()
 		if err != nil {
 			return err
 		}
@@ -152,6 +153,7 @@ func (r *Repository) View() (*Graph, error) {
 			return err
 		}
 		hydrateGraphEvidence(graph, mergeLegacyJournal(journal, graph))
+		r.publishCache(read)
 		return nil
 	})
 	return graph, err
@@ -166,7 +168,11 @@ func (r *Repository) ViewGraph() (*Graph, error) {
 	var graph *Graph
 	err := withReadLock(r.lockPath, r.opts, func() error {
 		var err error
-		graph, err = r.load()
+		var read eventLogRead
+		graph, read, err = r.loadWithRead()
+		if err == nil {
+			r.publishCache(read)
+		}
 		return err
 	})
 	return graph, err
@@ -180,7 +186,8 @@ func (r *Repository) ViewWithJournal() (*Graph, []JournalEntry, error) {
 	var journal []JournalEntry
 	err := withReadLock(r.lockPath, r.opts, func() error {
 		var err error
-		graph, err = r.load()
+		var read eventLogRead
+		graph, read, err = r.loadWithRead()
 		if err != nil {
 			return err
 		}
@@ -190,6 +197,7 @@ func (r *Repository) ViewWithJournal() (*Graph, []JournalEntry, error) {
 		}
 		journal = mergeLegacyJournal(journal, graph)
 		hydrateGraphEvidence(graph, journal)
+		r.publishCache(read)
 		return nil
 	})
 	return graph, journal, err
@@ -220,6 +228,7 @@ func (r *Repository) Update(fn func(*Graph) ([]Event, error)) (UpdateOutcome, er
 		if err := r.appendValidated(events, eventRead); err != nil {
 			return err
 		}
+		r.publishCache(eventRead)
 		outcome.Graph = candidate
 		return nil
 	})
@@ -261,6 +270,7 @@ func (r *Repository) UpdateWithJournal(fn func(*Graph) ([]Event, []JournalEntry,
 		if err := r.appendJournalValidated(journal, journalRead); err != nil {
 			return fmt.Errorf("backlog changed, but journal update failed: %w", err)
 		}
+		r.publishCache(eventRead)
 		outcome.Journal = append(existingJournal, journal...)
 		hydrateGraphEvidence(outcome.Graph, outcome.Journal)
 		return nil
@@ -278,9 +288,14 @@ func (r *Repository) Compact() (CompactOutcome, error) {
 		if err != nil {
 			return err
 		}
-		graph, err := r.load()
+		var graph *Graph
+		if read.snapshot != nil {
+			graph, err = replayEventsOnto(read.snapshot, read.events)
+		} else {
+			graph, err = replayEvents(read.events)
+		}
 		if err != nil {
-			return err
+			return &corruptionError{err: err}
 		}
 		journal, err := r.loadJournal()
 		if err != nil {
@@ -308,6 +323,7 @@ func (r *Repository) Compact() (CompactOutcome, error) {
 		if err := replaceLogAtomically(r.eventsPath, data); err != nil {
 			return err
 		}
+		_ = os.Remove(filepath.Join(r.dir, cacheFileName))
 		outcome = CompactOutcome{Path: path, SourceRecords: read.recordCount, SnapshotRecords: stats.Records, JournalRecords: len(journal)}
 		return nil
 	})
@@ -323,6 +339,9 @@ func (r *Repository) load() (*Graph, error) {
 }
 
 func (r *Repository) loadWithRead() (*Graph, eventLogRead, error) {
+	if graph, read, ok := tryLoadBacklogCache(r.eventsPath); ok {
+		return graph, read, nil
+	}
 	read, err := r.io.inspectEvents(r.eventsPath)
 	if err != nil {
 		var pathError *os.PathError
@@ -332,16 +351,26 @@ func (r *Repository) loadWithRead() (*Graph, eventLogRead, error) {
 		return nil, eventLogRead{}, err
 	}
 	if read.snapshot != nil {
-		graph, err := replayEventsOnto(read.snapshot, read.events)
+		raw, err := replayEventsOntoRaw(cloneGraph(read.snapshot), read.events)
 		if err != nil {
 			return nil, eventLogRead{}, &corruptionError{err: err}
 		}
+		graph, err := replayEventsOnto(cloneGraph(raw), nil)
+		if err != nil {
+			return nil, eventLogRead{}, &corruptionError{err: err}
+		}
+		read.cacheGraph = raw
 		return graph, read, nil
 	}
-	graph, err := replayEvents(read.events)
+	raw, err := replayEventsOntoRaw(newGraph(), read.events)
 	if err != nil {
 		return nil, eventLogRead{}, &corruptionError{err: err}
 	}
+	graph, err := replayEventsOnto(cloneGraph(raw), nil)
+	if err != nil {
+		return nil, eventLogRead{}, &corruptionError{err: err}
+	}
+	read.cacheGraph = raw
 	return graph, read, nil
 }
 
