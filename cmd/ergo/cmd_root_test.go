@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sandover/ergo/v4/internal/ergo"
+	"github.com/sandover/ergo/v6/internal/ergo"
 	"github.com/spf13/cobra"
 )
 
@@ -119,7 +119,7 @@ func TestRootHelpAndVersionUseProvidedWriters(t *testing.T) {
 			In: strings.NewReader(""), Out: &output, Err: &errors,
 			StdinTerminal: true, Width: 80,
 		}
-		if code := runCommand(freshRootWithStreams(streams, "4.0.0"), args, streams); code != 0 {
+		if code := runCommand(freshRootWithStreams(streams, "6.0.2"), args, streams); code != 0 {
 			t.Fatalf("args=%v exit=%d stderr=%q", args, code, errors.String())
 		}
 		if output.Len() == 0 {
@@ -132,8 +132,8 @@ func TestResolveBuildVersion(t *testing.T) {
 	tests := []struct {
 		name, linker, module, want string
 	}{
-		{name: "release linker wins", linker: "4.3.3", module: "v4.3.2", want: "4.3.3"},
-		{name: "go install module", linker: "dev", module: "v4.3.3", want: "4.3.3"},
+		{name: "release linker wins", linker: "6.0.2", module: "v6.0.1", want: "6.0.2"},
+		{name: "go install module", linker: "dev", module: "v6.0.2", want: "6.0.2"},
 		{name: "local build", linker: "dev", module: "(devel)", want: "dev"},
 		{name: "missing build info", linker: "dev", want: "dev"},
 	}

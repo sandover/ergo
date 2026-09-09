@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sandover/ergo/v4/internal/ergo"
+	"github.com/sandover/ergo/v6/internal/ergo"
 )
 
 func TestShowTaskBodyWritesExactStoredBody(t *testing.T) {

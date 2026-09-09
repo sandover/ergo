@@ -4,8 +4,8 @@
 
 [![License](https://img.shields.io/github/license/sandover/ergo)](LICENSE)
 [![CI](https://github.com/sandover/ergo/actions/workflows/ci.yml/badge.svg)](https://github.com/sandover/ergo/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo/v4)](https://goreportcard.com/report/github.com/sandover/ergo/v4)
-[![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo/v4.svg)](https://pkg.go.dev/github.com/sandover/ergo/v4)
+[![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo/v6)](https://goreportcard.com/report/github.com/sandover/ergo/v6)
+[![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo/v6.svg)](https://pkg.go.dev/github.com/sandover/ergo/v6)
 
 You (and your agent) use Ergo to manage an implementation backlog in your repo.  You have the agent write plans to ergo, instead of to markdown files or the plan mode inside of agent harnesses. 
 
@@ -34,7 +34,7 @@ brew install sandover/tap/ergo
 Any supported platform with Go:
 
 ```sh
-go install github.com/sandover/ergo/v4/cmd/ergo@latest
+go install github.com/sandover/ergo/v6/cmd/ergo@latest
 ```
 
 Prebuilt archives for macOS, Linux, and Windows are available from the

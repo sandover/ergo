@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sandover/ergo/v4/internal/ergo"
+	"github.com/sandover/ergo/v6/internal/ergo"
 )
 
 var ergoBinary string

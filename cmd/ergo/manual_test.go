@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sandover/ergo/v4/internal/ergo"
+	"github.com/sandover/ergo/v6/internal/ergo"
 	"github.com/spf13/cobra"
 )
 

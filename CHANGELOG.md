@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The Go module now uses the required `/v6` major-version suffix. After the
+  next release, `go install github.com/sandover/ergo/v6/cmd/ergo@latest` will
+  resolve the current Ergo 6 release.
+
+### Compatibility
+
+- Go-based installers and integrations must use the `/v6` import path for Ergo
+  6. The older `/v4` path remains pinned to the final Ergo 4 release.
+
 ## [6.0.1] - 2026-08-24
 
 ### Fixed

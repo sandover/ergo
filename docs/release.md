@@ -32,7 +32,7 @@ every publication.
 For a version candidate, inject the same linker variable as GoReleaser:
 
 ```sh
-release_version=4.0.0
+release_version=6.0.2
 go build -ldflags "-s -w -X main.version=$release_version" -o .scratch/release/ergo-candidate ./cmd/ergo
 .scratch/release/ergo-candidate version
 ```
@@ -71,6 +71,8 @@ new version.
   claim it, and finish the attempt.
 - Verify one copied legacy log containing error or claimed-blocked state.
 - Install through Homebrew and invoke `$(brew --prefix)/bin/ergo` explicitly.
+- Install `github.com/sandover/ergo/v6/cmd/ergo@<tag>` with Go and confirm its
+  `version` output matches the tag without its `v` prefix.
 - Verify WinGet too when its publisher is configured.
 
 The release is complete only when its page has useful release notes and source,
