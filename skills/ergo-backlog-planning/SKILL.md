@@ -29,17 +29,12 @@ Follow a principle of parsimony. Add plan complexity only when it helps an agent
 
 ## Backlog Planning
 
-### Grill the user
+### Establish scope and decisions
 
-Interview the user relentlessly until you reach a shared understanding about their intended task or goal. Map this as a **design tree**: every decision branches into the decisions that hang off it.
-
-Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Then wait for the user's answers before the next round.
-
-Each round the user answers reshapes the tree: settled decisions push the frontier outward and unblock questions that depended on them. Recompute the frontier and ask the next round. A question whose answer depends on another question still open in this round belongs to a _later_ round, not this one.
-
-Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, tools, etc.), dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself. Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the sub-agent to report; ask the rest of the frontier now. The _decisions_ are the user's: put each to them and wait.
-
-The interview is done when the frontier is empty: every branch of the design tree visited, nothing left silently assumed.
+Establish the intended outcome, constraints, and completion criteria. Investigate
+facts directly. Ask about unresolved decisions that materially affect scope, risk,
+or difficult-to-reverse choices. Use reasonable assumptions for routine
+implementation details and proceed with authorized work.
 
 ### Tasks and epics
 
@@ -53,7 +48,7 @@ An epic body is optional. Use it for shared scope, non-goals, constraints, decis
 
 ### Resolve decisions first
 
-If a planning decision is uncertain or hard to reverse, stop and ask the user early. Resolve material choices during planning so the backlog contains few ambiguities or deferred decisions.
+Resolve material choices early using the decision criteria above. Continue independent work while a necessary answer is pending.
 
 Defer a decision only when implementation evidence is required, such as an artifact or spike result that the user needs to judge the next move.
 
@@ -89,7 +84,8 @@ Use this body shape. Omit empty sections except `Validation Gates`.
 - Run: <Smallest task-local test, lint, build, or inspection>
 - Deferred: <Behavior> is verified by <task ID or unambiguous title>.
 ```
-A checkpoint stops agent work and asks the user for input.
+Include a checkpoint only when a specific user decision or approval is needed.
+It pauses dependent work until the user answers.
 
 ### Task dependencies
 
@@ -98,23 +94,14 @@ A checkpoint stops agent work and asks the user for input.
 
 ### Review the backlog
 
-Once the backlog is in place, stop, clear your mind, and re-read the backlog as if you did not write it.
+Review the backlog for complete scope, executable tasks, sound dependencies, and
+unresolved decisions. Simplify structure that does not help implementation or
+verification, and fix any gaps. Summarize the tasks, dependencies, decisions, and
+material risks.
 
-- Does it contain all work needed to reach the goal, including necessary tests, docs, migration, compatibility, cleanup, and release work?
-- Can an agent execute each task without the original conversation?
-- Does the dependency graph make sense?
-- Is every open question, compatibility path, and duplicate source of truth resolved or assigned to a task?
-
-Fix any problems. Then summarize the epics, key tasks, dependencies, decisions, and risks. Get approval before implementation when the user asked only for planning or when material decisions remain.
-
-### Now review it again
-
-Now ask yourself:
-- could this implementation be simpler, while still addressing all the requirements and needs?
-- could this backlog implementation, while still fulfilling the implementation?
-
-If you see opportunities for elegance, take them now.
-
+If the user requested planning only, return the plan. If implementation is
+already authorized, continue through its completion criteria; pause dependent
+work only for a necessary user decision or approval.
 
 ### Execute and adapt
 
