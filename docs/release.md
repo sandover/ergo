@@ -15,6 +15,16 @@ in `ergo --help`, `ergo quickstart`, and `docs/spec.md`.
   then include useful examples, behavioral boundaries, compatibility, and the
   upgrade path. A generated commit list is never acceptable as final notes.
 - Confirm help, quickstart, spec, architecture, and shipped skill agree.
+- Choose the release version and run the version-aware preflight before creating
+  the tag:
+
+  ```sh
+  release_version=6.0.5
+  task release-check RELEASE_VERSION="$release_version"
+  ```
+
+  The check matches the proposed major version to `go.mod`, then confirms that
+  first-party imports and the README use the declared module path.
 - For the 6.0.0 cutover, verify the notes explain draft staging, the `◌`
   presentation, `open` replacing `release`, blocked-work migration, retry by
   specific claim, and incompatibility with older binaries after the first
@@ -50,6 +60,11 @@ Breaking releases must map old workflows to new commands and state what is no
 longer exposed. Legacy storage compatibility must be tested against copied
 event logs rather than assumed from unit tests alone.
 
+Before the first release of Go major version 2 or later, change the `go.mod`
+module suffix to `/vN` and update first-party imports and public installation
+links. The release preflight enforces this against the proposed version without
+introducing a separate version file.
+
 ## Publish
 
 1. Record the exact release commit and passing CI run.
@@ -71,8 +86,9 @@ new version.
   claim it, and finish the attempt.
 - Verify one copied legacy log containing error or claimed-blocked state.
 - Install through Homebrew and invoke `$(brew --prefix)/bin/ergo` explicitly.
-- Install `github.com/sandover/ergo/v6/cmd/ergo@<tag>` with Go and confirm its
-  `version` output matches the tag without its `v` prefix.
+- Read the module path with `go list -m`, install `<module-path>/cmd/ergo@<tag>`
+  with Go, and confirm its `version` output matches the tag without its `v`
+  prefix.
 - Verify WinGet too when its publisher is configured.
 
 The release is complete only when its page has useful release notes and source,

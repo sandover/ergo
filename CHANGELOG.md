@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- CI now catches stale first-party imports and README installation links, while
+  release checks reject a version whose major number disagrees with the Go
+  module path before publishing.
+
 ## [6.0.4] - 2026-09-13
 
 ### Changed

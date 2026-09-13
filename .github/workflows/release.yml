@@ -22,6 +22,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Verify release version and module path
+        run: ./scripts/check-release-version.sh "${GITHUB_REF_NAME}"
       - name: Restore cross-target Go cache
         id: release-cache
         uses: actions/cache/restore@v4

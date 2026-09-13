@@ -42,6 +42,14 @@ tasks:
       - go build -ldflags "-X main.version={{.VERSION}}" -o bin/ergo ./cmd/ergo
       - printf '%s\n' "Built bin/ergo {{.VERSION}}"
 
+  release-check:
+    desc: Verify a proposed release matches the Go module and public install path
+    silent: true
+    requires:
+      vars: [RELEASE_VERSION]
+    cmds:
+      - ./scripts/check-release-version.sh "{{.RELEASE_VERSION}}"
+
   run:
     desc: Run ergo from source via `go run` (pass args like `task run -- list`)
     silent: true

@@ -13,6 +13,9 @@ go mod tidy
 
 git diff --exit-code -- go.mod go.sum
 
+printf '%s\n' "[ci] module path consistency"
+./scripts/check-release-version.sh
+
 printf '%s\n' "[ci] golangci-lint ${GOLANGCI_LINT_VERSION}"
 ERGO_LINT_QUIET=1 GOLANGCI_LINT_VERSION="${GOLANGCI_LINT_VERSION}" ./scripts/golangci-lint.sh run ./...
 
