@@ -5,7 +5,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os/exec"
 	"testing"
@@ -22,18 +21,17 @@ func BenchmarkLargeBacklogCLI(b *testing.B) {
 		{"compacted-compacted", ergo.LargeBacklogModeCompacted, ergo.LargeBacklogModeCompacted},
 	}
 	commands := []struct {
-		name string
-		args func(iteration int) []string
+		name  string
+		args  []string
+		reset []string
 	}{
-		{"list", func(int) []string { return []string{"list"} }},
-		{"list-ready", func(int) []string { return []string{"list", "--ready"} }},
-		{"list-json", func(int) []string { return []string{"list", "--json"} }},
-		{"list-ready-json", func(int) []string { return []string{"list", "--ready", "--json"} }},
-		{"show", func(int) []string { return []string{"show", "T00001"} }},
-		{"claim", func(int) []string { return []string{"claim", "T01174", "--agent", "benchmark@local"} }},
-		{"lifecycle-write", func(iteration int) []string {
-			return []string{"done", fmt.Sprintf("T%05d", 1174+iteration%303)}
-		}},
+		{"list", []string{"list"}, nil},
+		{"list-ready", []string{"list", "--ready"}, nil},
+		{"list-json", []string{"list", "--json"}, nil},
+		{"list-ready-json", []string{"list", "--ready", "--json"}, nil},
+		{"show", []string{"show", "T00001"}, nil},
+		{"claim", []string{"claim", "T01174", "--agent", "benchmark@local"}, []string{"open", "T01174"}},
+		{"lifecycle-write", []string{"done", "T01174"}, []string{"claim", "T01174", "--agent", "benchmark@local"}},
 	}
 	for _, representation := range representations {
 		for _, command := range commands {
@@ -53,12 +51,22 @@ func BenchmarkLargeBacklogCLI(b *testing.B) {
 				}
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					cmd := exec.Command(ergoBinary, command.args(i)...)
+					if command.reset != nil {
+						b.StopTimer()
+						// Establish a real transition before every measured mutation.
+						reset := exec.Command(ergoBinary, command.reset...)
+						reset.Dir = dir
+						if output, err := reset.CombinedOutput(); err != nil {
+							b.Fatalf("ergo %v: %v\n%s", command.reset, err, output)
+						}
+						b.StartTimer()
+					}
+					cmd := exec.Command(ergoBinary, command.args...)
 					cmd.Dir = dir
 					cmd.Stdout = io.Discard
 					cmd.Stderr = io.Discard
 					if err := cmd.Run(); err != nil {
-						b.Fatalf("ergo %v: %v", command.args(i), err)
+						b.Fatalf("ergo %v: %v", command.args, err)
 					}
 				}
 			})

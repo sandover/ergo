@@ -140,6 +140,13 @@ func applyTransaction(graph *Graph, events []Event) (*Graph, error) {
 }
 
 func cloneGraph(graph *Graph) *Graph {
+	clone := cloneGraphState(graph)
+	clone.rebuildIndexes()
+	return clone
+}
+
+// cloneGraphState copies stored state without building disposable query indexes.
+func cloneGraphState(graph *Graph) *Graph {
 	clone := newGraph()
 	if graph == nil {
 		return clone
@@ -162,7 +169,6 @@ func cloneGraph(graph *Graph) *Graph {
 	for id := range graph.legacyEmptyEpics {
 		clone.legacyEmptyEpics[id] = struct{}{}
 	}
-	clone.rebuildIndexes()
 	return clone
 }
 
@@ -171,19 +177,25 @@ func replayEventsOnto(graph *Graph, events []Event) (*Graph, error) {
 	if err != nil {
 		return nil, err
 	}
+	return finalizeGraph(graph), nil
+}
+
+// finalizeGraph prepares validated raw state for command queries.
+func finalizeGraph(graph *Graph) *Graph {
 	applyLegacyTitleMigration(graph)
 	graph.rebuildIndexes()
-	return graph, nil
+	return graph
 }
 
 // replayEventsOntoRaw preserves the pre-migration reducer state used by the
-// disposable backlog cache. Callers must finalize it with replayEventsOnto
+// disposable backlog cache. Callers must finalize it with finalizeGraph
 // before exposing the graph to commands.
 func replayEventsOntoRaw(graph *Graph, events []Event) (*Graph, error) {
 	taskSource := map[string]replayEventSource{}
 	lifecycleSource := map[string]replayEventSource{}
 	parentSource := map[string]replayEventSource{}
 	linkSource := map[string]map[string]replayEventSource{}
+	reachabilityScratch := make(map[string]bool)
 	for id := range graph.Tasks {
 		source := replayEventSource{context: "snapshot", kind: snapshotTaskRecordType, order: -1}
 		taskSource[id] = source
@@ -304,7 +316,7 @@ func replayEventsOntoRaw(graph *Graph, events []Event) (*Graph, error) {
 			if err := validateDepAncestry(fromTask, toTask); err != nil {
 				return nil, replayInvariantError(context, event.Type, data.FromID+" -> "+data.ToID, err.Error())
 			}
-			if hasCycle(graph, data.FromID, data.ToID) {
+			if hasCycleWithScratch(graph, data.FromID, data.ToID, reachabilityScratch) {
 				return nil, replayInvariantError(context, event.Type, data.FromID+" -> "+data.ToID, "dependency cycle")
 			}
 			if graph.Deps[data.FromID] == nil {
@@ -456,8 +468,6 @@ func replayEventsOntoRaw(graph *Graph, events []Event) (*Graph, error) {
 	if err := validateReplayInvariants(graph, taskSource, lifecycleSource, parentSource, linkSource); err != nil {
 		return nil, err
 	}
-
-	graph.rebuildIndexes()
 
 	return graph, nil
 }

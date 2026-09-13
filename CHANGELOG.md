@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.4] - 2026-09-13
+
+### Changed
+
+- Common commands on the 30,380-transaction reference backlog now take about
+  49-71 ms after the automatic cache is created, down from 72-98 ms in 6.0.3
+  and roughly one second before caching.
+- Full replay now reuses dependency-checking memory. First use and cache
+  recovery allocate about 22% less temporary memory on the reference backlog.
+- `ergo list` reads only task and dependency state because list output does not
+  use journal history. Human and JSON list output remain unchanged.
+
+### Compatibility
+
+- Ergo rebuilds its disposable cache in the new single-document format
+  automatically. Backlogs, journals, commands, and output formats do not
+  change, and deleting `.ergo/cache.json` still restores full replay.
+
 ## [6.0.3] - 2026-09-09
 
 ### Fixed
@@ -18,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache absence, corruption, replacement failure, or an unreadable cache falls
   back to full replay without changing command output or exit status. The cache
   is safe to delete and adds no command, flag, setting, or maintenance step.
-- Ergo keeps `cache.jsonl` and its temporary files out of Git through local
+- Ergo keeps `cache.json` and its temporary files out of Git through local
   `.ergo/.gitignore` rules without invoking Git or changing its index.
 
 ## [6.0.2] - 2026-09-09
@@ -780,7 +798,8 @@ read that log.
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v6.0.3...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v6.0.4...HEAD
+[6.0.4]: https://github.com/sandover/ergo/compare/v6.0.3...v6.0.4
 [6.0.3]: https://github.com/sandover/ergo/compare/v6.0.2...v6.0.3
 [6.0.2]: https://github.com/sandover/ergo/compare/v6.0.1...v6.0.2
 [6.0.1]: https://github.com/sandover/ergo/compare/v6.0.0...v6.0.1

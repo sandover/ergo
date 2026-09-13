@@ -281,10 +281,15 @@ func isEpicComplete(epicID string, graph *Graph) bool {
 }
 
 func hasCycle(graph *Graph, from, to string) bool {
+	return hasCycleWithScratch(graph, from, to, make(map[string]bool))
+}
+
+func hasCycleWithScratch(graph *Graph, from, to string, visited map[string]bool) bool {
 	if from == to {
 		return true
 	}
-	return isReachable(graph, to, from, make(map[string]bool))
+	clear(visited)
+	return isReachable(graph, to, from, visited)
 }
 
 func isReachable(graph *Graph, start, target string, visited map[string]bool) bool {

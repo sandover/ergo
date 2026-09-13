@@ -85,16 +85,9 @@ func TestCompatibilityReleasedBacklogsThroughCache(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, read, err := repository.loadWithRead()
-			if err != nil {
-				t.Fatal(err)
-			}
-			data, err := marshalCache(read.cacheGraph, read.cacheSource)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(filepath.Join(ergoDir, cacheFileName), data, 0600); err != nil {
-				t.Fatal(err)
+			writeCacheForRepository(t, &repository)
+			if _, _, hit := tryLoadBacklogCache(repository.eventsPath); !hit {
+				t.Fatal("released fixture did not load through cache")
 			}
 			after, err := repository.View()
 			if err != nil {

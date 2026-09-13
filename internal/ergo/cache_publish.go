@@ -17,15 +17,15 @@ const (
 	cacheRefreshBytes   = 1 * 1024 * 1024
 	cacheRefreshRecords = 256
 	cacheIgnoreComment  = "# Ergo performance cache"
-	cacheIgnoreFileRule = "/cache.jsonl"
+	cacheIgnoreFileRule = "/cache.json"
 	cacheIgnoreTempRule = "/cache.tmp-*"
 )
 
-func (r *Repository) publishCache(read eventLogRead) {
-	if r == nil || !cacheRefreshNeeded(read) {
+func (r *Repository) publishCache(checkpoint *cacheCheckpoint) {
+	if r == nil || checkpoint == nil {
 		return
 	}
-	data, err := marshalCache(read.cacheGraph, read.cacheSource)
+	data, err := marshalCache(checkpoint.graph, checkpoint.source)
 	if err != nil {
 		return
 	}
@@ -33,18 +33,18 @@ func (r *Repository) publishCache(read eventLogRead) {
 	_ = publishCacheFile(filepath.Join(r.dir, cacheFileName), data)
 }
 
-func cacheRefreshNeeded(read eventLogRead) bool {
-	if read.cacheGraph == nil || read.cacheSource.Identity == "" || read.cacheSource.Bytes < 0 {
+func cacheRefreshNeeded(source backlogSource, base *backlogSource) bool {
+	if source.Identity == "" || source.Bytes < 0 {
 		return false
 	}
-	if !read.cacheHit {
-		return read.cacheSource.Bytes >= cacheCreateBytes
+	if base == nil {
+		return source.Bytes >= cacheCreateBytes
 	}
-	if read.cacheSource.Bytes <= read.cacheBase.Bytes {
+	if source.Bytes <= base.Bytes {
 		return false
 	}
-	return read.cacheSource.Bytes-read.cacheBase.Bytes >= cacheRefreshBytes ||
-		read.cacheSource.Records-read.cacheBase.Records >= cacheRefreshRecords
+	return source.Bytes-base.Bytes >= cacheRefreshBytes ||
+		source.Records-base.Records >= cacheRefreshRecords
 }
 
 func publishCacheFile(path string, data []byte) error {

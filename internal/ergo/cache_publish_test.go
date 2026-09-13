@@ -123,7 +123,7 @@ func TestCacheIgnoreRulesPreserveExistingContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "/journal.jsonl\n# Ergo performance cache\n/cache.jsonl\n/cache.tmp-*\n"
+	want := "/journal.jsonl\n# Ergo performance cache\n/cache.json\n/cache.tmp-*\n"
 	if string(data) != want {
 		t.Fatalf("ignore contents = %q, want %q", data, want)
 	}
@@ -150,24 +150,22 @@ func TestCachePublicationFailureDoesNotFailView(t *testing.T) {
 }
 
 func TestCacheRefreshThresholds(t *testing.T) {
-	base := cacheSource{Identity: "id", Bytes: 10, Records: 10}
-	read := eventLogRead{cacheGraph: newGraph(), cacheSource: base}
-	if cacheRefreshNeeded(read) {
+	base := backlogSource{Identity: "id", Bytes: 10, Records: 10}
+	source := base
+	if cacheRefreshNeeded(source, nil) {
 		t.Fatal("small missing cache should not publish")
 	}
-	read.cacheSource.Bytes = cacheCreateBytes
-	if !cacheRefreshNeeded(read) {
+	source.Bytes = cacheCreateBytes
+	if !cacheRefreshNeeded(source, nil) {
 		t.Fatal("creation byte threshold did not publish")
 	}
-	read.cacheHit = true
-	read.cacheBase = base
-	read.cacheSource = base
-	if cacheRefreshNeeded(read) {
+	source = base
+	if cacheRefreshNeeded(source, &base) {
 		t.Fatal("unchanged cache should not refresh")
 	}
-	read.cacheSource.Records += cacheRefreshRecords
-	read.cacheSource.Bytes++
-	if !cacheRefreshNeeded(read) {
+	source.Records += cacheRefreshRecords
+	source.Bytes++
+	if !cacheRefreshNeeded(source, &base) {
 		t.Fatal("record threshold did not refresh")
 	}
 }

@@ -94,17 +94,25 @@ and the interrupted-tail rule repairs only an incomplete final JSON record.
 
 ## Disposable replay cache
 
-Large repositories may contain `.ergo/cache.jsonl`. It is a local performance
+Large repositories may contain `.ergo/cache.json`. It is a local performance
 artifact, never an authoritative log or selectable backlog. The cache stores a
 versioned, integrity-checked copy of raw reducer state at one newline-terminated
 backlog byte offset. It excludes derived indexes and journal hydration.
 
+Full reads and cached tails share one JSONL scanner. Raw replay applies and
+validates state; finalization migrates titles and rebuilds indexes once. A load
+returns parser/repair metadata separately from its optional publication
+checkpoint. Only a load due for refresh retains a second raw graph copy.
+
 A possible hit validates the cache, selected source basename, platform file
 identity, saved offset, and record boundary. The loader then seeks to that
 offset and replays only the appended tail. It deliberately does not read or hash
-the represented prefix. An in-place external edit that preserves the cheap
-identity signals can therefore remain unnoticed. Replacement, truncation,
-compaction, invalid boundaries, and normal cache corruption cause a miss.
+the represented prefix, apart from a one-byte boundary probe. In-place rewrites
+can remain unnoticed, including rewrite-plus-append and truncate-and-regrow.
+Same-size edits are rejected when modification time changes, but growth is
+treated as append-only. Replacement with a different identity, truncation below
+the checkpoint, compaction, invalid boundaries, and normal cache corruption
+cause a miss.
 
 Every accelerated-path failure returns to the unchanged full loader. Only that
 loader reports authoritative corruption. Deleting the cache always restores
@@ -117,15 +125,16 @@ Cache work is best-effort and cannot change command output, exit status, backlog
 durability, or journal failure behavior. Internal thresholds create at 4 MiB
 and refresh after a 1 MiB or 256-record tail.
 
-Before publication, Ergo best-effort appends `/cache.jsonl` and `/cache.tmp-*`
+Before publication, Ergo best-effort appends `/cache.json` and `/cache.tmp-*`
 to `.ergo/.gitignore` while preserving unrelated content. It never invokes Git
 or changes the index. A successful compact removes the old cache.
 
 ## Locking and repository updates
 
 `View` acquires `.ergo/lock` in shared mode, loads the selected backlog and
-journal, and returns a coherent graph. Multiple views may overlap. List and show
-therefore cannot observe the middle of a transaction.
+journal, and returns a coherent graph. `ViewGraph` omits the journal for callers
+such as `list` that use only task and dependency state. Multiple views may
+overlap, so list and show cannot observe the middle of a transaction.
 
 `Update` holds the same lock exclusively for its entire operation:
 

@@ -117,8 +117,13 @@ func BenchmarkLargeBacklogCacheTransitions(b *testing.B) {
 		}
 	})
 	b.Run("refresh-256", func(b *testing.B) {
-		_, repository := setup(b)
+		dir, repository := setup(b)
 		if _, err := repository.ViewGraph(); err != nil {
+			b.Fatal(err)
+		}
+		cachePath := filepath.Join(dir, dataDirName, cacheFileName)
+		baseline, err := os.ReadFile(cachePath)
+		if err != nil {
 			b.Fatal(err)
 		}
 		if err := appendBenchmarkTitleTail(repository.eventsPath, cacheRefreshRecords); err != nil {
@@ -126,6 +131,12 @@ func BenchmarkLargeBacklogCacheTransitions(b *testing.B) {
 		}
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			// Restore the old checkpoint so every sample folds in the same tail.
+			if err := os.WriteFile(cachePath, baseline, 0600); err != nil {
+				b.Fatal(err)
+			}
+			b.StartTimer()
 			if _, err := repository.ViewGraph(); err != nil {
 				b.Fatal(err)
 			}
@@ -353,13 +364,12 @@ func BenchmarkLargeBacklogListRendering(b *testing.B) {
 		b.Run(mode, func(b *testing.B) {
 			data := setupLargeBacklogBenchmark(b, mode, LargeBacklogModeFull)
 			data.graph.prepareDerivedQueries()
+			all, active, ready := collectListTasks(data.graph)
 			outcome := ListOutcome{
 				Options: ListOptions{ShowAll: true}, Graph: data.graph,
 				Roots:    buildListRoots(data.graph, true, false, ""),
-				AllTasks: collectNonContainerTasks(data.graph),
+				AllTasks: all, ActiveTasks: active, ReadyTasks: ready,
 			}
-			outcome.ActiveTasks = filterActiveTasks(outcome.AllTasks)
-			outcome.ReadyTasks = filterReadyTasks(outcome.AllTasks, data.graph)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				RenderList(io.Discard, outcome, false, 120)

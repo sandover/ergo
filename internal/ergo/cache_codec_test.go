@@ -1,11 +1,14 @@
 // Purpose: Prove the disposable cache preserves raw reducer state exactly.
 // Coverage: deterministic round trips, legacy evidence, tombstones, format
-// versioning, record bounds, and whole-file integrity failures.
+// versioning, strict structure, and whole-file integrity failures.
 // Invariants: decoding never turns malformed cache bytes into usable state.
 package ergo
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -26,7 +29,7 @@ func TestCacheCodecRoundTripsRawReplayState(t *testing.T) {
 	graph.Deps["TASK01"] = map[string]struct{}{"TASK02": {}}
 	graph.Tombstones["OLD001"] = TombstoneInfo{AgentID: "prune@host", At: now.Add(3 * time.Minute)}
 	graph.legacyEmptyEpics["EPIC00"] = struct{}{}
-	source := cacheSource{Name: backlogFileName, Identity: "unix:1:2", Bytes: 1234, Lines: 18, Records: 17, ModifiedNS: now.UnixNano()}
+	source := backlogSource{Name: backlogFileName, Identity: "unix:1:2", Bytes: 1234, Lines: 18, Records: 17, ModifiedNS: now.UnixNano()}
 
 	first, err := marshalCache(graph, source)
 	if err != nil {
@@ -67,20 +70,24 @@ func TestCacheCodecRejectsInvalidFiles(t *testing.T) {
 	graph := newGraph()
 	now := time.Date(2026, 9, 9, 12, 0, 0, 0, time.UTC)
 	graph.Tasks["TASK01"] = &Task{ID: "TASK01", State: stateTodo, Title: "Task", CreatedAt: now, UpdatedAt: now}
-	data, err := marshalCache(graph, cacheSource{Name: backlogFileName, Identity: "unix:1:2", Bytes: 42, Lines: 1, Records: 1})
+	data, err := marshalCache(graph, backlogSource{Name: backlogFileName, Identity: "unix:1:2", Bytes: 42, Lines: 1, Records: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	lines := bytes.Split(data, []byte("\n"))
-
 	tests := map[string][]byte{
 		"empty":           nil,
-		"missing commit":  bytes.Join(lines[:len(lines)-2], []byte("\n")),
+		"missing payload": []byte("{}\n"),
 		"missing newline": bytes.TrimSuffix(data, []byte("\n")),
 		"bad checksum":    bytes.Replace(data, []byte(`"title":"Task"`), []byte(`"title":"Changed"`), 1),
-		"bad version":     bytes.Replace(data, []byte(`"version":1`), []byte(`"version":2`), 1),
-		"unknown field":   bytes.Replace(data, []byte(`"version":1`), []byte(`"version":1,"surprise":true`), 1),
-		"suffix":          append(append([]byte(nil), data...), []byte("{}\n")...),
+		"bad version":     resignCache(t, data, []byte(`"version":2`), []byte(`"version":3`)),
+		"unknown field":   resignCache(t, data, []byte(`"version":2`), []byte(`"version":2,"surprise":true`)),
+		"unknown parent": rewriteCache(t, data, func(document *cacheDocument) {
+			document.Tasks[0].EpicID = "MISSING"
+		}),
+		"dangling dependency": rewriteCache(t, data, func(document *cacheDocument) {
+			document.Dependencies = []cacheDependency{{FromID: "TASK01", ToID: "MISSING"}}
+		}),
+		"suffix": append(append([]byte(nil), data...), []byte("{}\n")...),
 	}
 	for name, candidate := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -89,6 +96,47 @@ func TestCacheCodecRejectsInvalidFiles(t *testing.T) {
 			}
 		})
 	}
+}
+
+func rewriteCache(t *testing.T, data []byte, mutate func(*cacheDocument)) []byte {
+	t.Helper()
+	var envelope cacheEnvelope
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	var document cacheDocument
+	if err := json.Unmarshal(envelope.Checkpoint, &document); err != nil {
+		t.Fatal(err)
+	}
+	mutate(&document)
+	payload, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(payload)
+	envelope.Checkpoint = payload
+	envelope.SHA256 = hex.EncodeToString(sum[:])
+	encoded, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return append(encoded, '\n')
+}
+
+func resignCache(t *testing.T, data, old, replacement []byte) []byte {
+	t.Helper()
+	var envelope cacheEnvelope
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	envelope.Checkpoint = bytes.Replace(envelope.Checkpoint, old, replacement, 1)
+	sum := sha256.Sum256(envelope.Checkpoint)
+	envelope.SHA256 = hex.EncodeToString(sum[:])
+	encoded, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return append(encoded, '\n')
 }
 
 func TestRawReplayDefersLegacyTitleMigrationUntilTailApplied(t *testing.T) {

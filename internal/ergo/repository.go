@@ -143,7 +143,7 @@ func (r *Repository) View() (*Graph, error) {
 	var graph *Graph
 	err := withReadLock(r.lockPath, r.opts, func() error {
 		var err error
-		var read eventLogRead
+		var read backlogRead
 		graph, read, err = r.loadWithRead()
 		if err != nil {
 			return err
@@ -153,7 +153,7 @@ func (r *Repository) View() (*Graph, error) {
 			return err
 		}
 		hydrateGraphEvidence(graph, mergeLegacyJournal(journal, graph))
-		r.publishCache(read)
+		r.publishCache(read.checkpoint)
 		return nil
 	})
 	return graph, err
@@ -168,10 +168,10 @@ func (r *Repository) ViewGraph() (*Graph, error) {
 	var graph *Graph
 	err := withReadLock(r.lockPath, r.opts, func() error {
 		var err error
-		var read eventLogRead
+		var read backlogRead
 		graph, read, err = r.loadWithRead()
 		if err == nil {
-			r.publishCache(read)
+			r.publishCache(read.checkpoint)
 		}
 		return err
 	})
@@ -186,7 +186,7 @@ func (r *Repository) ViewWithJournal() (*Graph, []JournalEntry, error) {
 	var journal []JournalEntry
 	err := withReadLock(r.lockPath, r.opts, func() error {
 		var err error
-		var read eventLogRead
+		var read backlogRead
 		graph, read, err = r.loadWithRead()
 		if err != nil {
 			return err
@@ -197,7 +197,7 @@ func (r *Repository) ViewWithJournal() (*Graph, []JournalEntry, error) {
 		}
 		journal = mergeLegacyJournal(journal, graph)
 		hydrateGraphEvidence(graph, journal)
-		r.publishCache(read)
+		r.publishCache(read.checkpoint)
 		return nil
 	})
 	return graph, journal, err
@@ -225,10 +225,10 @@ func (r *Repository) Update(fn func(*Graph) ([]Event, error)) (UpdateOutcome, er
 		if err != nil {
 			return err
 		}
-		if err := r.appendValidated(events, eventRead); err != nil {
+		if err := r.appendValidated(events, eventRead.log); err != nil {
 			return err
 		}
-		r.publishCache(eventRead)
+		r.publishCache(eventRead.checkpoint)
 		outcome.Graph = candidate
 		return nil
 	})
@@ -263,14 +263,14 @@ func (r *Repository) UpdateWithJournal(fn func(*Graph) ([]Event, []JournalEntry,
 		if err != nil {
 			return err
 		}
-		if err := r.appendValidated(events, eventRead); err != nil {
+		if err := r.appendValidated(events, eventRead.log); err != nil {
 			return err
 		}
 		outcome.Graph = candidate
 		if err := r.appendJournalValidated(journal, journalRead); err != nil {
 			return fmt.Errorf("backlog changed, but journal update failed: %w", err)
 		}
-		r.publishCache(eventRead)
+		r.publishCache(eventRead.checkpoint)
 		outcome.Journal = append(existingJournal, journal...)
 		hydrateGraphEvidence(outcome.Graph, outcome.Journal)
 		return nil
@@ -338,7 +338,15 @@ func (r *Repository) load() (*Graph, error) {
 	return graph, err
 }
 
-func (r *Repository) loadWithRead() (*Graph, eventLogRead, error) {
+// backlogRead separates authoritative parsing from optional cache publication.
+// The checkpoint owns a raw graph copy only when a refresh is due.
+type backlogRead struct {
+	log        eventLogRead
+	checkpoint *cacheCheckpoint
+	cacheHit   bool
+}
+
+func (r *Repository) loadWithRead() (*Graph, backlogRead, error) {
 	if graph, read, ok := tryLoadBacklogCache(r.eventsPath); ok {
 		return graph, read, nil
 	}
@@ -346,32 +354,30 @@ func (r *Repository) loadWithRead() (*Graph, eventLogRead, error) {
 	if err != nil {
 		var pathError *os.PathError
 		if !errors.As(err, &pathError) {
-			return nil, eventLogRead{}, &corruptionError{err: err}
+			return nil, backlogRead{}, &corruptionError{err: err}
 		}
-		return nil, eventLogRead{}, err
+		return nil, backlogRead{}, err
 	}
-	if read.snapshot != nil {
-		raw, err := replayEventsOntoRaw(cloneGraph(read.snapshot), read.events)
-		if err != nil {
-			return nil, eventLogRead{}, &corruptionError{err: err}
-		}
-		graph, err := replayEventsOnto(cloneGraph(raw), nil)
-		if err != nil {
-			return nil, eventLogRead{}, &corruptionError{err: err}
-		}
-		read.cacheGraph = raw
-		return graph, read, nil
+	raw := read.snapshot
+	if raw == nil {
+		raw = newGraph()
 	}
-	raw, err := replayEventsOntoRaw(newGraph(), read.events)
+	raw, err = replayEventsOntoRaw(raw, read.events)
 	if err != nil {
-		return nil, eventLogRead{}, &corruptionError{err: err}
+		return nil, backlogRead{}, &corruptionError{err: err}
 	}
-	graph, err := replayEventsOnto(cloneGraph(raw), nil)
-	if err != nil {
-		return nil, eventLogRead{}, &corruptionError{err: err}
+	graph, loaded := finishBacklogLoad(raw, read, nil)
+	return graph, loaded, nil
+}
+
+// finishBacklogLoad takes ownership of validated raw state. Only publication
+// needs a second copy; ordinary hits and small full reads finalize in place.
+func finishBacklogLoad(raw *Graph, read eventLogRead, base *backlogSource) (*Graph, backlogRead) {
+	loaded := backlogRead{log: read, cacheHit: base != nil}
+	if cacheRefreshNeeded(read.source, base) {
+		loaded.checkpoint = &cacheCheckpoint{graph: cloneGraphState(raw), source: read.source}
 	}
-	read.cacheGraph = raw
-	return graph, read, nil
+	return finalizeGraph(raw), loaded
 }
 
 func (r *Repository) appendValidated(events []Event, read eventLogRead) error {

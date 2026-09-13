@@ -21,7 +21,7 @@ func TestCacheDoesNotChangeReadCommandOutput(t *testing.T) {
 		{"list"}, {"list", "--ready"}, {"list", "--json"},
 		{"list", "--ready", "--json"}, {"show", "T00001"}, {"show", "T00001", "--body"},
 	}
-	cachePath := filepath.Join(dir, ".ergo", "cache.jsonl")
+	cachePath := filepath.Join(dir, ".ergo", "cache.json")
 	for _, args := range commands {
 		if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
 			t.Fatal(err)

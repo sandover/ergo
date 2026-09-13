@@ -358,7 +358,7 @@ func TestGraphOnlyReadAndUpdateDoNotReadJournal(t *testing.T) {
 	}
 }
 
-func TestJournalFreeListIgnoresJournalCorruption(t *testing.T) {
+func TestListIgnoresJournalCorruption(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := InitializeRepository(dir); err != nil {
 		t.Fatal(err)
@@ -371,10 +371,7 @@ func TestJournalFreeListIgnoresJournalCorruption(t *testing.T) {
 	if err := os.WriteFile(journalPath, []byte("{}\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.List(ListRequest{OmitJournal: true}); err != nil {
+	if _, err := app.List(ListRequest{}); err != nil {
 		t.Fatalf("journal-free list failed: %v", err)
-	}
-	if _, err := app.List(ListRequest{}); err == nil {
-		t.Fatal("evidence-bearing list accepted corrupt journal")
 	}
 }

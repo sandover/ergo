@@ -29,13 +29,19 @@ const (
 	maxLogRecordBytes = 10 * 1024 * 1024
 )
 
+type backlogSource struct {
+	Name       string
+	Identity   string
+	Bytes      int64
+	Lines      int
+	Records    int
+	ModifiedNS int64
+}
+
 type eventLogRead struct {
 	events         []Event
 	snapshot       *Graph
-	cacheGraph     *Graph
-	cacheSource    cacheSource
-	cacheBase      cacheSource
-	cacheHit       bool
+	source         backlogSource
 	recordCount    int
 	lineCount      int
 	validBytes     int64
@@ -140,13 +146,32 @@ func inspectEventLog(path string) (eventLogRead, error) {
 		}
 	}
 
-	var result eventLogRead
-	scanner := bufio.NewScanner(file)
+	result, err := scanEventLog(file, path, backlogSource{}, endsWithNewline, true)
+	if err != nil {
+		return eventLogRead{}, err
+	}
+
+	if !result.truncatedTail && !result.needsSeparator && startInfoErr == nil && startIdentity != "" {
+		if endInfo, err := file.Stat(); err == nil && endInfo.Size() == startInfo.Size() && endInfo.ModTime() == startInfo.ModTime() {
+			if endIdentity, ok := sourceFileIdentity(file, endInfo); ok && endIdentity == startIdentity && result.validBytes == endInfo.Size() {
+				result.source = backlogSource{Name: filepath.Base(path), Identity: endIdentity, Bytes: endInfo.Size(),
+					Lines: result.lineCount, Records: result.recordCount, ModifiedNS: endInfo.ModTime().UnixNano()}
+			}
+		}
+	}
+	return result, nil
+}
+
+// scanEventLog is the single JSONL parser for complete files and cached tails.
+// Prefix coordinates preserve existing whole-file diagnostics and repair offsets.
+// Only complete-file scans may start an authoritative snapshot block.
+func scanEventLog(reader io.Reader, path string, prefix backlogSource, endsWithNewline, allowSnapshot bool) (eventLogRead, error) {
+	result := eventLogRead{recordCount: prefix.Records, lineCount: prefix.Lines, validBytes: prefix.Bytes}
+	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLogRecordBytes)
 	var pending []byte
 	pendingNo := 0
-	currentNo := 0
-	seenRecords := 0
+	currentNo := prefix.Lines
 	var snapshotDecoder *snapshotBlockDecoder
 
 	processLine := func(lineNo int, line []byte) error {
@@ -154,7 +179,6 @@ func inspectEventLog(path string) (eventLogRead, error) {
 		if len(trimmed) == 0 {
 			return nil
 		}
-		seenRecords++
 		result.recordCount++
 		if snapshotDecoder != nil && snapshotDecoder.seen < snapshotDecoder.total() {
 			if err := snapshotDecoder.consume(lineNo, trimmed); err != nil {
@@ -176,7 +200,7 @@ func inspectEventLog(path string) (eventLogRead, error) {
 			return formatEventsParseError(path, lineNo, trimmed, err)
 		}
 		if header.Type == snapshotRecordType {
-			if seenRecords != 1 || result.snapshot != nil || snapshotDecoder != nil {
+			if !allowSnapshot || result.recordCount != 1 || result.snapshot != nil || snapshotDecoder != nil {
 				return fmt.Errorf("%s:%d: snapshot manifest must be the first and only snapshot", path, lineNo)
 			}
 			decoder, err := newSnapshotDecoder(path, lineNo, trimmed)
@@ -246,14 +270,6 @@ func inspectEventLog(path string) (eventLogRead, error) {
 	if snapshotDecoder != nil && snapshotDecoder.seen != snapshotDecoder.total() {
 		return eventLogRead{}, fmt.Errorf("%s:%d: incomplete snapshot: got %d of %d data records",
 			path, snapshotDecoder.line, snapshotDecoder.seen, snapshotDecoder.total())
-	}
-	if !result.truncatedTail && !result.needsSeparator && startInfoErr == nil && startIdentity != "" {
-		if endInfo, err := file.Stat(); err == nil && endInfo.Size() == startInfo.Size() && endInfo.ModTime() == startInfo.ModTime() {
-			if endIdentity, ok := sourceFileIdentity(file, endInfo); ok && endIdentity == startIdentity && result.validBytes == endInfo.Size() {
-				result.cacheSource = cacheSource{Name: filepath.Base(path), Identity: endIdentity, Bytes: endInfo.Size(),
-					Lines: result.lineCount, Records: result.recordCount, ModifiedNS: endInfo.ModTime().UnixNano()}
-			}
-		}
 	}
 	return result, nil
 }

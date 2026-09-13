@@ -35,8 +35,8 @@ func TestBacklogCacheLoadsCheckpointAndAppendedTail(t *testing.T) {
 	if !read.cacheHit || graph.Tasks["TASK01"] == nil || graph.Tasks["TASK02"] == nil {
 		t.Fatalf("tail replay cache hit = %v, graph = %+v", read.cacheHit, graph.Tasks)
 	}
-	if read.recordCount != 2 || read.lineCount != 2 || len(read.events) != 1 || read.validBytes != read.cacheSource.Bytes {
-		t.Fatalf("tail coordinates = records %d lines %d bytes %d source %+v", read.recordCount, read.lineCount, read.validBytes, read.cacheSource)
+	if read.log.recordCount != 2 || read.log.lineCount != 2 || len(read.log.events) != 1 || read.log.validBytes != read.log.source.Bytes {
+		t.Fatalf("tail coordinates = records %d lines %d bytes %d source %+v", read.log.recordCount, read.log.lineCount, read.log.validBytes, read.log.source)
 	}
 }
 
@@ -135,12 +135,12 @@ func TestBacklogCachePreservesInterruptedTailRepairCoordinates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !read.cacheHit || !read.truncatedTail || read.validBytes != before.Size() {
-		t.Fatalf("repair coordinates = hit %v truncated %v valid %d want %d", read.cacheHit, read.truncatedTail, read.validBytes, before.Size())
+	if !read.cacheHit || !read.log.truncatedTail || read.log.validBytes != before.Size() {
+		t.Fatalf("repair coordinates = hit %v truncated %v valid %d want %d", read.cacheHit, read.log.truncatedTail, read.log.validBytes, before.Size())
 	}
 }
 
-func TestBacklogCacheHitDoesNotReadRepresentedPrefix(t *testing.T) {
+func TestBacklogCacheAcceptsUndetectablePrefixEdit(t *testing.T) {
 	dir, repository := cacheTestRepository(t, []Event{cacheTestNewTask(t, "TASK01", "First")})
 	writeCacheForRepository(t, repository)
 	path := filepath.Join(dir, dataDirName, backlogFileName)
@@ -208,11 +208,15 @@ func writeCacheForRepository(t *testing.T, repository *Repository) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := replayEventsOntoRaw(newGraph(), read.events)
+	raw := read.snapshot
+	if raw == nil {
+		raw = newGraph()
+	}
+	raw, err = replayEventsOntoRaw(raw, read.events)
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := read.cacheSource
+	source := read.source
 	if source.Identity == "" {
 		t.Fatal("backlog was not eligible for a checkpoint")
 	}

@@ -25,13 +25,7 @@ func (a *Application) List(request ListRequest) (ListOutcome, error) {
 	if err := repository.Open(a.repository); err != nil {
 		return ListOutcome{}, classifyRepositoryError(err)
 	}
-	var graph *Graph
-	var err error
-	if request.OmitJournal {
-		graph, err = repository.ViewGraph()
-	} else {
-		graph, err = repository.View()
-	}
+	graph, err := repository.ViewGraph()
 	if err != nil {
 		return ListOutcome{}, classifyRepositoryError(err)
 	}
@@ -42,12 +36,12 @@ func (a *Application) List(request ListRequest) (ListOutcome, error) {
 			return ListOutcome{}, classified(ErrorNotFound, fmt.Errorf("no such epic: %s", request.EpicID))
 		}
 	}
-	all := collectNonContainerTasks(graph)
+	all, active, ready := collectListTasks(graph)
 	outcome := ListOutcome{
 		Options: request, Graph: graph,
 		Roots:       buildListRoots(graph, request.ShowAll, request.ReadyOnly, request.EpicID),
 		AllTasks:    all,
-		ActiveTasks: filterActiveTasks(all), ReadyTasks: filterReadyTasks(all, graph),
+		ActiveTasks: active, ReadyTasks: ready,
 	}
 	if request.EpicID != "" {
 		outcome.EpicChildren = collectEpicChildren(request.EpicID, graph)

@@ -419,23 +419,14 @@ func topoSortTasks(tasks []*Task, graph *Graph) []*Task {
 		}
 	}
 
-	// Kahn's algorithm
+	// Kahn's algorithm. Keep the queue ordered as nodes enter it instead of
+	// sorting the whole queue after every edge.
 	var queue []*Task
 	for _, t := range tasks {
 		if inDegree[t.ID] == 0 {
-			queue = append(queue, t)
+			queue = insertTopoTask(queue, t, graph)
 		}
 	}
-
-	// Sort initial queue: ready first, then by ID
-	sort.Slice(queue, func(i, j int) bool {
-		iReady := graph.IsReady(queue[i].ID)
-		jReady := graph.IsReady(queue[j].ID)
-		if iReady != jReady {
-			return iReady // ready tasks first
-		}
-		return queue[i].ID < queue[j].ID
-	})
 
 	var result []*Task
 	for len(queue) > 0 {
@@ -451,20 +442,25 @@ func topoSortTasks(tasks []*Task, graph *Graph) []*Task {
 			}
 			inDegree[dependentID]--
 			if inDegree[dependentID] == 0 {
-				queue = append(queue, graph.Tasks[dependentID])
+				queue = insertTopoTask(queue, graph.Tasks[dependentID], graph)
 			}
 		}
-
-		// Re-sort queue
-		sort.Slice(queue, func(i, j int) bool {
-			iReady := graph.IsReady(queue[i].ID)
-			jReady := graph.IsReady(queue[j].ID)
-			if iReady != jReady {
-				return iReady
-			}
-			return queue[i].ID < queue[j].ID
-		})
 	}
 
 	return result
+}
+
+func insertTopoTask(queue []*Task, task *Task, graph *Graph) []*Task {
+	ready := graph.IsReady(task.ID)
+	index := sort.Search(len(queue), func(i int) bool {
+		queuedReady := graph.IsReady(queue[i].ID)
+		if ready != queuedReady {
+			return ready
+		}
+		return task.ID < queue[i].ID
+	})
+	queue = append(queue, nil)
+	copy(queue[index+1:], queue[index:])
+	queue[index] = task
+	return queue
 }

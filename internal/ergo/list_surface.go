@@ -6,10 +6,9 @@ import (
 )
 
 type ListOptions struct {
-	EpicID      string
-	ReadyOnly   bool
-	ShowAll     bool
-	OmitJournal bool
+	EpicID    string
+	ReadyOnly bool
+	ShowAll   bool
 }
 
 func RunList(listOpts ListOptions, opts GlobalOptions, render RenderOptions) error {
@@ -115,24 +114,20 @@ func collectEpicChildren(epicID string, graph *Graph) []*Task {
 	return topoSortTasks(graph.Children(epicID), graph)
 }
 
-func collectNonContainerTasks(graph *Graph) []*Task {
-	var tasks []*Task
+func collectListTasks(graph *Graph) (all, active, ready []*Task) {
 	for _, task := range graph.Tasks {
-		if !graph.IsEpic(task.ID) {
-			tasks = append(tasks, task)
+		if graph.IsEpic(task.ID) {
+			continue
 		}
-	}
-	return tasks
-}
-
-func filterActiveTasks(tasks []*Task) []*Task {
-	var active []*Task
-	for _, task := range tasks {
+		all = append(all, task)
 		if task.State != stateDone && task.State != stateCanceled {
 			active = append(active, task)
 		}
+		if graph.IsReady(task.ID) {
+			ready = append(ready, task)
+		}
 	}
-	return active
+	return all, active, ready
 }
 
 func filterReadyTasks(tasks []*Task, graph *Graph) []*Task {

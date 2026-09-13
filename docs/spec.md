@@ -306,11 +306,14 @@ Exactly one supported backlog file may exist. Repository opening does not
 rename or rewrite the selected file.
 
 For a sufficiently large backlog, commands may maintain an ignored local
-`.ergo/cache.jsonl` file. It is a disposable performance artifact, not part of
+`.ergo/cache.json` file. It is a disposable performance artifact, not part of
 the backlog or journal contract. Cache presence, absence, invalidation, or write
-failure does not change command output or exit status. Deleting it restores
-ordinary full replay. Ergo adds local cache patterns to `.ergo/.gitignore`
-before publication without invoking Git or changing the index.
+failure does not change command output or exit status while the represented
+prefix remains unchanged. The cache uses cheap file checks: same-file edits,
+including rewrite-plus-append or truncate-and-regrow, can remain undetected and
+affect reads and mutations. Deleting it restores ordinary full replay. Ergo
+adds local cache patterns to `.ergo/.gitignore` before publication without
+invoking Git or changing the index.
 
 Backlog replay constructs current tasks, epics, dependencies, metadata, and
 tombstones. It accepts every released event shape covered by the compatibility

@@ -1,12 +1,11 @@
 // Purpose: Encode and decode the disposable backlog replay checkpoint.
 // Exports: none; repository loading owns all cache use and publication.
 // Invariants: backlog history remains authoritative; the cache stores raw
-// pre-migration reducer state, is deterministic, bounded, and self-validating.
+// pre-migration reducer state as one deterministic, checksummed document.
 // Any cache-format problem is returned to the caller as a cache miss.
 package ergo
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
@@ -18,398 +17,232 @@ import (
 )
 
 const (
-	cacheFileName             = "cache.jsonl"
-	cacheVersion              = 1
-	cacheManifestRecordType   = "cache"
-	cacheTaskRecordType       = "cache_task"
-	cacheResultRecordType     = "cache_result"
-	cacheMessageRecordType    = "cache_message"
-	cacheDependencyRecordType = "cache_dependency"
-	cacheTombstoneRecordType  = "cache_tombstone"
-	cacheLegacyEpicRecordType = "cache_legacy_epic"
-	cacheCommitRecordType     = "cache_commit"
+	cacheFileName = "cache.json"
+	cacheVersion  = 2
 )
 
+type cacheEnvelope struct {
+	Checkpoint json.RawMessage `json:"checkpoint"`
+	SHA256     string          `json:"sha256"`
+}
+
+type cacheDocument struct {
+	Version      int               `json:"version"`
+	Source       cacheSource       `json:"source"`
+	Tasks        []cacheTask       `json:"tasks"`
+	Dependencies []cacheDependency `json:"dependencies,omitempty"`
+	Tombstones   []cacheTombstone  `json:"tombstones,omitempty"`
+	LegacyEpics  []string          `json:"legacy_epics,omitempty"`
+}
+
 type cacheSource struct {
-	Name       string
-	Identity   string
-	Bytes      int64
-	Lines      int
-	Records    int
-	ModifiedNS int64
+	Name       string `json:"name"`
+	Identity   string `json:"identity"`
+	Bytes      int64  `json:"bytes"`
+	Lines      int    `json:"lines"`
+	Records    int    `json:"records"`
+	ModifiedNS int64  `json:"modified_ns"`
 }
 
-type cacheManifest struct {
-	Type          string `json:"type"`
-	Version       int    `json:"version"`
-	Source        string `json:"source"`
-	SourceID      string `json:"source_id"`
-	PrefixBytes   int64  `json:"prefix_bytes"`
-	PrefixLines   int    `json:"prefix_lines"`
-	PrefixRecords int    `json:"prefix_records"`
-	ModifiedNS    int64  `json:"modified_ns"`
-	Tasks         int    `json:"tasks"`
-	Results       int    `json:"results"`
-	Messages      int    `json:"messages"`
-	Dependencies  int    `json:"dependencies"`
-	Tombstones    int    `json:"tombstones"`
-	LegacyEpics   int    `json:"legacy_epics"`
+type cacheTask struct {
+	ID        string         `json:"id"`
+	UUID      string         `json:"uuid,omitempty"`
+	EpicID    string         `json:"epic_id,omitempty"`
+	State     string         `json:"state"`
+	Title     string         `json:"title"`
+	Body      string         `json:"body"`
+	ClaimedBy string         `json:"claimed_by,omitempty"`
+	ClaimedNS int64          `json:"claimed_ns,omitempty"`
+	CreatedNS int64          `json:"created_ns"`
+	UpdatedNS int64          `json:"updated_ns"`
+	Results   []cacheResult  `json:"results,omitempty"`
+	Messages  []cacheMessage `json:"messages,omitempty"`
 }
 
-type cacheTaskRecord struct {
-	Type      string `json:"type"`
-	ID        string `json:"id"`
-	UUID      string `json:"uuid"`
-	EpicID    string `json:"epic_id"`
-	State     string `json:"state"`
-	Title     string `json:"title"`
-	Body      string `json:"body"`
-	ClaimedBy string `json:"claimed_by"`
-	ClaimedAt string `json:"claimed_at"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
-}
-
-type cacheResultRecord struct {
-	Type              string `json:"type"`
-	TaskID            string `json:"task_id"`
-	Ordinal           int    `json:"ordinal"`
+type cacheResult struct {
 	Summary           string `json:"summary"`
-	Path              string `json:"path"`
-	SHA256AtAttach    string `json:"sha256_at_attach"`
-	MtimeAtAttach     string `json:"mtime_at_attach"`
-	GitCommitAtAttach string `json:"git_commit_at_attach"`
-	CreatedAt         string `json:"created_at"`
+	Path              string `json:"path,omitempty"`
+	SHA256AtAttach    string `json:"sha256_at_attach,omitempty"`
+	MtimeAtAttach     string `json:"mtime_at_attach,omitempty"`
+	GitCommitAtAttach string `json:"git_commit_at_attach,omitempty"`
+	CreatedNS         int64  `json:"created_ns"`
 }
 
-type cacheMessageRecord struct {
-	Type      string `json:"type"`
-	TaskID    string `json:"task_id"`
-	Ordinal   int    `json:"ordinal"`
+type cacheMessage struct {
 	Kind      string `json:"kind"`
-	Text      string `json:"text"`
-	CreatedAt string `json:"created_at"`
+	Text      string `json:"text,omitempty"`
+	CreatedNS int64  `json:"created_ns"`
 }
 
-type cacheDependencyRecord struct {
-	Type   string `json:"type"`
+type cacheDependency struct {
 	FromID string `json:"from_id"`
 	ToID   string `json:"to_id"`
 }
 
-type cacheTombstoneRecord struct {
-	Type    string `json:"type"`
+type cacheTombstone struct {
 	ID      string `json:"id"`
-	AgentID string `json:"agent_id"`
-	At      string `json:"at"`
+	AgentID string `json:"agent_id,omitempty"`
+	AtNS    int64  `json:"at_ns"`
 }
 
-type cacheLegacyEpicRecord struct {
-	Type string `json:"type"`
-	ID   string `json:"id"`
-}
-
-type cacheCommitRecord struct {
-	Type   string `json:"type"`
-	SHA256 string `json:"sha256"`
-}
-
-type decodedCache struct {
+type cacheCheckpoint struct {
 	graph  *Graph
-	source cacheSource
+	source backlogSource
 }
 
-func marshalCache(graph *Graph, source cacheSource) ([]byte, error) {
+func marshalCache(graph *Graph, source backlogSource) ([]byte, error) {
 	if graph == nil {
 		graph = newGraph()
 	}
-	manifest := cacheManifest{
-		Type: cacheManifestRecordType, Version: cacheVersion,
-		Source: source.Name, SourceID: source.Identity, PrefixBytes: source.Bytes,
-		PrefixLines: source.Lines, PrefixRecords: source.Records, ModifiedNS: source.ModifiedNS,
-		Tasks: len(graph.Tasks), Tombstones: len(graph.Tombstones), LegacyEpics: len(graph.legacyEmptyEpics),
-	}
-	for _, task := range graph.Tasks {
-		manifest.Results += len(task.Results)
-		manifest.Messages += len(task.Messages)
-	}
-	for _, deps := range graph.Deps {
-		manifest.Dependencies += len(deps)
-	}
-
-	var output bytes.Buffer
-	hash := sha256.New()
-	write := func(record any) error {
-		line, err := json.Marshal(record)
-		if err != nil {
-			return err
-		}
-		if len(line) > maxLogRecordBytes {
-			return fmt.Errorf("cache record is too long: %d bytes exceeds the %d-byte limit", len(line), maxLogRecordBytes)
-		}
-		hash.Write(line)
-		hash.Write([]byte{'\n'})
-		output.Write(line)
-		output.WriteByte('\n')
-		return nil
-	}
-	if err := write(manifest); err != nil {
-		return nil, err
+	document := cacheDocument{
+		Version: cacheVersion,
+		Source:  cacheSource(source),
+		Tasks:   make([]cacheTask, 0, len(graph.Tasks)),
 	}
 	for _, task := range sortedTasks(graph.Tasks) {
-		claimedAt := ""
-		if !task.ClaimedAt.IsZero() {
-			claimedAt = formatTime(task.ClaimedAt)
+		record := cacheTask{
+			ID: task.ID, UUID: task.UUID, EpicID: task.EpicID, State: task.State,
+			Title: task.Title, Body: task.Body, ClaimedBy: task.ClaimedBy,
+			ClaimedNS: cacheTime(task.ClaimedAt), CreatedNS: cacheTime(task.CreatedAt), UpdatedNS: cacheTime(task.UpdatedAt),
+			Results: make([]cacheResult, 0, len(task.Results)), Messages: make([]cacheMessage, 0, len(task.Messages)),
 		}
-		if err := write(cacheTaskRecord{
-			Type: cacheTaskRecordType, ID: task.ID, UUID: task.UUID, EpicID: task.EpicID,
-			State: task.State, Title: task.Title, Body: task.Body, ClaimedBy: task.ClaimedBy,
-			ClaimedAt: claimedAt, CreatedAt: formatTime(task.CreatedAt), UpdatedAt: formatTime(task.UpdatedAt),
-		}); err != nil {
-			return nil, err
-		}
-		for ordinal, result := range task.Results {
-			if err := write(cacheResultRecord{
-				Type: cacheResultRecordType, TaskID: task.ID, Ordinal: ordinal,
+		for _, result := range task.Results {
+			record.Results = append(record.Results, cacheResult{
 				Summary: result.Summary, Path: result.Path, SHA256AtAttach: result.Sha256AtAttach,
 				MtimeAtAttach: result.MtimeAtAttach, GitCommitAtAttach: result.GitCommitAtAttach,
-				CreatedAt: formatTime(result.CreatedAt),
-			}); err != nil {
-				return nil, err
-			}
+				CreatedNS: cacheTime(result.CreatedAt),
+			})
 		}
-		for ordinal, message := range task.Messages {
-			if err := write(cacheMessageRecord{
-				Type: cacheMessageRecordType, TaskID: task.ID, Ordinal: ordinal,
-				Kind: message.Kind, Text: message.Text, CreatedAt: formatTime(message.CreatedAt),
-			}); err != nil {
-				return nil, err
-			}
+		for _, message := range task.Messages {
+			record.Messages = append(record.Messages, cacheMessage{Kind: message.Kind, Text: message.Text, CreatedNS: cacheTime(message.CreatedAt)})
 		}
+		document.Tasks = append(document.Tasks, record)
 	}
 	for _, from := range sortedMapKeys(graph.Deps) {
 		for _, to := range sortedKeys(graph.Deps[from]) {
-			if err := write(cacheDependencyRecord{Type: cacheDependencyRecordType, FromID: from, ToID: to}); err != nil {
-				return nil, err
-			}
+			document.Dependencies = append(document.Dependencies, cacheDependency{FromID: from, ToID: to})
 		}
 	}
 	for _, id := range sortedValueMapKeys(graph.Tombstones) {
 		info := graph.Tombstones[id]
-		if err := write(cacheTombstoneRecord{Type: cacheTombstoneRecordType, ID: id, AgentID: info.AgentID, At: formatTime(info.At)}); err != nil {
-			return nil, err
-		}
+		document.Tombstones = append(document.Tombstones, cacheTombstone{ID: id, AgentID: info.AgentID, AtNS: cacheTime(info.At)})
 	}
-	for _, id := range sortedValueMapKeys(graph.legacyEmptyEpics) {
-		if err := write(cacheLegacyEpicRecord{Type: cacheLegacyEpicRecordType, ID: id}); err != nil {
-			return nil, err
-		}
-	}
-	footer, err := json.Marshal(cacheCommitRecord{Type: cacheCommitRecordType, SHA256: hex.EncodeToString(hash.Sum(nil))})
+	document.LegacyEpics = sortedValueMapKeys(graph.legacyEmptyEpics)
+
+	payload, err := json.Marshal(document)
 	if err != nil {
 		return nil, err
 	}
-	output.Write(footer)
-	output.WriteByte('\n')
-	return output.Bytes(), nil
+	sum := sha256.Sum256(payload)
+	encoded, err := json.Marshal(cacheEnvelope{Checkpoint: payload, SHA256: hex.EncodeToString(sum[:])})
+	if err != nil {
+		return nil, err
+	}
+	return append(encoded, '\n'), nil
 }
 
-func decodeCache(reader io.Reader) (decodedCache, error) {
-	tracked := &cacheNewlineReader{reader: reader}
-	scanner := bufio.NewScanner(tracked)
-	scanner.Buffer(make([]byte, 0, 64*1024), maxLogRecordBytes)
-	if !scanner.Scan() {
-		if err := scanner.Err(); err != nil {
-			return decodedCache{}, err
-		}
-		return decodedCache{}, errors.New("empty cache")
+func decodeCache(reader io.Reader) (cacheCheckpoint, error) {
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return cacheCheckpoint{}, err
 	}
-	first := append([]byte(nil), scanner.Bytes()...)
-	var manifest cacheManifest
-	if err := decodeCacheRecord(first, cacheManifestRecordType, &manifest); err != nil {
-		return decodedCache{}, err
+	if len(data) == 0 {
+		return cacheCheckpoint{}, errors.New("empty cache")
 	}
-	if manifest.Version != cacheVersion {
-		return decodedCache{}, fmt.Errorf("unsupported cache version %d", manifest.Version)
+	if data[len(data)-1] != '\n' {
+		return cacheCheckpoint{}, errors.New("cache is not newline terminated")
 	}
-	if manifest.Source == "" || manifest.SourceID == "" || manifest.PrefixBytes < 0 || manifest.PrefixLines < 0 ||
-		manifest.PrefixRecords < 0 || manifest.Tasks < 0 || manifest.Results < 0 || manifest.Messages < 0 ||
-		manifest.Dependencies < 0 || manifest.Tombstones < 0 || manifest.LegacyEpics < 0 {
-		return decodedCache{}, errors.New("invalid cache manifest")
+	var envelope cacheEnvelope
+	if err := decodeStrictJSON(data, &envelope); err != nil {
+		return cacheCheckpoint{}, fmt.Errorf("invalid cache envelope: %w", err)
+	}
+	if len(envelope.Checkpoint) == 0 || envelope.SHA256 == "" {
+		return cacheCheckpoint{}, errors.New("incomplete cache envelope")
+	}
+	sum := sha256.Sum256(envelope.Checkpoint)
+	if hex.EncodeToString(sum[:]) != envelope.SHA256 {
+		return cacheCheckpoint{}, errors.New("cache integrity mismatch")
+	}
+	var document cacheDocument
+	if err := decodeStrictJSON(envelope.Checkpoint, &document); err != nil {
+		return cacheCheckpoint{}, fmt.Errorf("invalid cache checkpoint: %w", err)
+	}
+	if document.Version != cacheVersion {
+		return cacheCheckpoint{}, fmt.Errorf("unsupported cache version %d", document.Version)
+	}
+	if document.Source.Name == "" || document.Source.Identity == "" || document.Source.Bytes < 0 ||
+		document.Source.Lines < 0 || document.Source.Records < 0 {
+		return cacheCheckpoint{}, errors.New("invalid cache source")
 	}
 
-	hash := sha256.New()
-	hash.Write(first)
-	hash.Write([]byte{'\n'})
 	graph := newGraph()
-	counts := map[string]int{}
-	last := map[string]string{}
-	committed := false
-	for scanner.Scan() {
-		raw := append([]byte(nil), scanner.Bytes()...)
-		var header struct {
-			Type string `json:"type"`
+	graph.Tasks = make(map[string]*Task, len(document.Tasks))
+	graph.Deps = make(map[string]map[string]struct{}, len(document.Dependencies))
+	graph.Tombstones = make(map[string]TombstoneInfo, len(document.Tombstones))
+	graph.legacyEmptyEpics = make(map[string]struct{}, len(document.LegacyEpics))
+	lastID := ""
+	for _, record := range document.Tasks {
+		if record.ID == "" || record.ID <= lastID || !isReadableState(record.State) ||
+			(record.ClaimedBy == "") != (record.ClaimedNS == 0) || record.CreatedNS == 0 || record.UpdatedNS == 0 {
+			return cacheCheckpoint{}, errors.New("cache tasks are invalid or unordered")
 		}
-		if err := json.Unmarshal(raw, &header); err != nil {
-			return decodedCache{}, fmt.Errorf("invalid cache record: %w", err)
+		task := &Task{
+			ID: record.ID, UUID: record.UUID, EpicID: record.EpicID, State: record.State,
+			Title: record.Title, Body: record.Body, ClaimedBy: record.ClaimedBy,
+			ClaimedAt: fromCacheTime(record.ClaimedNS), CreatedAt: fromCacheTime(record.CreatedNS), UpdatedAt: fromCacheTime(record.UpdatedNS),
+			Results: make([]Result, 0, len(record.Results)), Messages: make([]Message, 0, len(record.Messages)),
 		}
-		if header.Type == cacheCommitRecordType {
-			var commit cacheCommitRecord
-			if err := decodeCacheRecord(raw, cacheCommitRecordType, &commit); err != nil {
-				return decodedCache{}, err
+		for _, result := range record.Results {
+			if result.CreatedNS == 0 || validateResultSummary(result.Summary) != nil {
+				return cacheCheckpoint{}, fmt.Errorf("cache task %s has invalid result", record.ID)
 			}
-			if got := hex.EncodeToString(hash.Sum(nil)); got != commit.SHA256 {
-				return decodedCache{}, errors.New("cache integrity mismatch")
-			}
-			committed = true
-			if scanner.Scan() {
-				return decodedCache{}, errors.New("cache has records after commit")
-			}
-			break
+			task.Results = append(task.Results, Result{Summary: result.Summary, Path: result.Path,
+				Sha256AtAttach: result.SHA256AtAttach, MtimeAtAttach: result.MtimeAtAttach,
+				GitCommitAtAttach: result.GitCommitAtAttach, CreatedAt: fromCacheTime(result.CreatedNS)})
 		}
-		hash.Write(raw)
-		hash.Write([]byte{'\n'})
-		counts[header.Type]++
-		switch header.Type {
-		case cacheTaskRecordType:
-			var record cacheTaskRecord
-			if err := decodeCacheRecord(raw, header.Type, &record); err != nil {
-				return decodedCache{}, err
+		for _, message := range record.Messages {
+			if message.CreatedNS == 0 || validateMessageKind(message.Kind) != nil {
+				return cacheCheckpoint{}, fmt.Errorf("cache task %s has invalid message", record.ID)
 			}
-			if record.ID == "" || graph.Tasks[record.ID] != nil || (last[header.Type] != "" && record.ID <= last[header.Type]) {
-				return decodedCache{}, errors.New("cache tasks are invalid or unordered")
-			}
-			claimedAt, err := parseOptionalCacheTime(record.ClaimedAt)
-			if err != nil {
-				return decodedCache{}, err
-			}
-			createdAt, err := parseTime(record.CreatedAt)
-			if err != nil {
-				return decodedCache{}, err
-			}
-			updatedAt, err := parseTime(record.UpdatedAt)
-			if err != nil {
-				return decodedCache{}, err
-			}
-			if !isReadableState(record.State) || (record.ClaimedBy == "") != claimedAt.IsZero() {
-				return decodedCache{}, fmt.Errorf("cache task %s has invalid state or claim", record.ID)
-			}
-			graph.Tasks[record.ID] = &Task{ID: record.ID, UUID: record.UUID, EpicID: record.EpicID, State: record.State,
-				Title: record.Title, Body: record.Body, ClaimedBy: record.ClaimedBy, ClaimedAt: claimedAt,
-				CreatedAt: createdAt, UpdatedAt: updatedAt}
-			last[header.Type] = record.ID
-		case cacheResultRecordType:
-			var record cacheResultRecord
-			if err := decodeCacheRecord(raw, header.Type, &record); err != nil {
-				return decodedCache{}, err
-			}
-			task := graph.Tasks[record.TaskID]
-			if task == nil || record.Ordinal != len(task.Results) {
-				return decodedCache{}, errors.New("invalid cache result order")
-			}
-			createdAt, err := parseTime(record.CreatedAt)
-			if err != nil {
-				return decodedCache{}, err
-			}
-			if err := validateResultSummary(record.Summary); err != nil {
-				return decodedCache{}, err
-			}
-			task.Results = append(task.Results, Result{Summary: record.Summary, Path: record.Path,
-				Sha256AtAttach: record.SHA256AtAttach, MtimeAtAttach: record.MtimeAtAttach,
-				GitCommitAtAttach: record.GitCommitAtAttach, CreatedAt: createdAt})
-		case cacheMessageRecordType:
-			var record cacheMessageRecord
-			if err := decodeCacheRecord(raw, header.Type, &record); err != nil {
-				return decodedCache{}, err
-			}
-			task := graph.Tasks[record.TaskID]
-			if task == nil || record.Ordinal != len(task.Messages) || validateMessageKind(record.Kind) != nil {
-				return decodedCache{}, errors.New("invalid cache message order or kind")
-			}
-			createdAt, err := parseTime(record.CreatedAt)
-			if err != nil {
-				return decodedCache{}, err
-			}
-			task.Messages = append(task.Messages, Message{Kind: record.Kind, Text: record.Text, CreatedAt: createdAt})
-		case cacheDependencyRecordType:
-			var record cacheDependencyRecord
-			if err := decodeCacheRecord(raw, header.Type, &record); err != nil {
-				return decodedCache{}, err
-			}
-			key := record.FromID + "\x00" + record.ToID
-			if last[header.Type] != "" && key <= last[header.Type] {
-				return decodedCache{}, errors.New("cache dependencies are unordered")
-			}
-			if graph.Deps[record.FromID] == nil {
-				graph.Deps[record.FromID] = map[string]struct{}{}
-			}
-			graph.Deps[record.FromID][record.ToID] = struct{}{}
-			last[header.Type] = key
-		case cacheTombstoneRecordType:
-			var record cacheTombstoneRecord
-			if err := decodeCacheRecord(raw, header.Type, &record); err != nil {
-				return decodedCache{}, err
-			}
-			if record.ID == "" || graph.Tasks[record.ID] != nil || (last[header.Type] != "" && record.ID <= last[header.Type]) {
-				return decodedCache{}, errors.New("cache tombstones are invalid or unordered")
-			}
-			at, err := parseTime(record.At)
-			if err != nil {
-				return decodedCache{}, err
-			}
-			graph.Tombstones[record.ID] = TombstoneInfo{AgentID: record.AgentID, At: at}
-			last[header.Type] = record.ID
-		case cacheLegacyEpicRecordType:
-			var record cacheLegacyEpicRecord
-			if err := decodeCacheRecord(raw, header.Type, &record); err != nil {
-				return decodedCache{}, err
-			}
-			if graph.Tasks[record.ID] == nil || (last[header.Type] != "" && record.ID <= last[header.Type]) {
-				return decodedCache{}, errors.New("cache legacy epics are invalid or unordered")
-			}
-			graph.legacyEmptyEpics[record.ID] = struct{}{}
-			last[header.Type] = record.ID
-		default:
-			return decodedCache{}, fmt.Errorf("unknown cache record type %q", header.Type)
+			task.Messages = append(task.Messages, Message{Kind: message.Kind, Text: message.Text, CreatedAt: fromCacheTime(message.CreatedNS)})
 		}
+		graph.Tasks[record.ID] = task
+		lastID = record.ID
 	}
-	if err := scanner.Err(); err != nil {
-		return decodedCache{}, err
-	}
-	if tracked.last != '\n' {
-		return decodedCache{}, errors.New("cache is not newline terminated")
-	}
-	if !committed {
-		return decodedCache{}, errors.New("cache commit is missing")
-	}
-	want := map[string]int{
-		cacheTaskRecordType: manifest.Tasks, cacheResultRecordType: manifest.Results,
-		cacheMessageRecordType: manifest.Messages, cacheDependencyRecordType: manifest.Dependencies,
-		cacheTombstoneRecordType: manifest.Tombstones, cacheLegacyEpicRecordType: manifest.LegacyEpics,
-	}
-	for kind, total := range want {
-		if counts[kind] != total {
-			return decodedCache{}, fmt.Errorf("cache %s count is %d, want %d", kind, counts[kind], total)
+	lastDependency := ""
+	for _, record := range document.Dependencies {
+		key := record.FromID + "\x00" + record.ToID
+		if record.FromID == "" || record.ToID == "" || key <= lastDependency {
+			return cacheCheckpoint{}, errors.New("cache dependencies are invalid or unordered")
 		}
+		if graph.Deps[record.FromID] == nil {
+			graph.Deps[record.FromID] = make(map[string]struct{})
+		}
+		graph.Deps[record.FromID][record.ToID] = struct{}{}
+		lastDependency = key
 	}
-	if _, err := replayEventsOntoRaw(graph, nil); err != nil {
-		return decodedCache{}, err
+	lastID = ""
+	for _, record := range document.Tombstones {
+		if record.ID == "" || record.ID <= lastID || record.AtNS == 0 || graph.Tasks[record.ID] != nil {
+			return cacheCheckpoint{}, errors.New("cache tombstones are invalid or unordered")
+		}
+		graph.Tombstones[record.ID] = TombstoneInfo{AgentID: record.AgentID, At: fromCacheTime(record.AtNS)}
+		lastID = record.ID
 	}
-	return decodedCache{graph: graph, source: cacheSource{Name: manifest.Source, Identity: manifest.SourceID,
-		Bytes: manifest.PrefixBytes, Lines: manifest.PrefixLines, Records: manifest.PrefixRecords, ModifiedNS: manifest.ModifiedNS}}, nil
-}
-
-func decodeCacheRecord(raw []byte, want string, destination any) error {
-	if err := decodeStrictJSON(raw, destination); err != nil {
-		return fmt.Errorf("invalid %s record: %w", want, err)
+	lastID = ""
+	for _, id := range document.LegacyEpics {
+		if id == "" || id <= lastID || graph.Tasks[id] == nil {
+			return cacheCheckpoint{}, errors.New("cache legacy epics are invalid or unordered")
+		}
+		graph.legacyEmptyEpics[id] = struct{}{}
+		lastID = id
 	}
-	var header struct {
-		Type string `json:"type"`
+	if err := validateReplayInvariants(graph, nil, nil, nil, nil); err != nil {
+		return cacheCheckpoint{}, err
 	}
-	if err := json.Unmarshal(raw, &header); err != nil || header.Type != want {
-		return fmt.Errorf("got cache record %q, want %q", header.Type, want)
-	}
-	return nil
+	source := backlogSource{Name: document.Source.Name, Identity: document.Source.Identity,
+		Bytes: document.Source.Bytes, Lines: document.Source.Lines, Records: document.Source.Records, ModifiedNS: document.Source.ModifiedNS}
+	return cacheCheckpoint{graph: graph, source: source}, nil
 }
 
 func decodeStrictJSON(raw []byte, destination any) error {
@@ -419,27 +252,21 @@ func decodeStrictJSON(raw []byte, destination any) error {
 		return err
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return errors.New("cache record contains trailing data")
+		return errors.New("cache contains trailing data")
 	}
 	return nil
 }
 
-func parseOptionalCacheTime(raw string) (time.Time, error) {
-	if raw == "" {
-		return time.Time{}, nil
+func cacheTime(value time.Time) int64 {
+	if value.IsZero() {
+		return 0
 	}
-	return parseTime(raw)
+	return value.UnixNano()
 }
 
-type cacheNewlineReader struct {
-	reader io.Reader
-	last   byte
-}
-
-func (reader *cacheNewlineReader) Read(buffer []byte) (int, error) {
-	n, err := reader.reader.Read(buffer)
-	if n > 0 {
-		reader.last = buffer[n-1]
+func fromCacheTime(value int64) time.Time {
+	if value == 0 {
+		return time.Time{}
 	}
-	return n, err
+	return time.Unix(0, value).UTC()
 }

@@ -1,6 +1,6 @@
 # Large-backlog performance investigation
 
-Baseline: 2026-09-08. Cache verification: 2026-09-09.
+Baseline: 2026-09-08. Cache verification: 2026-09-09. Loader refactor verification: 2026-09-13.
 
 Scope: investigate GitHub [issue #13](https://github.com/sandover/ergo/issues/13) on Ergo 6.x, then verify the resulting automatic disposable cache against the original full-replay baseline.
 
@@ -131,7 +131,7 @@ BenchmarkLargeBacklogCLI/compacted-compacted/lifecycle-write-8      3  274786167
 BenchmarkProcessStartup-8                                           3    7847639 ns/op 15701 B/op 38 allocs/op
 ```
 
-The issue’s old `list --ready` outlier does not appear here. With the current graph cache and journal split, full-history `list`, `list --ready`, JSON forms, `show`, `claim`, and a lifecycle write all remain near 1 second because they share the full rebuild. Snapshot reads are about 0.16–0.27 seconds. Preserving the full journal adds only a small secondary cost to a compacted backlog; it is far below the backlog-history cost and varies by command.
+The issue’s old `list --ready` outlier does not appear here. In the original baseline, full-history `list`, `list --ready`, JSON forms, `show`, `claim`, and a lifecycle write all remained near 1 second because they shared the full backlog rebuild. Snapshot reads were about 0.16–0.27 seconds. Journal loading was a small secondary cost and is now omitted entirely from list commands.
 
 ### Automatic cache results
 
@@ -141,25 +141,27 @@ Reference 1,500-task / 30,380-transaction in-process transitions:
 
 | State | Time | Allocated | Allocations |
 | --- | ---: | ---: | ---: |
-| First automatic cache creation | 973.6 ms | 254.91 MB | 1,564,905 |
-| Warm cache hit | about 62 ms | about 30 MB | about 120,000 |
-| Warm hit with 64-record tail | 62.2 ms | 29.84 MB | 120,598 |
-| Refresh at 256-record tail | 72.7 ms | 39.85 MB | 140,126 |
-| Invalid-cache full fallback and rebuild | 967.9 ms | 255.90 MB | 1,564,668 |
+| First automatic cache creation | 945.6 ms | 197.09 MB | 1,522,192 |
+| Warm cache hit | 39.6 ms | 30.97 MB | 20,917 |
+| Warm hit with 64-record tail | 41.9 ms | 32.63 MB | 26,148 |
+| Refresh at 256-record tail | 65.4 ms | 47.71 MB | 40,202 |
+| Invalid-cache full fallback and rebuild | 948.6 ms | 198.03 MB | 1,522,200 |
 
-The first command costs about the same as the old full replay because it must reconstruct the graph once. Routine warm reads are about 15-16x faster than the former one-second view, well below the 250 ms investigation target. Refresh adds about 11 ms over a warm read at the 256-record threshold. A corrupt or stale cache costs one full replay and then repairs itself for later commands.
+The first command costs about the same as the old full replay because it must reconstruct the graph once. Routine warm reads are about 24x faster than the former one-second view, well below the 250 ms investigation target. Refresh adds about 24 ms over the 64-record-tail case at the 256-record threshold. A corrupt or stale cache costs one full replay and then repairs itself for later commands.
+
+Before the loader refactors, the same five-sample warm-cache benchmark took 65.5 ms and made 117,450 allocations. Shared replay machinery first reduced those figures to 56.2 ms and 94,963 allocations. The single-document codec then reached 39.6 ms and 20,917 allocations. Its checksum envelope increases cumulative allocated bytes from 23.13 MB to 30.97 MB while cutting elapsed time by another 30% and allocation count by 78%.
 
 Warm end-to-end CLI measurements on the reference fixture:
 
 | Command | Before | With automatic cache |
 | --- | ---: | ---: |
-| `list` | 1,022 ms | 97.6 ms |
-| `list --ready` | 986 ms | 84.9 ms |
-| `list --json` | 972 ms | 78.3 ms |
-| `list --ready --json` | 983 ms | 71.5 ms |
-| `show` | 975 ms | 78.1 ms |
-| `claim` | 991 ms | 85.8 ms |
-| lifecycle write | 997 ms | 96.3 ms |
+| `list` | 1,022 ms | 60.3 ms |
+| `list --ready` | 986 ms | 51.9 ms |
+| `list --json` | 972 ms | 49.4 ms |
+| `list --ready --json` | 983 ms | 53.9 ms |
+| `show` | 975 ms | 64.3 ms |
+| `claim` | 991 ms | 70.6 ms |
+| lifecycle write | 997 ms | 68.3 ms |
 
 Task-scaled warm cache loads were about 62 ms at 1,500 tasks, 277 ms at 5,000 tasks, and 569 ms at 15,000 tasks. The remaining work scales with current graph size, as expected.
 
@@ -204,8 +206,8 @@ The profile includes one-time benchmark fixture setup, but the 15-second run mak
 
 ## Conclusion and recommendation
 
-The automatic disposable cache addresses the measured bottleneck without changing Ergo's user model. `backlog.jsonl` remains append-only and authoritative. Commands automatically create and refresh `.ergo/cache.jsonl`, load its current raw graph state, and replay only the bounded tail. Cache absence or failure returns to the old full replay path.
+The automatic disposable cache addresses the measured bottleneck without changing Ergo's user model. `backlog.jsonl` remains append-only and authoritative. Commands automatically create and refresh `.ergo/cache.json`, load its current raw graph state, and replay only the bounded tail. Cache absence or failure returns to the old full replay path.
 
-The reference CLI improves from roughly one second to 72-98 ms after first use. Fixed-state history tests show constant warm-load time through 300,000 transactions. Current graph growth still costs time and memory because Ergo must reconstruct and query that graph; this is the correct remaining scaling boundary.
+The reference CLI improves from roughly one second to 49-71 ms after first use. Fixed-state history tests show constant warm-load time through 300,000 transactions. Current graph growth still costs time and memory because Ergo must reconstruct and query that graph; this is the correct remaining scaling boundary.
 
 No manual compaction schedule, daemon, database, cache command, setting, status field, or new output is needed. `ergo compact` retains its explicit history-reduction behavior. The cache is an ignored local optimization and can be deleted safely.
