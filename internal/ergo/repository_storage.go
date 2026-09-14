@@ -169,6 +169,7 @@ func scanEventLog(reader io.Reader, path string, prefix backlogSource, endsWithN
 	result := eventLogRead{recordCount: prefix.Records, lineCount: prefix.Lines, validBytes: prefix.Bytes}
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLogRecordBytes)
+	scanner.Split(scanLinesPreservingCarriageReturn)
 	var pending []byte
 	pendingNo := 0
 	currentNo := prefix.Lines
@@ -272,6 +273,19 @@ func scanEventLog(reader io.Reader, path string, prefix backlogSource, endsWithN
 			path, snapshotDecoder.line, snapshotDecoder.seen, snapshotDecoder.total())
 	}
 	return result, nil
+}
+
+func scanLinesPreservingCarriageReturn(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if newline := bytes.IndexByte(data, '\n'); newline >= 0 {
+		return newline + 1, data[:newline], nil
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
 }
 
 func formatEventsParseError(path string, lineNo int, line []byte, cause error) error {

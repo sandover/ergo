@@ -40,6 +40,34 @@ func TestBacklogCacheLoadsCheckpointAndAppendedTail(t *testing.T) {
 	}
 }
 
+func TestBacklogCacheTracksCRLFSourceBytes(t *testing.T) {
+	dir, repository := cacheTestRepository(t, []Event{cacheTestNewTask(t, "TASK01", "First")})
+	path := filepath.Join(dir, dataDirName, backlogFileName)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = bytes.ReplaceAll(data, []byte{'\n'}, []byte{'\r', '\n'})
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	read, err := inspectEventLog(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read.source.Bytes != int64(len(data)) {
+		t.Fatalf("CRLF source bytes = %d, want %d", read.source.Bytes, len(data))
+	}
+
+	writeCacheForRepository(t, repository)
+	if _, read, err := repository.loadWithRead(); err != nil {
+		t.Fatal(err)
+	} else if !read.cacheHit {
+		t.Fatal("CRLF backlog did not load through cache")
+	}
+}
+
 func TestBacklogCacheMissesAfterSourceReplacementOrTruncation(t *testing.T) {
 	t.Run("replacement", func(t *testing.T) {
 		dir, repository := cacheTestRepository(t, []Event{cacheTestNewTask(t, "TASK01", "First")})
