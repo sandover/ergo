@@ -2627,6 +2627,10 @@ func TestDepSemantics_ContainerReadiness(t *testing.T) {
 // asserting it exits cleanly and produces a graph with at least one container.
 // This catches fixture drift the moment a script uses removed CLI syntax.
 func TestFixtureScripts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture scripts require a Unix-compatible shell")
+	}
+
 	repoRoot, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatalf("could not resolve repo root: %v", err)

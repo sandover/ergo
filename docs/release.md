@@ -94,3 +94,21 @@ new version.
 The release is complete only when its page has useful release notes and source,
 artifacts, and package-manager installs all report the intended version and
 accepted CLI contract.
+
+## Windows package publishing
+
+GoReleaser generates a `Sandover.Ergo` manifest from the two Windows ZIPs and
+opens an update pull request in the Windows Package Manager Community
+Repository for each non-prerelease release.
+
+Before enabling it:
+
+1. Submit one initial `Sandover.Ergo` manifest to `microsoft/winget-pkgs`.
+2. Fork `microsoft/winget-pkgs` as `sandover/winget-pkgs`.
+3. Add a classic GitHub token with `public_repo` scope as the `WINGET_TOKEN`
+   repository secret.
+
+The WinGet publisher skips its upload while `WINGET_TOKEN` is absent, so normal
+releases remain safe before the initial package setup. Once the initial package
+is accepted and the secret is present, future releases open the update pull
+request automatically.

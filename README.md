@@ -31,13 +31,23 @@ macOS with Homebrew:
 brew install sandover/tap/ergo
 ```
 
+Windows with WinGet:
+
+```powershell
+winget install --id Sandover.Ergo --exact
+```
+
+If WinGet does not find Ergo yet, download the Windows archive from the
+[latest GitHub release](https://github.com/sandover/ergo/releases/latest),
+extract `ergo.exe`, and add its directory to your user `PATH`.
+
 Any supported platform with Go:
 
 ```sh
 go install github.com/sandover/ergo/v6/cmd/ergo@latest
 ```
 
-Prebuilt archives for macOS, Linux, and Windows are available from the
+Prebuilt archives for macOS, Linux, and Windows are also available from the
 [latest GitHub release](https://github.com/sandover/ergo/releases/latest).
 
 Add a short repository instruction for your coding agent:

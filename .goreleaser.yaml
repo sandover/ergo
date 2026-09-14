@@ -47,3 +47,36 @@ homebrew_casks:
           if OS.mac?
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ergo"]
           end
+
+winget:
+  - name: ergo
+    publisher: Sandover
+    package_identifier: Sandover.Ergo
+    short_description: Local, dependency-aware backlog for coding agents
+    license: MIT
+    publisher_url: https://github.com/sandover
+    publisher_support_url: https://github.com/sandover/ergo/issues
+    homepage: https://github.com/sandover/ergo
+    description: >-
+      Ergo is a fast, minimal, dependency-aware backlog for coding agents.
+      It stores a readable task graph and shared journal in git-friendly JSONL.
+    tags:
+      - backlog
+      - cli
+      - coding-agents
+      - golang
+    ids:
+      - default
+    url_template: https://github.com/sandover/ergo/releases/download/{{ .Tag }}/{{ .ArtifactName }}
+    skip_upload: '{{ if isEnvSet "WINGET_TOKEN" }}false{{ else }}true{{ end }}'
+    repository:
+      owner: sandover
+      name: winget-pkgs
+      branch: "{{ .ProjectName }}-{{ .Version }}"
+      token: "{{ .Env.WINGET_TOKEN }}"
+      pull_request:
+        enabled: true
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
