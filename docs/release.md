@@ -95,6 +95,22 @@ The release is complete only when its page has useful release notes and source,
 artifacts, and package-manager installs all report the intended version and
 accepted CLI contract.
 
+## VS Code extension publishing
+
+Build and test the extension from `editors/vscode`, then package the VSIX with
+`npm run package`. Publish with `vsce publish --packagePath <file>.vsix` when a
+Marketplace token is available.
+
+Without a token, use the publisher page directly:
+
+1. Open <https://marketplace.visualstudio.com/manage/publishers/sandover>.
+2. Choose **More Actions → Update** for Ergo Backlog and upload the VSIX.
+3. Wait until `Verifying <version>` clears, then confirm the version on the
+   [public listing](https://marketplace.visualstudio.com/items?itemName=sandover.ergo-backlog).
+
+Do not start in Azure Portal or the general Azure DevOps site. They do not own
+the extension upload flow and lead away from the Marketplace publisher page.
+
 ## Windows package publishing
 
 GoReleaser generates a `Sandover.Ergo` manifest from the two Windows ZIPs and
