@@ -33,6 +33,7 @@ const claimsLibraryBacklog = parseListDocument(JSON.stringify({
       state: "todo",
       ready: false,
       epic_id: "BQM4Y5",
+      waiting_on: ["OKOKSE"],
     },
     {
       id: "EUDZOS",
@@ -59,6 +60,9 @@ test("renders a clickable searchable overview from realistic backlog data", () =
   assert.match(view.html, /Add support-safe plugin diagnostics to server logs/);
   assert.match(view.html, /Create one Citation from text that spans pages/);
 	assert.match(view.html, /1 ready · 1 waiting · 1 failed · 1 done/);
+	assert.match(view.html, /data-tooltip="waiting on Decide what each page highlight should show" aria-label="waiting on Decide what each page highlight should show"/);
+	assert.match(view.html, /max-width: min\(360px, calc\(100% - 16px\)\)/);
+	assert.match(view.html, /white-space: normal; width: max-content/);
 	assert.match(view.html, /<span class="id-control-group"><button class="item id" type="button" data-id="CCKOC2">CCKOC2<\/button><button class="copy-id" type="button" data-copy-id="CCKOC2" title="Copy task ID CCKOC2" aria-label="Copy task ID CCKOC2"/);
 	assert.match(view.html, /<span class="id-control-group"><button class="item id" type="button" data-id="BQM4Y5">BQM4Y5<\/button><button class="copy-id" type="button" data-copy-id="BQM4Y5" title="Copy epic ID BQM4Y5" aria-label="Copy epic ID BQM4Y5"/);
   assert.match(view.html, /data-id="OKOKSE"/);

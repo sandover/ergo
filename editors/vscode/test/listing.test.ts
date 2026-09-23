@@ -22,6 +22,7 @@ test("groups roots and epics into compact searchable picker rows", () => {
           state: "todo",
           ready: false,
           epic_id: "EPIC01",
+          waiting_on: ["ROOT01"],
         },
 		{
 		  id: "FAIL01",
@@ -59,7 +60,7 @@ test("groups roots and epics into compact searchable picker rows", () => {
   assert.deepEqual(picker[4], {
     type: "item",
     label: "TASK01  ↳ $(clock) Define and store multi-page Citation locations",
-    description: "waiting",
+    description: "waiting on Add support-safe plugin diagnostics to server logs",
     item: document.items[2],
   });
   assert.deepEqual(picker[5], {
@@ -80,6 +81,23 @@ test("rejects malformed and unsupported listings", () => {
     () => parseListDocument('{"version":1,"items":[{"id":"TASK01","title":"Task","kind":"task"}]}'),
     /invalid task listing/,
   );
+  assert.throws(
+    () => parseListDocument('{"version":1,"items":[{"id":"TASK01","title":"Task","kind":"task","state":"todo","ready":false,"waiting_on":[1]}]}'),
+    /invalid task listing/,
+  );
+});
+
+test("summarizes multiple blockers and falls back to an unavailable blocker ID", () => {
+  const document = parseListDocument(JSON.stringify({
+    version: 1,
+    items: [
+      { id: "WAIT01", title: "Waiting", kind: "task", state: "todo", ready: false, waiting_on: ["ONE001", "TWO002"] },
+      { id: "WAIT02", title: "Waiting", kind: "task", state: "todo", ready: false, waiting_on: ["HIDDEN"] },
+    ],
+  }));
+  const items = toPickerItems(document).filter((entry) => entry.type === "item");
+  assert.equal(items[0].description, "waiting on 2 dependencies");
+  assert.equal(items[1].description, "waiting on HIDDEN");
 });
 
 test("marks an epic failed when every child finishes and one fails", () => {

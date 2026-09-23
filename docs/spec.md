@@ -277,12 +277,14 @@ writes one newline-terminated version 1 document:
 ```
 
 Every item has `id`, `title`, and `kind`. Task items also have `state` and
-`ready`. Epic items have their derived `state`. Child tasks have `epic_id`.
-Ergo omits fields that do not apply. The
-projection excludes bodies, graph relationships, journal entries, icons,
-terminal layout, and ANSI decoration. Version 1 carries `failed` in the existing
-state string and changes no document shape. Editor integrations use `show` when
-they need journal evidence.
+`ready`. A todo task that is not ready has `waiting_on`, a sorted array of its
+unfinished effective dependency IDs, including dependencies inherited from its
+epic. Epic items have their derived `state`. Child tasks have `epic_id`. Ergo
+omits fields that do not apply. The projection excludes bodies, complete graph
+relationships, journal entries, icons, terminal layout, and ANSI decoration.
+Version 1 carries compatible additive fields and lifecycle values in the
+existing document shape. Editor integrations use `show` when they need journal
+evidence.
 
 Success exits zero. Failure exits nonzero and writes an actionable message to
 stderr. Unsupported commands, unsupported flags, and reserved creation JSON

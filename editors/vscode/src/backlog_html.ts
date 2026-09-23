@@ -3,7 +3,13 @@
 // IDs stay clickable and escaped, and filtering continues to operate on rendered rows.
 
 import { randomBytes } from "node:crypto";
-import { derivedEpicState, ErgoListDocument, ErgoListItem, taskStatusWord } from "./listing";
+import {
+  derivedEpicState,
+  ErgoListDocument,
+  ErgoListItem,
+  taskStatusDescription,
+  taskStatusWord,
+} from "./listing";
 import { copyIdButton, copyIdStyles } from "./copy_id";
 
 export interface BacklogView {
@@ -21,15 +27,16 @@ export function renderBacklog(
   );
   const epics = document.items.filter((item) => item.kind === "epic");
   const itemIds = new Set(document.items.map((item) => item.id));
+  const itemsById = new Map(document.items.map((item) => [item.id, item]));
 
   const roots = rootTasks.length
     ? `<section>
-        <div class="rows">${rootTasks.map(renderTask).join("")}</div>
+        <div class="rows">${rootTasks.map((item) => renderTask(item, itemsById)).join("")}</div>
       </section>`
     : "";
   const epicSections = epics.map((epic) => {
     const children = document.items.filter((item) => item.epic_id === epic.id);
-    return renderEpic(epic, children);
+    return renderEpic(epic, children, itemsById);
   }).join("");
 
   const html = `<!doctype html>
@@ -53,14 +60,14 @@ export function renderBacklog(
     .ready-filter input { accent-color: var(--vscode-checkbox-background); cursor: pointer; margin: 0; }
     main { margin-top: 18px; }
     section { margin-bottom: 18px; }
-    .row { align-items: center; border-radius: 3px; display: grid; gap: 12px; grid-template-columns: auto auto minmax(0, 1fr); padding: 3px 8px; }
+    .row { align-items: center; border-radius: 3px; display: grid; gap: 12px; grid-template-columns: auto auto minmax(0, 1fr); padding: 3px 8px; position: relative; }
     .row:hover, .row:focus-within { background: var(--surface-hover); }
     button.item { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; min-width: 0; overflow: hidden; padding: 0; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
     button.item:hover { color: var(--text-strong); text-decoration: underline; }
     button.item:focus { outline: 1px solid var(--accent); outline-offset: 2px; }
-    .state { align-items: center; color: var(--text-muted); cursor: default; display: inline-flex; font-size: 12px; gap: 5px; line-height: 1; position: relative; white-space: nowrap; }
-    .state[data-tooltip]::after { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 4px; bottom: calc(100% + 7px); box-shadow: 0 3px 10px rgb(0 0 0 / 28%); color: var(--text-strong); content: attr(data-tooltip); font-size: 12px; font-weight: 400; left: 50%; opacity: 0; padding: 5px 7px; pointer-events: none; position: absolute; text-transform: none; transform: translate(-50%, 2px); transition: opacity .1s ease, transform .1s ease; visibility: hidden; z-index: 2; }
-    .state[data-tooltip]:hover::after { opacity: 1; transform: translate(-50%, 0); visibility: visible; }
+    .state { align-items: center; color: var(--text-muted); cursor: default; display: inline-flex; font-size: 12px; gap: 5px; line-height: 1; white-space: nowrap; }
+    .state[data-tooltip]::after { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 4px; bottom: calc(100% + 7px); box-sizing: border-box; box-shadow: 0 3px 10px rgb(0 0 0 / 28%); color: var(--text-strong); content: attr(data-tooltip); font-size: 12px; font-weight: 400; left: 8px; max-width: min(360px, calc(100% - 16px)); opacity: 0; overflow-wrap: anywhere; padding: 5px 7px; pointer-events: none; position: absolute; text-transform: none; transform: translateY(2px); transition: opacity .1s ease, transform .1s ease; visibility: hidden; white-space: normal; width: max-content; z-index: 2; }
+    .state[data-tooltip]:hover::after { opacity: 1; transform: translateY(0); visibility: visible; }
     .state-symbol { font-size: 14px; }
     .state[data-state="draft"] { color: var(--text-muted); }
     .state[data-state="ready"], .state[data-state="done"] { color: var(--success); }
@@ -217,7 +224,11 @@ export function renderBacklog(
   return { html, itemIds };
 }
 
-function renderEpic(epic: ErgoListItem, children: ErgoListItem[]): string {
+function renderEpic(
+  epic: ErgoListItem,
+  children: ErgoListItem[],
+  itemsById: ReadonlyMap<string, ErgoListItem>,
+): string {
   const counts = new Map<string, number>();
   for (const child of children) {
     const state = taskStatusWord(child);
@@ -238,15 +249,16 @@ function renderEpic(epic: ErgoListItem, children: ErgoListItem[]): string {
         ${progress ? `<span class="epic-progress">${progress}</span>` : ""}
       </span>
     </summary>
-    <div class="children">${children.map(renderTask).join("")}</div>
+    <div class="children">${children.map((item) => renderTask(item, itemsById)).join("")}</div>
   </details>`;
 }
 
-function renderTask(item: ErgoListItem): string {
+function renderTask(item: ErgoListItem, itemsById: ReadonlyMap<string, ErgoListItem>): string {
   const state = taskStatusWord(item);
+  const description = taskStatusDescription(item, itemsById);
   return `<div class="row" data-search="${searchText([item])}" data-ready="${item.ready === true}">
     <span class="id-control-group"><button class="item id" type="button" data-id="${attribute(item.id)}">${text(item.id)}</button>${copyIdButton(item.id, "task")}</span>
-    <span class="state" data-state="${attribute(state)}" data-tooltip="${attribute(state)}" aria-label="${attribute(state)}"><span class="state-symbol" aria-hidden="true">${stateSymbol(state)}</span></span>
+    <span class="state" data-state="${attribute(state)}" data-tooltip="${attribute(description)}" aria-label="${attribute(description)}"><span class="state-symbol" aria-hidden="true">${stateSymbol(state)}</span></span>
     <span class="task-title">${text(item.title)}</span>
   </div>`;
 }

@@ -372,8 +372,9 @@ receipts.
 Editor integrations use two narrow CLI projections rather than depending on
 terminal presentation or reading the event log. `list --json` applies normal
 filters and ordering, then emits versioned task and epic identity, lifecycle,
-readiness, and placement fields. `info` reports executable, version, project,
-metadata directory, and selected log paths for diagnostics. Because `info`
+readiness, effective waiting dependencies, and placement fields. `info` reports
+the executable, version, project, metadata directory, and selected log paths
+for diagnostics. Because `info`
 uses normal repository discovery, integrations probe compatibility with
 `--version` before a project has been established.
 

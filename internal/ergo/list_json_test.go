@@ -111,6 +111,51 @@ func TestRenderListJSONPreservesDraftStateAndReadiness(t *testing.T) {
 	}
 }
 
+func TestRenderListJSONExplainsWaitingWithEffectiveBlockers(t *testing.T) {
+	shared := &Task{ID: "SHARED", Title: "Shared prerequisite", State: stateTodo}
+	finished := &Task{ID: "DONE01", Title: "Finished prerequisite", State: stateDone}
+	epic := &Task{ID: "EPIC01", Title: "Epic"}
+	direct := &Task{ID: "DIRECT", Title: "Direct prerequisite", State: stateTodo, EpicID: epic.ID}
+	waiting := &Task{ID: "WAIT01", Title: "Waiting task", State: stateTodo, EpicID: epic.ID}
+	graph := &Graph{
+		Tasks: map[string]*Task{
+			shared.ID: shared, finished.ID: finished, epic.ID: epic, direct.ID: direct, waiting.ID: waiting,
+		},
+		Deps: map[string]map[string]struct{}{
+			epic.ID:    {shared.ID: {}},
+			waiting.ID: {direct.ID: {}, finished.ID: {}},
+		},
+	}
+	graph.rebuildIndexes()
+	outcome := ListOutcome{Graph: graph, Roots: []*treeNode{{
+		task: epic, isEpic: true,
+		children: []*treeNode{{task: direct}, {task: waiting}},
+	}}}
+
+	var output bytes.Buffer
+	if err := RenderListJSON(&output, outcome); err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Items []struct {
+			ID        string   `json:"id"`
+			WaitingOn []string `json:"waiting_on"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(output.Bytes(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if got := document.Items[2].WaitingOn; strings.Join(got, ",") != "DIRECT,SHARED" {
+		t.Fatalf("waiting_on = %v, want direct and inherited blockers", got)
+	}
+	if document.Items[0].WaitingOn != nil {
+		t.Fatalf("waiting_on leaked to epic: %#v", document.Items[0])
+	}
+	if got := document.Items[1].WaitingOn; strings.Join(got, ",") != "SHARED" {
+		t.Fatalf("inherited waiting_on = %v, want shared blocker", got)
+	}
+}
+
 func TestRenderListJSONEmptyItemsAndWriterError(t *testing.T) {
 	var output bytes.Buffer
 	if err := RenderListJSON(&output, ListOutcome{}); err != nil {

@@ -15,12 +15,13 @@ type listJSONDocument struct {
 }
 
 type listJSONItem struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Kind   string `json:"kind"`
-	State  string `json:"state,omitempty"`
-	Ready  *bool  `json:"ready,omitempty"`
-	EpicID string `json:"epic_id,omitempty"`
+	ID        string   `json:"id"`
+	Title     string   `json:"title"`
+	Kind      string   `json:"kind"`
+	State     string   `json:"state,omitempty"`
+	Ready     *bool    `json:"ready,omitempty"`
+	EpicID    string   `json:"epic_id,omitempty"`
+	WaitingOn []string `json:"waiting_on,omitempty"`
 }
 
 // RenderListJSON writes the filtered list outcome without terminal presentation
@@ -53,6 +54,9 @@ func appendNodesAsJSON(items *[]listJSONItem, nodes []*treeNode, graph *Graph) {
 			item.State = node.task.State
 			item.Ready = &ready
 			item.EpicID = node.task.EpicID
+			if node.task.State == stateTodo && !ready {
+				item.WaitingOn = graph.Blockers(node.task.ID)
+			}
 		}
 		*items = append(*items, item)
 		appendNodesAsJSON(items, node.children, graph)

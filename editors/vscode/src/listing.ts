@@ -13,6 +13,7 @@ export interface ErgoListItem {
   state?: string;
   ready?: boolean;
   epic_id?: string;
+  waiting_on?: string[];
 }
 
 export interface ErgoListDocument {
@@ -55,6 +56,7 @@ export function parseListDocument(input: string): ErgoListDocument {
 
 export function toPickerItems(document: ErgoListDocument): PickerEntry[] {
   const entries: PickerEntry[] = [];
+  const itemsById = new Map(document.items.map((item) => [item.id, item]));
   const rootTasks = document.items.filter(
     (item) => item.kind === "task" && !item.epic_id,
   );
@@ -68,7 +70,7 @@ export function toPickerItems(document: ErgoListDocument): PickerEntry[] {
   if (rootTasks.length > 0 || ungroupedTasks.length > 0) {
     entries.push({ type: "separator", label: "ROOT TASKS" });
     for (const item of [...rootTasks, ...ungroupedTasks]) {
-      entries.push(taskPickerItem(item, false));
+      entries.push(taskPickerItem(item, false, itemsById));
     }
   }
 
@@ -84,7 +86,7 @@ export function toPickerItems(document: ErgoListDocument): PickerEntry[] {
         item: epic,
       });
       for (const child of children) {
-        entries.push(taskPickerItem(child, true));
+        entries.push(taskPickerItem(child, true, itemsById));
       }
     }
   }
@@ -116,13 +118,32 @@ export function taskStatusWord(item: ErgoListItem): string {
   }
 }
 
-function taskPickerItem(item: ErgoListItem, child: boolean): PickerItem {
+export function taskStatusDescription(
+  item: ErgoListItem,
+  itemsById: ReadonlyMap<string, ErgoListItem>,
+): string {
+  const status = taskStatusWord(item);
+  if (status !== "waiting" || !item.waiting_on?.length) {
+    return status;
+  }
+  if (item.waiting_on.length === 1) {
+    const id = item.waiting_on[0];
+    return `waiting on ${itemsById.get(id)?.title ?? id}`;
+  }
+  return `waiting on ${item.waiting_on.length} dependencies`;
+}
+
+function taskPickerItem(
+  item: ErgoListItem,
+  child: boolean,
+  itemsById: ReadonlyMap<string, ErgoListItem>,
+): PickerItem {
   const status = taskStatusWord(item);
   const prefix = child ? "↳ " : "";
   return {
     type: "item",
     label: `${item.id}  ${prefix}${statusIcon(status)} ${item.title}`,
-    description: status,
+    description: taskStatusDescription(item, itemsById),
     item,
   };
 }
@@ -177,6 +198,12 @@ function parseListItem(value: unknown): ErgoListItem {
         throw new Error("Ergo returned an invalid task listing.");
       }
       item.epic_id = value.epic_id;
+    }
+    if (value.waiting_on !== undefined) {
+      if (!Array.isArray(value.waiting_on) || !value.waiting_on.every((id) => typeof id === "string")) {
+        throw new Error("Ergo returned an invalid task listing.");
+      }
+      item.waiting_on = value.waiting_on;
     }
   }
   return item;

@@ -76,7 +76,8 @@ terminal layout:
 
 This writes one versioned JSON document containing an ordered `items` array.
 It is a small task-picker projection, not a complete graph export. Normal
-`list` output remains the human-readable view.
+`list` output remains the human-readable view. A waiting todo task includes
+`waiting_on` with the unfinished dependency IDs that keep it from being ready.
 
 `show` normally produces a complete task document. For a leaf, that document
 combines stored fields with synthesized metadata and relationships. For an epic,
