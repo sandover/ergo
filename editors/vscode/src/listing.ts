@@ -102,9 +102,22 @@ export function derivedEpicState(children: ErgoListItem[]): string {
   return children.some((child) => child.state === "failed") ? "failed" : "done";
 }
 
+export function taskStatusWord(item: ErgoListItem): string {
+  if (item.state === "todo") {
+    return item.ready ? "ready" : "waiting";
+  }
+  switch (item.state) {
+    case "doing":
+      return "in progress";
+    case "error":
+      return "legacy error";
+    default:
+      return item.state ?? "task";
+  }
+}
+
 function taskPickerItem(item: ErgoListItem, child: boolean): PickerItem {
-  const status =
-    item.state === "todo" ? (item.ready ? "ready" : "waiting") : item.state ?? "task";
+  const status = taskStatusWord(item);
   const prefix = child ? "↳ " : "";
   return {
     type: "item",
@@ -122,7 +135,7 @@ function statusIcon(status: string): string {
       return "$(clock)";
     case "draft":
       return "◌";
-    case "doing":
+    case "in progress":
       return "$(sync)";
     case "blocked":
       return "$(error)";
@@ -132,7 +145,7 @@ function statusIcon(status: string): string {
       return "$(check)";
     case "canceled":
       return "$(circle-slash)";
-    case "error":
+    case "legacy error":
       return "$(warning)";
     default:
       return "$(circle-outline)";

@@ -12,7 +12,7 @@ Ergo Backlog turns a repository's dependency-aware [Ergo](https://github.com/san
 - **Read task and epic details.** Open the selected item as a formatted Markdown preview in its own editor tab.
 - **Open the backlog naturally.** Select `.ergo/backlog.jsonl` in the Explorer to see the backlog view instead of the raw event log.
 
-Ergo Backlog is read-only. Planning and lifecycle changes remain explicit CLI actions, while VS Code provides a comfortable place to browse and understand the current plan.
+Ergo Backlog is read-only. Planning and lifecycle changes remain explicit CLI actions, while VS Code provides a comfortable place to browse and understand the current plan. The backlog, open details, picker, and status-bar summary update as Ergo changes on disk.
 
 ## Get started
 

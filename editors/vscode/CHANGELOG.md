@@ -1,5 +1,18 @@
 # Change Log
 
+## 6.1.0
+
+- Restyle the backlog with the softer Solar Eclipse Ashen palette.
+- Render task and epic details in an Ergo-owned Markdown view so their reading
+  colors remain calm and consistent without changing other Markdown previews.
+- Keep the backlog, open details, task picker, and workspace status synchronized
+  with external Ergo changes.
+- Show a quiet ready and blocked summary in the status bar, with accessible
+  state icons and tooltips in the backlog.
+- Add compact copy-ID controls to backlog rows and task and epic details.
+- Highlight search matches, separate tasks clearly inside epic details, and
+  link task details back to their parent epic.
+
 ## 6.0.1
 
 - Publish Ergo Backlog as a stable extension aligned with the latest Ergo

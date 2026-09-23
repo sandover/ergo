@@ -43,7 +43,7 @@ test("groups roots and epics into compact searchable picker rows", () => {
   assert.deepEqual(picker[1], {
     type: "item",
     label: "ROOT01  $(sync) Add support-safe plugin diagnostics to server logs",
-    description: "doing",
+    description: "in progress",
     item: document.items[0],
   });
   assert.deepEqual(picker[2], {
@@ -112,4 +112,28 @@ test("keeps draft tasks visible and unavailable in the picker", () => {
     description: "draft",
     item: document.items[0],
   });
+});
+
+test("uses plain status words for every supported task state", () => {
+  const document = parseListDocument(JSON.stringify({
+    version: 1,
+    items: [
+      { id: "READY01", title: "Ready", kind: "task", state: "todo", ready: true },
+      { id: "WAIT01", title: "Waiting", kind: "task", state: "todo", ready: false },
+      { id: "DRAFT01", title: "Draft", kind: "task", state: "draft", ready: false },
+      { id: "DOING01", title: "Doing", kind: "task", state: "doing", ready: false },
+      { id: "BLOCK01", title: "Blocked", kind: "task", state: "blocked", ready: false },
+      { id: "FAIL01", title: "Failed", kind: "task", state: "failed", ready: false },
+      { id: "DONE01", title: "Done", kind: "task", state: "done", ready: false },
+      { id: "CANCEL01", title: "Canceled", kind: "task", state: "canceled", ready: false },
+      { id: "ERROR01", title: "Legacy error", kind: "task", state: "error", ready: false },
+    ],
+  }));
+
+  assert.deepEqual(
+    toPickerItems(document)
+      .filter((entry) => entry.type === "item")
+      .map((entry) => entry.type === "item" ? entry.description : ""),
+    ["ready", "waiting", "draft", "in progress", "blocked", "failed", "done", "canceled", "legacy error"],
+  );
 });

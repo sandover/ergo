@@ -2,7 +2,7 @@
   "name": "ergo-backlog",
   "displayName": "Ergo Backlog",
   "description": "Browse a dependency-aware Ergo backlog without leaving VS Code.",
-  "version": "6.0.1",
+  "version": "6.1.0",
   "publisher": "sandover",
   "preview": false,
   "icon": "assets/icon.png",
@@ -42,7 +42,8 @@
   ],
   "activationEvents": [
     "onCommand:ergo.listTasks",
-    "onCustomEditor:ergo.backlog"
+    "onCustomEditor:ergo.backlog",
+    "workspaceContains:.ergo/backlog.jsonl"
   ],
   "main": "./out/src/extension.js",
   "contributes": {
@@ -84,6 +85,9 @@
     "test": "npm run build && node scripts/test.mjs",
     "vscode:prepublish": "npm run build",
     "package": "vsce package"
+  },
+  "dependencies": {
+    "markdown-it": "^14.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

@@ -3,26 +3,28 @@ import { backlogViewType, ErgoBacklogEditor } from "./backlog_editor";
 import {
   clearCompatibilityCache,
   ErgoCommandError,
-  listArguments,
-  runCompatibleErgo,
 } from "./ergo";
-import { ErgoListItem, parseListDocument, toPickerItems } from "./listing";
-import { previewScheme } from "./preview";
+import { ErgoLiveness } from "./liveness";
+import { showLiveBacklogPicker } from "./picker";
 import { ErgoPreviewProvider } from "./preview_provider";
+import { ErgoStatusBar } from "./status_bar";
 
 export function activate(context: vscode.ExtensionContext): void {
-  const previews = new ErgoPreviewProvider();
+  const liveness = new ErgoLiveness();
+  const status = new ErgoStatusBar(liveness);
+  const previews = new ErgoPreviewProvider(liveness);
   context.subscriptions.push(
-    previews,
-    vscode.workspace.registerTextDocumentContentProvider(previewScheme, previews),
+    liveness,
+    status,
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("ergo.executablePath")) {
         clearCompatibilityCache();
+        status.refreshForConfigurationChange();
       }
     }),
     vscode.window.registerCustomEditorProvider(
       backlogViewType,
-      new ErgoBacklogEditor(previews),
+      new ErgoBacklogEditor(previews, liveness),
       {
         webviewOptions: { retainContextWhenHidden: true },
         supportsMultipleEditorsPerDocument: false,
@@ -34,32 +36,12 @@ export function activate(context: vscode.ExtensionContext): void {
         if (!folder) {
           return;
         }
-        const output = await runCompatibleErgo(
-          listArguments(folder.uri.fsPath),
+        await showLiveBacklogPicker(
+          folder,
           ergoExecutable(folder.uri),
+          liveness,
+          previews,
         );
-        const entries = toPickerItems(parseListDocument(output));
-        if (entries.length === 0) {
-          await vscode.window.showInformationMessage("No Ergo tasks found.");
-          return;
-        }
-        const items: ErgoQuickPickItem[] = entries.map((entry) =>
-          entry.type === "separator"
-            ? { label: entry.label, kind: vscode.QuickPickItemKind.Separator }
-            : {
-                label: entry.label,
-                description: entry.description,
-                item: entry.item,
-              },
-        );
-        const selected = await vscode.window.showQuickPick(items, {
-          title: "Ergo: Backlog",
-          placeHolder: "Search by title or ID",
-          matchOnDescription: true,
-        });
-        if (selected?.item) {
-          await previews.open(folder.uri.fsPath, selected.item.id, selected.item.kind);
-        }
       } catch (error) {
         const message =
           error instanceof ErgoCommandError || error instanceof Error
@@ -99,7 +81,3 @@ function ergoExecutable(resource: vscode.Uri): string {
     .getConfiguration("ergo", resource)
     .get<string>("executablePath", "ergo");
 }
-
-type ErgoQuickPickItem = vscode.QuickPickItem & {
-  item?: ErgoListItem;
-};
