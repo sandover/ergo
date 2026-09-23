@@ -349,7 +349,7 @@ func replaceLogAtomically(path string, data []byte) error {
 	if err := file.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(tmpPath, path); err != nil {
+	if err := replaceLogFile(tmpPath, path); err != nil {
 		return err
 	}
 	return syncDir(filepath.Dir(path))

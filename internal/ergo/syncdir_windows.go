@@ -1,9 +1,9 @@
 //go:build windows
 
-// Purpose: Complete atomic event-log replacement on Windows hosts.
+// Purpose: Complete the common event-log replacement flow on Windows hosts.
 // Exports: none (package-internal helper).
-// Role: Platform counterpart to Unix directory syncing.
-// Invariants: File contents are synced before rename; directory fsync is unavailable through os.File on Windows.
+// Role: No-op after replaceLogFile requests Windows write-through.
+// Invariants: Does not claim parent-directory metadata durability.
 package ergo
 
 func syncDir(string) error {

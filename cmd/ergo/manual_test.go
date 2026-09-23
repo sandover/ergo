@@ -296,6 +296,53 @@ func TestShowBodyDocumentationHasClearOwnership(t *testing.T) {
 	}
 }
 
+func TestWindowsPowerShellWorkflowDocumentation(t *testing.T) {
+	quickstart := ergo.QuickstartText(false)
+	for _, fact := range []string{
+		"New-TemporaryFile", "Start-Process", "RedirectStandardOutput",
+		"RedirectStandardInput", "UTF8Encoding", "byte-order mark",
+		"body ABCDEF --append", "Invoke-ErgoWithBody 'body ABCDEF' ''",
+		"$id = (ergo new task", ".Trim()", "Remove-Item",
+	} {
+		if !strings.Contains(quickstart, fact) {
+			t.Errorf("quickstart lacks PowerShell workflow fact %q", fact)
+		}
+	}
+	assertOrdered(t, "PowerShell exact body round trip", quickstart,
+		"-ArgumentList 'show ABCDEF --body'",
+		"RedirectStandardOutput $bodyFile.FullName",
+		"Edit $bodyFile in an editor",
+		"-ArgumentList 'body ABCDEF'",
+		"RedirectStandardInput $bodyFile.FullName")
+
+	root := filepath.Join("..", "..")
+	surfaces := []struct {
+		name string
+		text string
+	}{
+		{name: "README.md"},
+		{name: "internal/ergo/quickstart.txt", text: quickstart},
+		{name: "editors/vscode/README.md"},
+	}
+	for i := range surfaces {
+		if surfaces[i].text == "" {
+			data, err := os.ReadFile(filepath.Join(root, surfaces[i].name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			surfaces[i].text = string(data)
+		}
+		for _, fact := range []string{
+			"winget install --id Sandover.Ergo --exact",
+			"github.com/sandover/ergo/releases/latest", "`ergo.exe`", "user `PATH`",
+		} {
+			if !strings.Contains(surfaces[i].text, fact) {
+				t.Errorf("%s lacks Windows installation fact %q", surfaces[i].name, fact)
+			}
+		}
+	}
+}
+
 func TestAgentFlagBelongsOnlyToClaim(t *testing.T) {
 	root := newManualTestRoot()
 	if root.PersistentFlags().Lookup("agent") != nil {

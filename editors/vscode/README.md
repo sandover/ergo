@@ -30,7 +30,18 @@ On macOS:
 brew install sandover/tap/ergo
 ```
 
-On Windows and Linux, download the appropriate archive from the [latest Ergo release](https://github.com/sandover/ergo/releases/latest) and place `ergo.exe` or `ergo` on `PATH`.
+On Windows, install Ergo with WinGet:
+
+```powershell
+winget install --id Sandover.Ergo --exact
+```
+
+If WinGet does not find Ergo yet, download the Windows archive from the
+[latest Ergo release](https://github.com/sandover/ergo/releases/latest), extract
+`ergo.exe`, and add its directory to your user `PATH`. On Linux, download the
+appropriate archive from the same release and place `ergo` on `PATH`.
+
+Open a new terminal and restart VS Code after changing `PATH`.
 
 Ergo Backlog uses the Ergo CLI from the VS Code extension host environment. Remote, WSL, SSH, and development-container windows therefore need Ergo installed in that environment.
 

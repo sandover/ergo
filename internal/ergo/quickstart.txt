@@ -2,6 +2,14 @@
 
 {{HEADER}}1. WORKFLOW{{RESET}}
 
+On Windows, install Ergo with WinGet:
+
+  {{CMD}}winget install --id Sandover.Ergo --exact{{RESET}}
+
+If WinGet does not find Ergo yet, download the Windows archive from
+https://github.com/sandover/ergo/releases/latest, extract `ergo.exe`, and add
+its directory to your user `PATH`. Open a new terminal after changing `PATH`.
+
 Initialize the repository, create a task, and use its returned ID:
 
   {{CMD}}ergo init{{RESET}}
@@ -92,6 +100,30 @@ write:
   {{CMD}}${EDITOR:-vi} "$tmp" || exit{{RESET}}
   {{CMD}}ergo body ABCDEF <"$tmp"{{RESET}}
 
+In PowerShell, use file redirection through `Start-Process` for literal body
+bytes. Save edits as UTF-8 without a byte-order mark, and keep the file's
+existing line endings:
+
+  $ergo = (Get-Command ergo -CommandType Application).Source
+  $bodyFile = New-TemporaryFile
+  try {
+    $process = Start-Process -FilePath $ergo `
+        -ArgumentList 'show ABCDEF --body' `
+        -RedirectStandardOutput $bodyFile.FullName `
+        -NoNewWindow -Wait -PassThru
+    if ($process.ExitCode -ne 0) { throw "ergo show failed: $($process.ExitCode)" }
+
+    # Edit $bodyFile in an editor that preserves its encoding and line endings.
+    $process = Start-Process -FilePath $ergo `
+        -ArgumentList 'body ABCDEF' `
+        -RedirectStandardInput $bodyFile.FullName `
+        -NoNewWindow -Wait -PassThru
+    if ($process.ExitCode -ne 0) { throw "ergo body failed: $($process.ExitCode)" }
+  }
+  finally {
+    Remove-Item $bodyFile.FullName
+  }
+
 {{HEADER}}4. CREATE AND ORGANIZE{{RESET}}
 
 Create ordinary todo work, or stage it as draft work while you assemble the
@@ -107,10 +139,43 @@ an empty body.
 
   {{CMD}}printf '%s\n' 'Implement password login.' | ergo new task "Add login"{{RESET}}
 
+For PowerShell, write UTF-8 without a byte-order mark to a temporary file and
+redirect that file to Ergo. This keeps PowerShell's text-pipeline formatting
+from changing the body bytes:
+
+  $ergo = (Get-Command ergo -CommandType Application).Source
+  function Invoke-ErgoWithBody {
+    param([string]$Arguments, [string]$Text)
+    $inputFile = New-TemporaryFile
+    try {
+      [IO.File]::WriteAllText(
+          $inputFile.FullName, $Text, [Text.UTF8Encoding]::new($false))
+      $process = Start-Process -FilePath $ergo `
+          -ArgumentList $Arguments `
+          -RedirectStandardInput $inputFile.FullName `
+          -NoNewWindow -Wait -PassThru
+      if ($process.ExitCode -ne 0) { throw "ergo failed: $($process.ExitCode)" }
+    }
+    finally {
+      Remove-Item $inputFile.FullName
+    }
+  }
+
+  Invoke-ErgoWithBody 'new task "Add login"' 'Implement password login.'
+  Invoke-ErgoWithBody 'body ABCDEF' "Revised body`r`n"
+  Invoke-ErgoWithBody 'body ABCDEF --append' "`r`n## New context`r`n"
+  Invoke-ErgoWithBody 'body ABCDEF' ''
+
 Successful task creation prints only the task ID. This makes the result safe to
 use directly:
 
   {{CMD}}ergo show "$(ergo new task "Investigate timeout")"{{RESET}}
+
+In PowerShell, capture the native command's one-line output as text:
+
+  $id = (ergo new task "Investigate timeout").Trim()
+  if ($LASTEXITCODE -ne 0) { throw "ergo new task failed: $LASTEXITCODE" }
+  ergo show $id
 
 Create an epic and its children from a Markdown file. `--draft` stages every
 child in the atomic batch; the epic itself has no lifecycle state:

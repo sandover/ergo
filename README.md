@@ -39,7 +39,8 @@ winget install --id Sandover.Ergo --exact
 
 If WinGet does not find Ergo yet, download the Windows archive from the
 [latest GitHub release](https://github.com/sandover/ergo/releases/latest),
-extract `ergo.exe`, and add its directory to your user `PATH`.
+extract `ergo.exe`, and add its directory to your user `PATH`. Open a new
+terminal after changing `PATH`.
 
 Any supported platform with Go:
 

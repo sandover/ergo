@@ -265,8 +265,34 @@ It preserves current tasks, explicit empty-epic identity, dependencies, and
 readable compatibility lifecycle state. The same locked operation migrates
 legacy backlog messages and results into the journal once. Journal compaction
 keeps every explicit result and the newest automatic entry for each surviving
-task. Replacement writes and syncs temporary files, renames them over the
-selected files, and syncs their directory.
+task. Replacement writes and syncs temporary files before the platform-specific
+replacement described below.
+
+## File durability
+
+Backlog transactions and journal entries append under the repository lock. Ergo
+calls `Sync` on each file after writing. Compaction and other authoritative log
+replacements write a temporary file, call `Sync`, close it, and then replace the
+destination. Unix also syncs the containing directory after replacement.
+
+On Windows, Go maps `File.Sync` to
+[FlushFileBuffers](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers),
+which flushes the file's buffered data. Ergo replaces each log with
+[MoveFileExW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw)
+using `MOVEFILE_REPLACE_EXISTING` and `MOVEFILE_WRITE_THROUGH`. Microsoft
+documents that this flag delays return until the file is moved on disk and
+explicitly guarantees a flush when the move uses copy-and-delete. Ergo replaces
+files within the same directory, so its replacement does not use
+copy-and-delete. Windows provides no portable directory-sync equivalent
+through Go's `os.File`, and the API documentation does not state a separate
+parent-directory metadata flush guarantee for this same-volume replacement.
+
+This requests file and replacement flushing on Windows, but it does not promise
+survival of every power loss, storage-controller failure, or filesystem-specific
+failure. Unix adds a parent-directory sync; Windows relies on its replacement
+operation and the filesystem and storage device's behavior. Recovery remains
+platform-neutral: reads validate complete records, ignore only an incomplete
+final JSON record, and report complete malformed records as corruption.
 
 ## Application boundary and errors
 
