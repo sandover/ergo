@@ -1,27 +1,23 @@
 # ergo
 
-**A fast, minimal, dependency-aware backlog for coding agents.**
+**A shared task list for you and your coding agents.**
 
 [![License](https://img.shields.io/github/license/sandover/ergo)](LICENSE)
 [![CI](https://github.com/sandover/ergo/actions/workflows/ci.yml/badge.svg)](https://github.com/sandover/ergo/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/sandover/ergo/v6)](https://goreportcard.com/report/github.com/sandover/ergo/v6)
 [![Go Reference](https://pkg.go.dev/badge/github.com/sandover/ergo/v6.svg)](https://pkg.go.dev/github.com/sandover/ergo/v6)
 
-You (and your agent) use Ergo to manage an implementation backlog in your repo.  You have the agent write plans to ergo, instead of to markdown files or the plan mode inside of agent harnesses. 
+The `ergo` CLI is a way for coding agents to keep implementation plans, progress, and results inside your project -- outside the agent harness. This way, your backlog is independent of any one agent, model, session, or machine. A backlog should be interruptible, resumable, storable, parallelizable, and legible, and with `ergo`, that's how it is.
 
-Why do this? 
+Have your agent write out its plans using `ergo` instead of Markdown files or an internal plan tool. You can opt to track the backlog in git or keep it local.
 
-Because it turns your work backlog into something readable, storable, interruptible, resumable, shareable, portable, and rewindable. And you can track the whole thing in git. It's just a couple of JSONL files.
+- Tasks have state (like "todo" or "doing" or "done")
+- Tasks can depend on one another, so the “Build the signup endpoint” task can wait for the “Create the database tables” task.
+- Tasks can be grouped into epics.
 
-ergo is just a CLI. 
+Your agent writes the backlog, but it's easy for you to read and review it. Run `ergo list`:
 
-So, instead of plan mode, agents use the ergo CLI to create tasks, order them with dependencies, claim them, and report results. Multiple agents can be working in parallel -- ergo is built for this.
-
-We humans can also use the ergo CLI to view or update the backlog. Plus there's a VS Code plugin. 
-
-Ergo is deliberately small and sound. The backlog and its shared task journal are plain, git-friendly JSONL stored in a `.ergo/` directory in your repo, which you can track with git or add to `.gitignore`.
-
-Ergo is inspired by [beads (bd)](https://github.com/steveyegge/beads), but built for simplicity and speed. 
+![An Ergo backlog in the terminal](docs/img/ergo-list-screenshot.png)
 
 ## Install
 
@@ -51,48 +47,52 @@ go install github.com/sandover/ergo/v6/cmd/ergo@latest
 Prebuilt archives for macOS, Linux, and Windows are also available from the
 [latest GitHub release](https://github.com/sandover/ergo/releases/latest).
 
-Add a short repository instruction for your coding agent:
+## Try it
+
+In your project's directory, run:
+
+```sh
+ergo init
+```
+
+Add this to your `AGENTS.md`:
 
 > Use Ergo to manage the implementation backlog. Run `ergo --help` and
 > `ergo quickstart` to learn it.
 
-That's it!
+Then ask your agent:
 
-The repository also ships an [Ergo backlog-planning skill](skills/ergo-backlog-planning/SKILL.md).
+> Plan the password-reset feature in Ergo.
 
-## Seeing your backlog
+Review the plan with `ergo list` and use `ergo show <id>` to read a task's
+details. When you're ready, tell the agent:
 
-Once your agent has written out a backlog, you can view it with `ergo list`
+> Implement the plan
 
-![An Ergo backlog in the terminal](docs/img/ergo-list-screenshot.png)
+In any new session, just tell your agent to read the Ergo backlog and continue the work.
 
-or in VS Code with the [Ergo Backlog](https://marketplace.visualstudio.com/items?itemName=sandover.ergo-backlog) plugin available in the VS Code Extension Marketplace. If you click on `.ergo/backlog.jsonl` you'll see something like this:
+## View in VS Code
+
+Install the [Ergo Backlog](https://marketplace.visualstudio.com/items?itemName=sandover.ergo-backlog)
+extension and open `.ergo/backlog.jsonl` to browse tasks and their details.
 
 ![An Ergo backlog in VS Code](docs/img/ergo-vscode-backlog.png)
 
-## Tasks and epics
+## Your backlog stays with your code
 
-- **Tasks** can be in draft, todo, doing, blocked, done, failed, or canceled.
-
-- **Epics** don't have their own state. An epic finishes when all its children
-  finish, and its outcome reflects their outcomes.
-
-- Tasks can depend on other tasks, including across epic boundaries.
-
-## Journal
-
-- Ergo keeps task history in `.ergo/journal.jsonl`. 
-
-- The journal records task creation, state changes, notes, and results from
-  agents. 
-
-- Agents can use `ergo result` to record what they changed, how they verified
-  it, or where they left supporting evidence.
-
-- You can track the journal in git with the backlog, or add it to `.gitignore`
-  if you don't want to keep the work history.
+Ergo is a small command-line tool with no database or background service to
+manage. It stores the backlog in `.ergo/backlog.jsonl` and task history,
+including notes and results, in `.ergo/journal.jsonl`. Track these plain-text
+files in Git, or add them to `.gitignore` for local use.
 
 ## Learn more
 
-The manual lives in the CLI. `ergo --help` gives you the overview, `ergo
-quickstart` gives you the complete guide, and every command has its own help.
+The manual lives in the CLI: `ergo --help` gives the overview, `ergo quickstart`
+gives the complete guide, and `ergo <command> --help` explains each command.
+You can also read the [overview](internal/ergo/help.txt) and
+[guide](internal/ergo/quickstart.txt) here before installing.
+
+The optional [backlog-planning skill](skills/ergo-backlog-planning/SKILL.md)
+helps agents write well-structured tasks.
+
+`ergo` is inspired by [Beads](https://github.com/gastownhall/beads), but has a focus on simplicity and speed.
