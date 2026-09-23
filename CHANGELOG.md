@@ -7,11 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.5] - 2026-09-23
+
+### Added
+
+- `ergo list --json` now includes the unfinished effective dependency IDs in a
+  `waiting_on` field for todo tasks that are not ready. Existing fields and
+  human-readable list output remain unchanged.
+- Windows contributors now have one documented validation command that covers
+  the native CLI, PowerShell workflows, and the VS Code extension.
+
+### Changed
+
+- Windows log compaction now replaces files through the native write-through
+  rename operation. Readers continue to see either the old complete log or the
+  new complete log during replacement.
+- Windows installation guidance now leads with WinGet and keeps the release
+  archive as a clear fallback while the community package completes review.
+
 ### Fixed
 
-- CI now catches stale first-party imports and README installation links, while
-  release checks reject a version whose major number disagrees with the Go
-  module path before publishing.
+- Windows cache boundaries now preserve CRLF backlogs instead of treating the
+  carriage return as event data.
+- Release checks now catch stale README installation links and reject a version
+  whose major number disagrees with the Go module path before publishing.
 
 ## [6.0.4] - 2026-09-13
 

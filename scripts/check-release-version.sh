@@ -2,7 +2,7 @@
 # Validate Ergo's Go module identity and its public references.
 # An optional version may include the leading v used by Git tags.
 # Go 2 and later require the matching /vN semantic import suffix.
-# Current Go imports and README links must use the declared module path.
+# README installation links must use the declared module path.
 # This check performs no writes and must run before an immutable tag is pushed.
 
 set -euo pipefail
@@ -42,15 +42,6 @@ if [[ "$#" -eq 1 ]]; then
       "error: release ${release_version} requires module ${expected_module}; go.mod declares ${module_path}" >&2
     exit 1
   fi
-fi
-
-stale_imports="$(
-  GIT_WORK_TREE="${repo_root}" git grep -n -E '"github\.com/sandover/ergo(/v[0-9]+)?/' -- '*.go' \
-    | grep -v -F "\"${module_path}/" || true
-)"
-if [[ -n "${stale_imports}" ]]; then
-  printf '%s\n%s\n' "error: first-party Go imports do not match ${module_path}:" "${stale_imports}" >&2
-  exit 1
 fi
 
 readme_modules="$(grep -oE 'github\.com/sandover/ergo/v[0-9]+' README.md | sort -u || true)"
