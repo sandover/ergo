@@ -234,19 +234,7 @@ func (a *Application) Lifecycle(request LifecycleRequest) (LifecycleOutcome, err
 	if err != nil {
 		return LifecycleOutcome{}, classifyRepositoryError(err)
 	}
-	mutation := taskMutation{
-		Kind: request.Kind, State: targetState, StateSet: true,
-		MessageKind: request.Kind, MessageText: message, MessageSet: messageSet,
-	}
-	switch request.Kind {
-	case "open":
-		mutation.AllowedStates = []string{stateTodo, stateDraft, stateDoing, stateBlocked}
-	case "done", "fail", "block":
-		mutation.AllowedStates = []string{stateTodo, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled, stateError}
-	case "cancel":
-		mutation.AllowedStates = []string{stateTodo, stateDraft, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled, stateError}
-	}
-	mutated, err := applyTaskMutation(dir, a.repository, id, mutation, "")
+	mutated, err := applyTaskChange(dir, a.repository, id, true, lifecycleChange(request.Kind, targetState, message, messageSet))
 	if err != nil {
 		return LifecycleOutcome{}, classifyRepositoryError(err)
 	}
@@ -284,12 +272,7 @@ func (a *Application) Claim(request ClaimRequest) (ClaimOutcome, error) {
 	}
 	id := strings.TrimSpace(request.ID)
 	if id != "" {
-		mutation := taskMutation{
-			Kind: "claim", State: stateDoing, StateSet: true,
-			Claim: agentID, ClaimSet: true, ClaimConflict: true,
-			AllowedStates: []string{stateTodo, stateDoing, stateDone, stateFailed, stateCanceled, stateError},
-		}
-		mutated, err := applyTaskMutation(dir, a.repository, id, mutation, agentID)
+		mutated, err := applyTaskChange(dir, a.repository, id, true, claimChange(agentID))
 		if err != nil {
 			return ClaimOutcome{}, classifyRepositoryError(err)
 		}
@@ -308,12 +291,11 @@ func (a *Application) Claim(request ClaimRequest) (ClaimOutcome, error) {
 			return nil, nil, nil
 		}
 		chosenID = ready[0].ID
-		mutation := taskMutation{Kind: "claim", State: stateDoing, StateSet: true, Claim: agentID, ClaimSet: true}
-		events, _, err := buildMutationEvents(chosenID, ready[0], mutation, agentID, time.Now().UTC())
+		change, err := claimChange(agentID)(graph, ready[0], time.Now().UTC())
 		if err != nil {
 			return nil, nil, err
 		}
-		return events, []JournalEntry{newJournalEntry(chosenID, "claim", agentID, "", time.Now().UTC())}, nil
+		return change.events, change.journal, nil
 	})
 	if err != nil {
 		return ClaimOutcome{}, classifyRepositoryError(err)

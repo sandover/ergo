@@ -15,46 +15,44 @@ import (
 
 func TestMutationSuppressesTrueNoop(t *testing.T) {
 	task := &Task{ID: "ABCDEF", State: stateDone, Title: "Task", Body: "Body"}
-	events, fields, err := buildMutationEvents(task.ID, task, taskMutation{State: stateDone, StateSet: true}, "", time.Now().UTC())
+	change, err := buildStateChange(task, stateDone, "", time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 0 || len(fields) != 0 {
-		t.Fatalf("true no-op produced events=%d fields=%v", len(events), fields)
+	if len(change.events) != 0 || len(change.fields) != 0 {
+		t.Fatalf("true no-op produced events=%d fields=%v", len(change.events), change.fields)
 	}
 }
 
-func TestMutationBuildsMixedAtomicBatch(t *testing.T) {
-	task := &Task{ID: "ABCDEF", State: stateDoing, ClaimedBy: "agent-1", Body: "old"}
-	mutation := taskMutation{State: stateBlocked, StateSet: true, Body: "new", BodySet: true}
-	events, fields, err := buildMutationEvents(task.ID, task, mutation, "", time.Now().UTC())
+func TestLifecycleBuildsAtomicStateBatch(t *testing.T) {
+	task := &Task{ID: "ABCDEF", State: stateDoing, ClaimedBy: "agent-1"}
+	graph := &Graph{Tasks: map[string]*Task{task.ID: task}}
+	change, err := lifecycleChange("block", stateBlocked, "", false)(graph, task, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := eventTypes(events); !equalStrings(got, []string{"body", "unclaim", "state"}) {
+	if got := eventTypes(change.events); !equalStrings(got, []string{"unclaim", "state"}) {
 		t.Fatalf("event types = %v", got)
 	}
-	if !equalStrings(sortedUniqueStrings(fields), []string{"body", "claim", "state"}) {
-		t.Fatalf("updated fields = %v", fields)
+	if !equalStrings(change.fields, []string{"claim", "state"}) {
+		t.Fatalf("updated fields = %v", change.fields)
 	}
 }
 
 func TestMutationAppendsBodyAgainstLockedTaskState(t *testing.T) {
 	task := &Task{ID: "ABCDEF", State: stateTodo, Title: "Task", Body: "existing"}
-	events, fields, err := buildMutationEvents(task.ID, task, taskMutation{
-		Kind: "body", Body: "+new", BodySet: true, BodyAppend: true,
-	}, "", time.Now().UTC())
+	change, err := bodyChange("+new", true)(nil, task, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := eventTypes(events); !equalStrings(got, []string{"body"}) {
+	if got := eventTypes(change.events); !equalStrings(got, []string{"body"}) {
 		t.Fatalf("event types = %v", got)
 	}
-	if !equalStrings(fields, []string{"body"}) {
-		t.Fatalf("updated fields = %v", fields)
+	if !equalStrings(change.fields, []string{"body"}) {
+		t.Fatalf("updated fields = %v", change.fields)
 	}
 	var update BodyUpdateEvent
-	if err := json.Unmarshal(events[0].Data, &update); err != nil {
+	if err := json.Unmarshal(change.events[0].Data, &update); err != nil {
 		t.Fatal(err)
 	}
 	if update.Body != "existing+new" {
@@ -64,15 +62,32 @@ func TestMutationAppendsBodyAgainstLockedTaskState(t *testing.T) {
 
 func TestMutationSameBlockedStateClearsLegacyClaim(t *testing.T) {
 	task := &Task{ID: "ABCDEF", State: stateBlocked, ClaimedBy: "legacy-agent"}
-	events, fields, err := buildMutationEvents(task.ID, task, taskMutation{State: stateBlocked, StateSet: true}, "", time.Now().UTC())
+	change, err := buildStateChange(task, stateBlocked, "", time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := eventTypes(events); !equalStrings(got, []string{"unclaim"}) {
+	if got := eventTypes(change.events); !equalStrings(got, []string{"unclaim"}) {
 		t.Fatalf("event types = %v", got)
 	}
-	if !equalStrings(fields, []string{"claim"}) {
-		t.Fatalf("updated fields = %v", fields)
+	if !equalStrings(change.fields, []string{"claim"}) {
+		t.Fatalf("updated fields = %v", change.fields)
+	}
+}
+
+func TestContentAndMoveKeepLegacyClaimValidation(t *testing.T) {
+	task := &Task{ID: "ABCDEF", State: stateBlocked, ClaimedBy: "legacy-agent", Title: "Task"}
+	graph := &Graph{Tasks: map[string]*Task{task.ID: task}}
+	now := time.Now().UTC()
+	for name, build := range map[string]taskChange{
+		"title": titleChange("New title"),
+		"body":  bodyChange("New body", false),
+		"move":  moveChange(""),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := build(graph, task, now); err == nil {
+				t.Fatal("expected legacy claim invariant error")
+			}
+		})
 	}
 }
 
@@ -98,10 +113,7 @@ func TestMutationValidationFailureDoesNotAppend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = applyTaskMutation(ergoDir, GlobalOptions{StartDir: repoDir}, "ABCDEF", taskMutation{
-		State: stateDone, StateSet: true, Body: "new", BodySet: true,
-		Title: " ", TitleSet: true,
-	}, "")
+	_, err = applyTaskChange(ergoDir, GlobalOptions{StartDir: repoDir}, "ABCDEF", false, titleChange(" "))
 	if err == nil {
 		t.Fatal("expected title validation error")
 	}

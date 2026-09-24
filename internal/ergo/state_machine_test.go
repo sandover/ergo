@@ -5,7 +5,10 @@
 // Invariants: doing is claimed and every other forward state is unclaimed.
 package ergo
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestLifecycleStatePostconditionsAcceptEveryReadableSource(t *testing.T) {
 	sources := []string{stateTodo, stateDoing, stateBlocked, stateDone, stateFailed, stateCanceled, stateError}
@@ -13,23 +16,22 @@ func TestLifecycleStatePostconditionsAcceptEveryReadableSource(t *testing.T) {
 	for _, source := range sources {
 		for _, target := range targets {
 			t.Run(source+"-to-"+target, func(t *testing.T) {
-				mutation := taskMutation{State: target, StateSet: true}
+				claim := ""
 				if target == stateDoing {
-					mutation.Claim = "agent-1"
-					mutation.ClaimSet = true
+					claim = "agent-1"
 				}
-				state, claim, err := mutationPostcondition(&Task{State: source, ClaimedBy: legacyClaim(source)}, mutation, "")
+				task := &Task{ID: "ABCDEF", State: source, ClaimedBy: legacyClaim(source)}
+				change, err := buildStateChange(task, target, claim, time.Now().UTC())
 				if err != nil {
 					t.Fatalf("unexpected postcondition error: %v", err)
 				}
-				if state != target {
-					t.Fatalf("state = %q, want %q", state, target)
+				stateChanged := source != target
+				claimChanged := task.ClaimedBy != claim
+				if containsString(change.fields, "state") != stateChanged {
+					t.Fatalf("state change = %v, want %v", change.fields, stateChanged)
 				}
-				if target == stateDoing && claim != "agent-1" {
-					t.Fatalf("doing claim = %q, want agent-1", claim)
-				}
-				if target != stateDoing && claim != "" {
-					t.Fatalf("non-doing claim = %q, want empty", claim)
+				if containsString(change.fields, "claim") != claimChanged {
+					t.Fatalf("claim change = %v, want %v", change.fields, claimChanged)
 				}
 			})
 		}

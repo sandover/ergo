@@ -44,18 +44,16 @@ func TestMessageReplayAndCompact(t *testing.T) {
 func TestMessageMutationValidation(t *testing.T) {
 	task := &Task{ID: "ABCDEF", State: stateDoing, ClaimedBy: "agent"}
 	now := time.Now().UTC()
-	events, fields, err := buildMutationEvents(task.ID, task, taskMutation{
-		State: stateDone, StateSet: true,
-		MessageKind: "done", MessageText: "Verified.", MessageSet: true,
-	}, "", now)
+	graph := &Graph{Tasks: map[string]*Task{task.ID: task}}
+	change, err := lifecycleChange("done", stateDone, "Verified.", true)(graph, task, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := eventTypes(events); !equalStrings(got, []string{"unclaim", "state"}) {
+	if got := eventTypes(change.events); !equalStrings(got, []string{"unclaim", "state"}) {
 		t.Fatalf("event types = %v", got)
 	}
-	if !equalStrings(sortedUniqueStrings(fields), []string{"claim", "state"}) {
-		t.Fatalf("updated fields = %v", fields)
+	if !equalStrings(change.fields, []string{"claim", "state", "message"}) {
+		t.Fatalf("updated fields = %v", change.fields)
 	}
 
 	if _, _, err := normalizeLifecycleMessages([]string{"  "}); err == nil {
@@ -86,9 +84,7 @@ func TestContainerRejectsMessageWithoutAppending(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = applyTaskMutation(ergoDir, GlobalOptions{StartDir: repoDir}, "PARENT", taskMutation{
-		MessageKind: "done", MessageText: "Nope", MessageSet: true,
-	}, "")
+	_, err = applyTaskChange(ergoDir, GlobalOptions{StartDir: repoDir}, "PARENT", true, lifecycleChange("done", stateDone, "Nope", true))
 	if err == nil {
 		t.Fatal("expected container message error")
 	}

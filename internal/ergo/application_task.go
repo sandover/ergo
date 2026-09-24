@@ -25,9 +25,7 @@ func (a *Application) UpdateTitle(request UpdateTitleRequest) (UpdateTitleOutcom
 	if err != nil {
 		return UpdateTitleOutcome{}, classifyRepositoryError(err)
 	}
-	outcome, err := applyTaskMutation(dir, a.repository, request.ID, taskMutation{
-		Kind: "title", Title: title, TitleSet: true,
-	}, "")
+	outcome, err := applyTaskChange(dir, a.repository, request.ID, false, titleChange(title))
 	if err != nil {
 		return UpdateTitleOutcome{}, classifyRepositoryError(err)
 	}
@@ -50,9 +48,7 @@ func (a *Application) UpdateBody(request UpdateBodyRequest) (UpdateBodyOutcome, 
 	if err != nil {
 		return UpdateBodyOutcome{}, classifyRepositoryError(err)
 	}
-	outcome, err := applyTaskMutation(dir, a.repository, request.ID, taskMutation{
-		Kind: "body", Body: string(request.Body), BodySet: true, BodyAppend: request.Append,
-	}, "")
+	outcome, err := applyTaskChange(dir, a.repository, request.ID, false, bodyChange(string(request.Body), request.Append))
 	if err != nil {
 		return UpdateBodyOutcome{}, classifyRepositoryError(err)
 	}
@@ -82,9 +78,7 @@ func (a *Application) Move(request MoveRequest) (MoveOutcome, error) {
 	if err != nil {
 		return MoveOutcome{}, classifyRepositoryError(err)
 	}
-	outcome, err := applyTaskMutation(dir, a.repository, request.ID, taskMutation{
-		Kind: "move", EpicID: request.DestinationID, EpicSet: true, ValidateMove: true,
-	}, "")
+	outcome, err := applyTaskChange(dir, a.repository, request.ID, false, moveChange(request.DestinationID))
 	if err != nil {
 		return MoveOutcome{}, classifyRepositoryError(err)
 	}

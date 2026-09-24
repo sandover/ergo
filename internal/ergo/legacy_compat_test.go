@@ -24,11 +24,11 @@ func TestLegacyLifecycleNormalizationIsExplicit(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			events, _, err := buildMutationEvents(test.task.ID, test.task, taskMutation{State: test.target, StateSet: true}, "", now)
+			change, err := buildStateChange(test.task, test.target, "", now)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := eventTypes(events); !equalStrings(got, test.wantTypes) {
+			if got := eventTypes(change.events); !equalStrings(got, test.wantTypes) {
 				t.Fatalf("event types = %v, want %v", got, test.wantTypes)
 			}
 		})

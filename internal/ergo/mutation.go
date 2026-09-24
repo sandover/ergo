@@ -1,39 +1,21 @@
-// Purpose: Build and apply atomic task mutations from command postconditions.
-// Exports: none; command handlers use the package-internal mutation request.
-// Role: Single write path for lifecycle, content, placement, and result changes.
-// Invariants: doing has one claim; every other forward state is unclaimed.
-// Invariants: validation completes before any event is appended under the lock.
-// Notes: Legacy error states may be read, but this writer never targets error.
+// Task changes build events against the locked graph before the repository writes.
+// Each command owns its validation; the repository remains the single write path.
 package ergo
 
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 )
 
-type taskMutation struct {
-	Kind          string
-	State         string
-	StateSet      bool
-	Claim         string
-	ClaimSet      bool
-	Title         string
-	TitleSet      bool
-	Body          string
-	BodySet       bool
-	BodyAppend    bool
-	EpicID        string
-	EpicSet       bool
-	ValidateMove  bool
-	MessageKind   string
-	MessageText   string
-	MessageSet    bool
-	AllowedStates []string
-	ClaimConflict bool
+type taskChangeResult struct {
+	events  []Event
+	fields  []string
+	journal []JournalEntry
 }
+
+type taskChange func(*Graph, *Task, time.Time) (taskChangeResult, error)
 
 type mutationOutcome struct {
 	Graph         *Graph
@@ -41,76 +23,38 @@ type mutationOutcome struct {
 	Journal       []JournalEntry
 }
 
-func applyTaskMutation(dir string, opts RepositoryOptions, id string, mutation taskMutation, agentID string) (mutationOutcome, error) {
+func applyTaskChange(dir string, opts RepositoryOptions, id string, withJournal bool, build taskChange) (mutationOutcome, error) {
 	var repository Repository
 	if err := repository.openAt(dir, opts, systemRepositoryIO()); err != nil {
 		return mutationOutcome{}, err
 	}
 	var outcome mutationOutcome
-
-	build := func(graph *Graph) ([]Event, []JournalEntry, error) {
+	buildLocked := func(graph *Graph) (taskChangeResult, error) {
 		if _, ok := graph.Tombstones[id]; ok {
-			return nil, nil, classified(ErrorNotFound, prunedErr(id))
+			return taskChangeResult{}, classified(ErrorNotFound, prunedErr(id))
 		}
 		task := graph.Tasks[id]
 		if task == nil {
-			return nil, nil, classified(ErrorNotFound, fmt.Errorf("unknown task id %s", id))
+			return taskChangeResult{}, classified(ErrorNotFound, fmt.Errorf("unknown task id %s", id))
 		}
-		if len(mutation.AllowedStates) > 0 && !containsString(mutation.AllowedStates, task.State) {
-			return nil, nil, classified(ErrorConflict, lifecycleStateError(mutation.Kind, id, task.State))
+		change, err := build(graph, task, time.Now().UTC())
+		if err == nil {
+			outcome.ChangedFields = change.fields
 		}
-		if mutation.ClaimConflict && task.ClaimedBy != "" && task.ClaimedBy != mutation.Claim {
-			return nil, nil, classified(ErrorConflict, fmt.Errorf("task %s is already claimed by %s", id, task.ClaimedBy))
-		}
-		if mutation.EpicSet && mutation.ValidateMove {
-			if err := validateMovePlacement(graph, task, mutation.EpicID); err != nil {
-				return nil, nil, err
-			}
-		}
-		if graph.IsEpic(task.ID) {
-			if mutation.ClaimSet {
-				return nil, nil, classified(ErrorConflict, errors.New("epics cannot be claimed"))
-			}
-			if mutation.StateSet {
-				return nil, nil, classified(ErrorConflict, errors.New("epics do not have state"))
-			}
-			if mutation.MessageSet {
-				return nil, nil, classified(ErrorConflict, errors.New("epics cannot have lifecycle messages"))
-			}
-		}
-		if mutation.Kind == "open" && task.State == stateTodo {
-			mutation.MessageSet = false
-			mutation.MessageText = ""
-		}
-
-		now := time.Now().UTC()
-		events, fields, err := buildMutationEvents(id, task, mutation, agentID, now)
-		if err != nil {
-			return nil, nil, err
-		}
-		outcome.ChangedFields = fields
-		var journal []JournalEntry
-		if isAutomaticJournalKind(mutation.Kind) && (len(events) > 0 || mutation.MessageSet) {
-			responsible := agentID
-			if responsible == "" {
-				responsible = task.ClaimedBy
-			}
-			journal = []JournalEntry{newJournalEntry(id, mutation.Kind, responsible, mutation.MessageText, now)}
-		}
-		if mutation.MessageSet {
-			outcome.ChangedFields = append(outcome.ChangedFields, "message")
-		}
-		return events, journal, nil
+		return change, err
 	}
 
 	var update UpdateOutcome
 	var err error
-	if isAutomaticJournalKind(mutation.Kind) || mutation.MessageSet {
-		update, err = repository.UpdateWithJournal(build)
+	if withJournal {
+		update, err = repository.UpdateWithJournal(func(graph *Graph) ([]Event, []JournalEntry, error) {
+			change, err := buildLocked(graph)
+			return change.events, change.journal, err
+		})
 	} else {
 		update, err = repository.Update(func(graph *Graph) ([]Event, error) {
-			events, _, err := build(graph)
-			return events, err
+			change, err := buildLocked(graph)
+			return change.events, err
 		})
 	}
 	if err == nil {
@@ -120,122 +64,171 @@ func applyTaskMutation(dir string, opts RepositoryOptions, id string, mutation t
 	return outcome, err
 }
 
-func buildMutationEvents(id string, task *Task, mutation taskMutation, agentID string, now time.Time) ([]Event, []string, error) {
-	var events []Event
-	var fields []string
-
-	if mutation.TitleSet {
-		mutation.Title = strings.TrimSpace(mutation.Title)
-		if mutation.Title == "" {
-			return nil, nil, errors.New("title cannot be empty")
+func titleChange(title string) taskChange {
+	return func(_ *Graph, task *Task, now time.Time) (taskChangeResult, error) {
+		cleanTitle := strings.TrimSpace(title)
+		if cleanTitle == "" {
+			return taskChangeResult{}, errors.New("title cannot be empty")
 		}
-	}
-	if mutation.TitleSet && mutation.Title != task.Title {
-		event, err := newEvent("title", now, TitleUpdateEvent{ID: id, Title: mutation.Title, TS: formatTime(now)})
+		if err := validateUnchangedTaskLifecycle(task); err != nil {
+			return taskChangeResult{}, err
+		}
+		if cleanTitle == task.Title {
+			return taskChangeResult{}, nil
+		}
+		event, err := newEvent("title", now, TitleUpdateEvent{ID: task.ID, Title: cleanTitle, TS: formatTime(now)})
 		if err != nil {
-			return nil, nil, err
+			return taskChangeResult{}, err
 		}
-		events = append(events, event)
-		fields = append(fields, "title")
+		return taskChangeResult{events: []Event{event}, fields: []string{"title"}}, nil
 	}
-	targetBody := mutation.Body
-	if mutation.BodyAppend {
-		targetBody = task.Body + mutation.Body
-	}
-	if mutation.BodySet && targetBody != task.Body {
-		event, err := newEvent("body", now, BodyUpdateEvent{ID: id, Body: targetBody, TS: formatTime(now)})
-		if err != nil {
-			return nil, nil, err
-		}
-		events = append(events, event)
-		fields = append(fields, "body")
-	}
-	if mutation.EpicSet && mutation.EpicID != task.EpicID {
-		event, err := newEvent("epic", now, EpicAssignEvent{ID: id, EpicID: mutation.EpicID, TS: formatTime(now)})
-		if err != nil {
-			return nil, nil, err
-		}
-		events = append(events, event)
-		fields = append(fields, "epic")
-	}
-
-	targetState, targetClaim, err := mutationPostcondition(task, mutation, agentID)
-	if err != nil {
-		return nil, nil, err
-	}
-	if targetClaim != task.ClaimedBy {
-		if targetClaim == "" {
-			event, err := newEvent("unclaim", now, UnclaimEvent{ID: id, TS: formatTime(now)})
-			if err != nil {
-				return nil, nil, err
-			}
-			events = append(events, event)
-		} else {
-			event, err := newEvent("claim", now, ClaimEvent{ID: id, AgentID: targetClaim, TS: formatTime(now)})
-			if err != nil {
-				return nil, nil, err
-			}
-			events = append(events, event)
-		}
-		fields = append(fields, "claim")
-	}
-	if targetState != task.State {
-		event, err := newEvent("state", now, StateEvent{ID: id, NewState: targetState, TS: formatTime(now)})
-		if err != nil {
-			return nil, nil, err
-		}
-		events = append(events, event)
-		fields = append(fields, "state")
-	}
-
-	return events, fields, nil
 }
 
-func mutationPostcondition(task *Task, mutation taskMutation, agentID string) (string, string, error) {
-	targetState := task.State
-	targetClaim := task.ClaimedBy
-
-	if mutation.StateSet {
-		if err := validateForwardState(mutation.State); err != nil {
-			return "", "", err
+func bodyChange(body string, appendBody bool) taskChange {
+	return func(_ *Graph, task *Task, now time.Time) (taskChangeResult, error) {
+		if err := validateUnchangedTaskLifecycle(task); err != nil {
+			return taskChangeResult{}, err
 		}
-		targetState = mutation.State
-		if targetState == stateDoing {
-			switch {
-			case mutation.ClaimSet && mutation.Claim != "":
-				targetClaim = mutation.Claim
-			case mutation.ClaimSet:
-				return "", "", errors.New("state=doing requires a claim")
-			case targetClaim != "":
-			case agentID != "":
-				targetClaim = agentID
-			default:
-				return "", "", errors.New("state=doing requires a claim; pass --agent")
-			}
-		} else {
-			if mutation.ClaimSet && mutation.Claim != "" {
-				return "", "", fmt.Errorf("state=%s must have no claim", targetState)
-			}
-			targetClaim = ""
+		targetBody := body
+		if appendBody {
+			targetBody = task.Body + body
 		}
-	} else if mutation.ClaimSet {
-		if mutation.Claim == "" {
-			targetClaim = ""
-			if targetState == stateDoing {
-				targetState = stateTodo
-			}
-		} else {
-			targetState = stateDoing
-			targetClaim = mutation.Claim
+		if targetBody == task.Body {
+			return taskChangeResult{}, nil
 		}
+		event, err := newEvent("body", now, BodyUpdateEvent{ID: task.ID, Body: targetBody, TS: formatTime(now)})
+		if err != nil {
+			return taskChangeResult{}, err
+		}
+		return taskChangeResult{events: []Event{event}, fields: []string{"body"}}, nil
 	}
+}
 
-	if targetState != stateError {
-		if err := validateClaimInvariant(targetState, targetClaim); err != nil {
-			return "", "", err
+func moveChange(destinationID string) taskChange {
+	return func(graph *Graph, task *Task, now time.Time) (taskChangeResult, error) {
+		if err := validateMovePlacement(graph, task, destinationID); err != nil {
+			return taskChangeResult{}, err
 		}
+		if err := validateUnchangedTaskLifecycle(task); err != nil {
+			return taskChangeResult{}, err
+		}
+		if destinationID == task.EpicID {
+			return taskChangeResult{}, nil
+		}
+		event, err := newEvent("epic", now, EpicAssignEvent{ID: task.ID, EpicID: destinationID, TS: formatTime(now)})
+		if err != nil {
+			return taskChangeResult{}, err
+		}
+		return taskChangeResult{events: []Event{event}, fields: []string{"epic"}}, nil
 	}
-	return targetState, targetClaim, nil
+}
+
+// Content and placement writes preserve the existing lifecycle and claim.
+// Released error records may retain a claim; other states must obey the current invariant.
+func validateUnchangedTaskLifecycle(task *Task) error {
+	if task.State == stateError {
+		return nil
+	}
+	return validateClaimInvariant(task.State, task.ClaimedBy)
+}
+
+func lifecycleChange(kind, targetState, message string, messageSet bool) taskChange {
+	return func(graph *Graph, task *Task, now time.Time) (taskChangeResult, error) {
+		if !lifecycleAllowsState(kind, task.State) {
+			return taskChangeResult{}, classified(ErrorConflict, lifecycleStateError(kind, task.ID, task.State))
+		}
+		if graph.IsEpic(task.ID) {
+			return taskChangeResult{}, classified(ErrorConflict, errors.New("epics do not have state"))
+		}
+		recordMessage := messageSet
+		recordedText := message
+		if kind == "open" && task.State == stateTodo {
+			recordMessage = false
+			recordedText = ""
+		}
+		change, err := buildStateChange(task, targetState, "", now)
+		if err != nil {
+			return taskChangeResult{}, err
+		}
+		if len(change.events) > 0 || recordMessage {
+			change.journal = []JournalEntry{newJournalEntry(task.ID, kind, task.ClaimedBy, recordedText, now)}
+		}
+		if recordMessage {
+			change.fields = append(change.fields, "message")
+		}
+		return change, nil
+	}
+}
+
+func lifecycleAllowsState(kind, state string) bool {
+	switch kind {
+	case "open":
+		return state == stateTodo || state == stateDraft || state == stateDoing || state == stateBlocked
+	case "done", "fail", "block":
+		return state == stateTodo || state == stateDoing || state == stateBlocked ||
+			state == stateDone || state == stateFailed || state == stateCanceled || state == stateError
+	case "cancel":
+		return state == stateTodo || state == stateDraft || state == stateDoing || state == stateBlocked ||
+			state == stateDone || state == stateFailed || state == stateCanceled || state == stateError
+	default:
+		return false
+	}
+}
+
+func claimChange(agentID string) taskChange {
+	return func(graph *Graph, task *Task, now time.Time) (taskChangeResult, error) {
+		if task.State != stateTodo && task.State != stateDoing && task.State != stateDone &&
+			task.State != stateFailed && task.State != stateCanceled && task.State != stateError {
+			return taskChangeResult{}, classified(ErrorConflict, lifecycleStateError("claim", task.ID, task.State))
+		}
+		if task.ClaimedBy != "" && task.ClaimedBy != agentID {
+			return taskChangeResult{}, classified(ErrorConflict, fmt.Errorf("task %s is already claimed by %s", task.ID, task.ClaimedBy))
+		}
+		if graph.IsEpic(task.ID) {
+			return taskChangeResult{}, classified(ErrorConflict, errors.New("epics cannot be claimed"))
+		}
+		change, err := buildStateChange(task, stateDoing, agentID, now)
+		if err != nil {
+			return taskChangeResult{}, err
+		}
+		if len(change.events) > 0 {
+			change.journal = []JournalEntry{newJournalEntry(task.ID, "claim", agentID, "", now)}
+		}
+		return change, nil
+	}
+}
+
+func buildStateChange(task *Task, targetState, targetClaim string, now time.Time) (taskChangeResult, error) {
+	if err := validateForwardState(targetState); err != nil {
+		return taskChangeResult{}, err
+	}
+	if err := validateClaimInvariant(targetState, targetClaim); err != nil {
+		return taskChangeResult{}, err
+	}
+	var change taskChangeResult
+	if targetClaim != task.ClaimedBy {
+		var event Event
+		var err error
+		if targetClaim == "" {
+			event, err = newEvent("unclaim", now, UnclaimEvent{ID: task.ID, TS: formatTime(now)})
+		} else {
+			event, err = newEvent("claim", now, ClaimEvent{ID: task.ID, AgentID: targetClaim, TS: formatTime(now)})
+		}
+		if err != nil {
+			return taskChangeResult{}, err
+		}
+		change.events = append(change.events, event)
+		change.fields = append(change.fields, "claim")
+	}
+	if targetState != task.State {
+		event, err := newEvent("state", now, StateEvent{ID: task.ID, NewState: targetState, TS: formatTime(now)})
+		if err != nil {
+			return taskChangeResult{}, err
+		}
+		change.events = append(change.events, event)
+		change.fields = append(change.fields, "state")
+	}
+	return change, nil
 }
 
 func validateForwardState(state string) error {
@@ -262,19 +255,6 @@ func lifecycleStateError(kind, id, state string) error {
 	default:
 		return fmt.Errorf("%s cannot apply to state=%s", kind, state)
 	}
-}
-
-func sortedUniqueStrings(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		seen[value] = struct{}{}
-	}
-	out := make([]string, 0, len(seen))
-	for value := range seen {
-		out = append(out, value)
-	}
-	sort.Strings(out)
-	return out
 }
 
 func containsString(values []string, target string) bool {

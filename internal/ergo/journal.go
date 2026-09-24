@@ -43,15 +43,6 @@ func newJournalEntry(taskID, kind, agent, text string, at time.Time) JournalEntr
 	return JournalEntry{Version: journalVersion, TaskID: taskID, Kind: kind, At: formatTime(at), Agent: agent, Text: text}
 }
 
-func isAutomaticJournalKind(kind string) bool {
-	switch kind {
-	case "claim", "done", "fail", "block", "cancel", "open", "release":
-		return true
-	default:
-		return false
-	}
-}
-
 func validateJournalEntry(entry JournalEntry) error {
 	if entry.Version != journalVersion {
 		return fmt.Errorf("unsupported journal version %d", entry.Version)
