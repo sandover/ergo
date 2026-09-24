@@ -69,7 +69,10 @@ The extension normally resolves `ergo` from the extension host's `PATH`. To use 
 
 Ergo Backlog supports Ergo 6.0.0 and later. The latest release is recommended.
 If Ergo is missing or incompatible, the extension reports the path it tried and
-explains how to install or select a compatible executable.
+explains how to install or select a compatible executable. On Windows, the
+recovery prompt can copy the WinGet command, open the release ZIPs, select an
+executable, or retry detection. Selecting an executable updates the existing
+**Ergo: Executable Path** setting; the extension never runs an installer.
 
 ## Read-only by design
 

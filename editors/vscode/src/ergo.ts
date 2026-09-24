@@ -1,9 +1,11 @@
 import { execFile } from "node:child_process";
 
 export const minimumErgoVersion = "6.0.0";
+export const ergoReleasesUrl = "https://github.com/sandover/ergo/releases/latest";
+export const windowsInstallCommand = "winget install --id Sandover.Ergo --exact";
 
 export class ErgoCommandError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly recoverable = false) {
     super(message);
     this.name = "ErgoCommandError";
   }
@@ -28,7 +30,10 @@ export async function runErgo(
           return;
         }
         const systemError = error as NodeJS.ErrnoException;
-        reject(new ErgoCommandError(commandErrorMessage(systemError, stderr)));
+        reject(new ErgoCommandError(
+          commandErrorMessage(systemError, stderr),
+          isExecutableAccessError(systemError),
+        ));
       },
     );
   });
@@ -80,7 +85,10 @@ async function checkCompatibility(executable: string): Promise<void> {
     output = await runErgo(["--version"], executable);
   } catch (error) {
     if (error instanceof ErgoCommandError) {
-      throw new ErgoCommandError(`${error.message} ${installationGuidance(executable)}`);
+      throw new ErgoCommandError(
+        `${error.message} ${installationGuidance(executable)}`,
+        true,
+      );
     }
     throw error;
   }
@@ -88,11 +96,13 @@ async function checkCompatibility(executable: string): Promise<void> {
   if (!version) {
     throw new ErgoCommandError(
       `The Ergo executable "${executable}" returned an unrecognized version. ${installationGuidance(executable)}`,
+      true,
     );
   }
   if (!isSupportedVersion(version)) {
     throw new ErgoCommandError(
       `Ergo ${version} is too old; Ergo Backlog requires ${minimumErgoVersion} or later. ${installationGuidance(executable)}`,
+      true,
     );
   }
 }
@@ -107,9 +117,23 @@ export function commandErrorMessage(error: NodeJS.ErrnoException, stderr: string
   return stderr.trim() || error.message;
 }
 
-function installationGuidance(executable: string): string {
-  const source = process.platform === "darwin"
-    ? "Install it with `brew install sandover/tap/ergo`"
-    : "Install it from https://github.com/sandover/ergo/releases";
-  return `${source}, or set ergo.executablePath to the intended executable (attempted "${executable}").`;
+export function isExecutableAccessError(error: NodeJS.ErrnoException): boolean {
+  return error.code === "ENOENT" || error.code === "EACCES";
+}
+
+export function installationGuidance(
+  executable: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  let source: string;
+  if (platform === "win32") {
+    source = `On Windows, install with \`${windowsInstallCommand}\`. If WinGet does not find Ergo, download the Windows ZIP from ${ergoReleasesUrl} and extract ergo.exe.`;
+  } else if (platform === "darwin") {
+    source = `On macOS, install with \`brew install sandover/tap/ergo\`, or download a macOS release from ${ergoReleasesUrl}.`;
+  } else if (platform === "linux") {
+    source = `On Linux, download the appropriate release archive from ${ergoReleasesUrl} and put ergo on PATH.`;
+  } else {
+    source = `Install Ergo from ${ergoReleasesUrl}.`;
+  }
+  return `${source} Select a compatible executable or update ergo.executablePath (attempted "${executable}").`;
 }

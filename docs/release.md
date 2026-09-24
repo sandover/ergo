@@ -128,3 +128,13 @@ The WinGet publisher skips its upload while `WINGET_TOKEN` is absent, so normal
 releases remain safe before the initial package setup. Once the initial package
 is accepted and the secret is present, future releases open the update pull
 request automatically.
+
+Use [`scripts/verify-winget.ps1`](../scripts/verify-winget.ps1) on Windows to
+check the exact public package. Running it without switches only checks catalog
+availability, the installed package version, and `ergo version` when available.
+Pass `-Install`, `-Upgrade`, or `-Uninstall` to perform one operation; each
+operation is separate and requires its own switch. Install and upgrade also
+require the intended version so a no-op cannot look successful. For example,
+run `.\scripts\verify-winget.ps1 -Install -ExpectedVersion 6.0.5` from the
+repository root. If Ergo is not visible to the current PowerShell process after
+installation, open a new shell and run `ergo version` to confirm PATH resolution.

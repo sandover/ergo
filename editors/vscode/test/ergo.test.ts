@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   commandErrorMessage,
+  installationGuidance,
+  isExecutableAccessError,
   isSupportedVersion,
   listArguments,
   parseErgoVersion,
+  windowsInstallCommand,
 } from "../src/ergo";
 
 test("passes workspace paths as one argument without shell interpolation", () => {
@@ -49,4 +52,29 @@ test("distinguishes a non-executable configured path", () => {
     commandErrorMessage(denied, ""),
     "The configured Ergo executable is not executable.",
   );
+});
+
+test("only missing or inaccessible executables trigger CLI recovery", () => {
+  const withCode = (code: string): NodeJS.ErrnoException =>
+    Object.assign(new Error(code), { code });
+  assert.equal(isExecutableAccessError(withCode("ENOENT")), true);
+  assert.equal(isExecutableAccessError(withCode("EACCES")), true);
+  assert.equal(isExecutableAccessError(withCode("EPERM")), false);
+  assert.equal(isExecutableAccessError(withCode("EIO")), false);
+});
+
+test("gives installation guidance for each supported desktop platform", () => {
+  const windows = installationGuidance("ergo", "win32");
+  assert.ok(windows.includes(windowsInstallCommand));
+  assert.ok(windows.includes("Windows ZIP"));
+  assert.ok(windows.includes("ergo.exe"));
+
+  const macOS = installationGuidance("ergo", "darwin");
+  assert.ok(macOS.includes("brew install sandover/tap/ergo"));
+  assert.ok(!macOS.includes("winget"));
+
+  const linux = installationGuidance("ergo", "linux");
+  assert.ok(linux.includes("appropriate release archive"));
+  assert.ok(linux.includes("put ergo on PATH"));
+  assert.ok(!linux.includes("winget"));
 });

@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { isCopyIdMessage, isErgoId } from "./copy_id";
 import { copyIdToClipboard } from "./copy_id_host";
 import { runCompatibleErgo } from "./ergo";
+import { runWithCliRecovery } from "./cli_recovery_vscode";
 import { ErgoLiveness } from "./liveness";
 import { RefreshGate } from "./refresh_gate";
 import {
@@ -36,13 +37,18 @@ export class ErgoPreviewProvider {
         .getConfiguration("ergo", vscode.Uri.file(folder))
         .get<string>("executablePath", "ergo");
       try {
-        await refreshGate.run(
-          () => runCompatibleErgo(showArguments(folder, id), executable),
-          (source) => {
-            panel.title = title;
-            panel.webview.html = renderPreview(source, title, id, kind, panel.webview.cspSource);
-          },
+        const result = await runWithCliRecovery(vscode.Uri.file(folder), executable, (selected) =>
+          refreshGate.run(
+            () => runCompatibleErgo(showArguments(folder, id), selected),
+            (source) => {
+              panel.title = title;
+              panel.webview.html = renderPreview(source, title, id, kind, panel.webview.cspSource);
+            },
+          ),
         );
+        if (result.status === "stopped") {
+          panel.webview.html = renderPreviewNotice(result.message, panel.webview.cspSource);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Ergo could not open this detail.";
         panel.webview.html = renderPreviewNotice(message, panel.webview.cspSource);

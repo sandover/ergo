@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { ErgoCommandError, listArguments, runCompatibleErgo } from "./ergo";
+import { runWithCliRecovery } from "./cli_recovery_vscode";
 import { ErgoListItem, parseListDocument, toPickerItems } from "./listing";
 import { ErgoLiveness } from "./liveness";
 import { ErgoPreviewProvider } from "./preview_provider";
@@ -7,7 +8,7 @@ import { RefreshGate } from "./refresh_gate";
 
 export async function showLiveBacklogPicker(
   folder: vscode.WorkspaceFolder,
-  executable: string,
+  initialExecutable: string,
   liveness: ErgoLiveness,
   previews: ErgoPreviewProvider,
 ): Promise<void> {
@@ -21,37 +22,53 @@ export async function showLiveBacklogPicker(
   let disposed = false;
   let hasItems = false;
   let lastRefreshError = "";
+  let executable = initialExecutable;
 
-  const refresh = async (): Promise<void> => {
+  const refresh = async (): Promise<boolean> => {
     const activeID = picker.activeItems[0]?.item?.id;
     picker.busy = true;
-    await gate.run(
-      async () => parseListDocument(
-        await runCompatibleErgo(listArguments(folder.uri.fsPath), executable),
+    const result = await runWithCliRecovery(folder.uri, executable, (selected) =>
+      gate.run(
+        async () => parseListDocument(
+          await runCompatibleErgo(listArguments(folder.uri.fsPath), selected),
+        ),
+        (document) => {
+          const items = quickPickItems(document);
+          hasItems = items.some((item) => item.item !== undefined);
+          picker.items = items;
+          if (activeID) {
+            const active = items.find((item) => item.item?.id === activeID);
+            picker.activeItems = active ? [active] : [];
+          }
+          picker.busy = false;
+          lastRefreshError = "";
+        },
       ),
-      (document) => {
-        const items = quickPickItems(document);
-        hasItems = items.some((item) => item.item !== undefined);
-        picker.items = items;
-        if (activeID) {
-          const active = items.find((item) => item.item?.id === activeID);
-          picker.activeItems = active ? [active] : [];
-        }
-        picker.busy = false;
-        lastRefreshError = "";
-      },
     );
+    if (result.status === "stopped") {
+      picker.busy = false;
+      lastRefreshError = result.message;
+      return false;
+    }
+    executable = result.executable;
+    return true;
   };
 
   const liveUpdates = liveness.subscribe(folder.uri.fsPath, () => {
-    void refresh().catch(async (error: unknown) => {
-      picker.busy = false;
-      const message = errorMessage(error, "Ergo could not refresh the backlog.");
-      if (message !== lastRefreshError) {
-        lastRefreshError = message;
-        await vscode.window.showErrorMessage(message);
-      }
-    });
+    void refresh()
+      .then((completed) => {
+        if (!completed) {
+          picker.hide();
+        }
+      })
+      .catch(async (error: unknown) => {
+        picker.busy = false;
+        const message = errorMessage(error, "Ergo could not refresh the backlog.");
+        if (message !== lastRefreshError) {
+          lastRefreshError = message;
+          await vscode.window.showErrorMessage(message);
+        }
+      });
   });
   const accepted = picker.onDidAccept(() => {
     const selected = picker.selectedItems[0] ?? picker.activeItems[0];
@@ -79,7 +96,11 @@ export async function showLiveBacklogPicker(
 
   picker.show();
   try {
-    await refresh();
+    const refreshed = await refresh();
+    if (!refreshed) {
+      picker.hide();
+      return;
+    }
     if (!disposed && !picker.busy && !hasItems) {
       picker.hide();
       await vscode.window.showInformationMessage("No Ergo tasks found.");

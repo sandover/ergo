@@ -4,6 +4,7 @@ import { listArguments, runCompatibleErgo } from "./ergo";
 import { renderBacklog } from "./backlog_html";
 import { copyIdToClipboard } from "./copy_id_host";
 import { isCopyIdMessage } from "./copy_id";
+import { runWithCliRecovery } from "./cli_recovery_vscode";
 import { parseListDocument } from "./listing";
 import { ErgoLiveness } from "./liveness";
 import { RefreshGate } from "./refresh_gate";
@@ -37,16 +38,21 @@ export class ErgoBacklogEditor implements vscode.CustomReadonlyEditorProvider {
         const executable = vscode.workspace
           .getConfiguration("ergo", document.uri)
           .get<string>("executablePath", "ergo");
-        await refreshGate.run(
-          async () => parseListDocument(
-            await runCompatibleErgo(listArguments(folder), executable),
+        const result = await runWithCliRecovery(document.uri, executable, (selected) =>
+          refreshGate.run(
+            async () => parseListDocument(
+              await runCompatibleErgo(listArguments(folder), selected),
+            ),
+            (listing) => {
+              const view = renderBacklog(listing, panel.webview.cspSource);
+              itemKinds = new Map(listing.items.map((item) => [item.id, item.kind]));
+              panel.webview.html = view.html;
+            },
           ),
-          (listing) => {
-            const view = renderBacklog(listing, panel.webview.cspSource);
-            itemKinds = new Map(listing.items.map((item) => [item.id, item.kind]));
-            panel.webview.html = view.html;
-          },
         );
+        if (result.status === "stopped") {
+          panel.webview.html = noticeHtml(result.message, panel.webview.cspSource);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Ergo could not open this backlog.";
         panel.webview.html = noticeHtml(message, panel.webview.cspSource);
