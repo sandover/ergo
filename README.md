@@ -11,7 +11,7 @@ The `ergo` CLI is a way for coding agents to keep implementation plans, progress
 
 Have your agent write out its plans using `ergo` instead of Markdown files or an internal plan tool. You can opt to track the backlog in git or keep it local.
 
-- Tasks have state (like "todo" or "doing" or "done")
+- Tasks have a state, such as draft, todo, doing, or done.
 - Tasks can depend on one another, so the “Build the signup endpoint” task can wait for the “Create the database tables” task.
 - Tasks can be grouped into epics.
 
@@ -27,18 +27,12 @@ macOS with Homebrew:
 brew install sandover/tap/ergo
 ```
 
-Windows with WinGet:
-
-```powershell
-winget install --id Sandover.Ergo --exact
-```
-
-If WinGet does not find Ergo yet, download the Windows archive from the
+On Windows, download the Windows ZIP for your architecture from the
 [latest GitHub release](https://github.com/sandover/ergo/releases/latest),
 extract `ergo.exe`, and add its directory to your user `PATH`. Open a new
 terminal after changing `PATH`.
 
-Any supported platform with Go:
+macOS, Linux, or Windows with Go 1.24 or later:
 
 ```sh
 go install github.com/sandover/ergo/v6/cmd/ergo@latest
@@ -74,14 +68,22 @@ In any new session, just tell your agent to read the Ergo backlog and continue t
 ## View in VS Code
 
 Install the [Ergo Backlog](https://marketplace.visualstudio.com/items?itemName=sandover.ergo-backlog)
-extension and open `.ergo/backlog.jsonl` to browse tasks and their details.
+extension alongside the Ergo CLI, then open `.ergo/backlog.jsonl` to browse
+tasks and their details. Search by title or ID, filter for ready work, and
+click a task ID to read its details. The extension is read-only; agents change
+the backlog through the CLI.
+
+You can also run **Ergo: Backlog** from the Command Palette to find a task.
+
+For remote, WSL, SSH, or development-container windows, install Ergo in that
+environment. See the [extension guide](editors/vscode/README.md) for setup.
 
 ![An Ergo backlog in VS Code](docs/img/ergo-vscode-backlog.png)
 
 ## Your backlog stays with your code
 
 Ergo is a small command-line tool with no database or background service to
-manage. It stores the backlog in `.ergo/backlog.jsonl` and task history,
+manage. It stores the backlog in `.ergo/backlog.jsonl` and work history,
 including notes and results, in `.ergo/journal.jsonl`. Track these plain-text
 files in Git, or add them to `.gitignore` for local use.
 
