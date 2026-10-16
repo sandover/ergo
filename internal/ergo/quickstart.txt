@@ -340,3 +340,8 @@ returns a coherent snapshot. This includes a prune preview.
 Writes use the lock exclusively; confirmed prune is a write. Claim selection
 and mutation happen under one exclusive lock, so concurrent agents cannot claim
 the same task. Commands retain the bounded wait for an incompatible lock.
+
+With git worktrees, a best practice is to let a supervisor agent manage the
+backlog, in the main checkout. The supervisor can claim and assign the tasks,
+review the work, and mark tasks done. Subagents in worktrees then don't need
+to mutate ergo state. If copies do diverge, merges are usually easy.
