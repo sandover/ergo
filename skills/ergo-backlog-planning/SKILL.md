@@ -1,71 +1,21 @@
 ---
 name: ergo-backlog-planning
 description: >-
-  Shape multi-step work into Ergo tasks with a clear definition of done and a practical way to check it. Use when planning software, documentation, or other project work in an Ergo backlog. Skip small tasks and routine housekeeping.
+  Shape a workstream into tasks, organize tasks into epics, express dependencies among tasks. Use for planning medium and large workstreams; skip for small tasks and routine housekeeping.
 ---
 
 # Ergo Backlog Planning
 
-Use Ergo to write tasks that another agent can pick up later. Each task should
-say what outcome to produce, what constraints matter, and how the agent will
-know it has finished.
+Use Ergo to write tasks (work tickets) to be implemented by you or another agent. Each task should include a clear unambiguous goal, essential context and rationale, links to any necessary resources or background, a crisp definition of done (often a list), and, where applicable, suggestions for how to validate the work.
 
-If you do not know the CLI, read `ergo --help` and `ergo quickstart`. Use
-`ergo where` to find the backlog. If none exists, confirm the project root
-before running `ergo init`.
+If you do not know the ergo CLI already, read `ergo --help` and `ergo quickstart`. Use `ergo where` to confirm the backlog's location before writing tasks.
 
-## Shape the tasks
-
-- Split work where an agent can produce and check a useful outcome. Keep small
-  related steps together. Use an epic only when it helps organize related tasks.
-- Put the facts and constraints an implementer needs in the task body. A child
-  task must make sense when claimed on its own; do not rely on the epic body for
-  instructions needed to execute it.
-- State what counts as done in observable terms. Include an important edge case
-  only when it changes that decision. Leave routine implementation choices to
-  the agent.
-- Give each task a way to decide whether it is done. Prefer a focused check the
-  agent can perform, such as a relevant test or inspection of the result. Name
-  the expected outcome. Do not add checks that cannot change the decision.
-- Choose human validation deliberately when the agent cannot judge the result.
-  Say what the human will review and what decision is needed. Do not substitute
-  an unrelated automated check or prescribe detailed review steps without a
-  reason.
-
-A short task body often needs only this shape. Add context when it helps:
-
-```md
-## Outcome
-<What this task must deliver>
-
-## Done when
-<Observable result or acceptance criteria>
-
-## Check
-<Focused agent check and expected result, or the human review needed>
-```
-
-The check may be an inspection, a command, or a human decision. It need not be a
-test suite. If human approval is part of the definition of done, keep that
-decision visible rather than marking the task complete on implementation alone.
-
-## Connect the work
-
-- Add a dependency only when one task needs another task's result. Leave
-  independent tasks free to run in parallel.
-- Assign a combined check to one task only when task-level checks cannot
-  establish the shared outcome. Do not repeat broad validation across tasks.
-  Make a task that checks combined behavior depend on every task whose output
-  it checks.
-- Resolve choices that affect scope or acceptance before dependent work starts.
-  Use reasonable assumptions for routine details; ask the user about choices
-  that materially affect scope, risk, or acceptance.
-
-When graph construction takes several commands, create tasks with `--draft`.
-Add children and dependencies, then `ergo open <id>` for each leaf when the
-plan is ready to claim.
-
-Review the backlog as an implementing agent would: can each task be started,
-finished, and checked without guessing? Fix unclear tasks or unnecessary
-dependencies. Check that the tasks together cover the requested outcome.
-Summarize the plan and any human decisions it still needs.
+- Use reasonable assumptions for routine details. Ask the user when available context cannot resolve a choice that materially changes scope, risk, or what counts as done.
+- Split work where an agent can deliver a useful outcome; keep small related steps together.
+- Use epics to help organize related tasks.
+- Tasks should make sense on their own, but the epic body may provide larger context.
+- Assume the implementer is as intelligent as you are, but they lack your conversational context. You don't need to be overly verbose or prescriptive; let the implementer implement.
+- Sometimes only a person can judge whether a task is done. If so, say what the human will review and what decision is needed.
+- Add a dependency when one task needs another task's result. Leave independent tasks free to run in parallel.
+- Keep validation as cheap as possible, checking only what is necessary to establish that the task is done.
+- Reuse check results that still apply to the work. Add a combined check only when individual task checks cannot establish the shared outcome.
