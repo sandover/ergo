@@ -1,10 +1,5 @@
 package ergo
 
-import (
-	"os"
-	"path/filepath"
-)
-
 type CompactOutcomeResult = CompactOutcome
 
 func (a *Application) Compact() (CompactOutcomeResult, error) {
@@ -19,22 +14,11 @@ func (a *Application) Compact() (CompactOutcomeResult, error) {
 type WhereOutcome struct{ Path string }
 
 func (a *Application) Where() (WhereOutcome, error) {
-	start, err := os.Getwd()
+	selected, err := resolveStorage(a.repository, false)
 	if err != nil {
 		return WhereOutcome{}, classifyRepositoryError(err)
 	}
-	if a.repository.StartDir != "" {
-		start = a.repository.StartDir
-	}
-	dir, err := resolveErgoDir(start)
-	if err != nil {
-		return WhereOutcome{}, classifyRepositoryError(err)
-	}
-	path, err := filepath.Abs(dir)
-	if err != nil {
-		return WhereOutcome{}, classifyRepositoryError(err)
-	}
-	return WhereOutcome{Path: path}, nil
+	return WhereOutcome{Path: selected.Dir}, nil
 }
 
 type PruneRequest struct{ Confirm bool }

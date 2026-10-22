@@ -74,6 +74,18 @@ recovery prompt can copy the WinGet command, open the release ZIPs, select an
 executable, or retry detection. Selecting an executable updates the existing
 **Ergo: Executable Path** setting; the extension never runs an installer.
 
+## Personal and external backlogs
+
+The CLI supports personal backlogs and external storage through global project
+mappings; see `ergo quickstart`. The extension invokes the CLI with the source
+workspace path, so those mappings also select the backlog for picker and detail
+commands. It does not provide per-command `--user` or `--data-dir` controls.
+Its file watchers, status-bar discovery, and JSONL custom-editor discovery still
+assume source-local `.ergo` files: external changes may not refresh automatically,
+and external-only backlogs do not appear in the status bar. Use the CLI for full
+selection and inspection support; do not create a second local backlog merely
+to satisfy editor discovery.
+
 ## Read-only by design
 
 Ergo Backlog asks the installed Ergo CLI to interpret the repository's event log. It does not parse or write `.ergo/backlog.jsonl`, mutate tasks, invoke commands through a shell, add telemetry, or send backlog content to an Ergo service.

@@ -3,7 +3,6 @@ package ergo
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -11,17 +10,18 @@ type InitializeRequest struct{ Dir string }
 type InitializeResult = InitializeOutcome
 
 func (a *Application) Initialize(request InitializeRequest) (InitializeResult, error) {
-	dir := request.Dir
-	if dir == "" {
-		dir = a.repository.StartDir
-		if filepath.Base(filepath.Clean(dir)) == dataDirName {
-			dir = filepath.Dir(filepath.Clean(dir))
-		}
-		if dir == "" {
-			dir = "."
-		}
+	options := a.repository
+	if request.Dir != "" {
+		options.StartDir = request.Dir
 	}
-	outcome, err := InitializeRepository(dir)
+	selected, err := resolveStorage(options, true)
+	if err != nil {
+		return InitializeResult{}, classifyRepositoryError(err)
+	}
+	outcome, err := initializeStorage(selected.Dir)
+	if err == nil && (selected.Source != "repository" || selected.Owner != "shared") {
+		err = ensureIgnoreRules(selected.Dir, "# Ergo local runtime files", "/lock", cacheIgnoreFileRule, cacheIgnoreTempRule)
+	}
 	return outcome, classifyRepositoryError(err)
 }
 

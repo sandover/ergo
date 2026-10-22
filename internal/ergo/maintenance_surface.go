@@ -290,6 +290,9 @@ func RenderInfo(w io.Writer, outcome InfoOutcome) {
 	fmt.Fprintf(w, "Executable: %s\n", outcome.Executable)
 	fmt.Fprintf(w, "Version: %s\n", outcome.Version)
 	fmt.Fprintf(w, "Project: %s\n", outcome.Project)
+	fmt.Fprintf(w, "Owner: %s\n", outcome.Owner)
+	fmt.Fprintf(w, "Storage: %s\n", outcome.Storage)
+	fmt.Fprintf(w, "Selection: %s\n", outcome.Source)
 	fmt.Fprintf(w, "Backlog: %s\n", outcome.Backlog)
 	fmt.Fprintf(w, "Journal: %s\n", outcome.Journal)
 }

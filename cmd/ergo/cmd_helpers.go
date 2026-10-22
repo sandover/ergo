@@ -27,7 +27,7 @@ func writeCLIError(w io.Writer, err error, args []string) {
 	} else if errors.Is(err, ergo.ErrNoErgoDir) {
 		fmt.Fprintln(w, "hint: run `ergo init` or target an existing graph with `ergo --dir <path>`")
 	} else if isPermissionError(err) {
-		fmt.Fprintln(w, "hint: permission error accessing .ergo/; check repo permissions (ergo needs read/write)")
+		fmt.Fprintln(w, "hint: permission error accessing the selected backlog directory; check permissions (ergo needs read/write)")
 	} else if strings.Contains(err.Error(), ".ergo") && strings.Contains(err.Error(), "exists but is not a directory") {
 		fmt.Fprintln(w, "hint: .ergo must be a directory; delete/rename the file and run `ergo init`")
 	} else if errors.Is(err, ergo.ErrLockBusy) {
@@ -51,7 +51,7 @@ func writeApplicationErrorHint(w io.Writer, err error, args []string) bool {
 		fmt.Fprintln(w, "hint: another ergo process is still running; try again in a moment")
 	case ergo.ErrorInternal:
 		if isPermissionError(err) {
-			fmt.Fprintln(w, "hint: permission error accessing .ergo/; check repo permissions (ergo needs read/write)")
+			fmt.Fprintln(w, "hint: permission error accessing the selected backlog directory; check permissions (ergo needs read/write)")
 		}
 	}
 	return true
@@ -64,7 +64,7 @@ func helpInvocation(args []string) string {
 			skip = false
 			continue
 		}
-		if arg == "--dir" || arg == "--agent" {
+		if arg == "--dir" || arg == "--agent" || arg == "--color" || arg == "--data-dir" || arg == "--user" {
 			skip = true
 			continue
 		}

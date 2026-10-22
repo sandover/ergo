@@ -27,8 +27,14 @@ macOS with Homebrew:
 brew install sandover/tap/ergo
 ```
 
-On Windows, download the Windows ZIP for your architecture from the
-[latest GitHub release](https://github.com/sandover/ergo/releases/latest),
+On Windows:
+
+```powershell
+winget install --id Sandover.Ergo --exact
+```
+
+If WinGet does not find Ergo yet, download the Windows ZIP for your architecture
+from the [latest GitHub release](https://github.com/sandover/ergo/releases/latest),
 extract `ergo.exe`, and add its directory to your user `PATH`. Open a new
 terminal after changing `PATH`.
 
@@ -80,12 +86,18 @@ environment. See the [extension guide](editors/vscode/README.md) for setup.
 
 ![An Ergo backlog in VS Code](docs/img/ergo-vscode-backlog.png)
 
-## Your backlog stays with your code
+## Your backlog, wherever you want it
 
 Ergo is a small command-line tool with no database or background service to
-manage. It stores the backlog in `.ergo/backlog.jsonl` and work history,
-including notes and results, in `.ergo/journal.jsonl`. Track these plain-text
-files in Git, or add them to `.gitignore` for local use.
+manage. By default it stores the backlog in `.ergo/backlog.jsonl` and work
+history, including notes and results, in `.ergo/journal.jsonl`. Track these
+plain-text files in Git, or add them to `.gitignore` for local use.
+
+Use `--user <id>` for an independent personal backlog, `--data-dir <path>` for
+an external project storage base, or global project mappings to avoid repeating
+flags. You can version that directory separately from your source code. Ergo
+only reads and writes backlog files; Git operations remain yours. Run
+`ergo quickstart` for selection, configuration, and migration guidance.
 
 ## Learn more
 

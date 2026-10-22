@@ -72,11 +72,15 @@ func publishCacheFile(path string, data []byte) error {
 }
 
 func ensureCacheIgnored(dir string) error {
+	return ensureIgnoreRules(dir, cacheIgnoreComment, cacheIgnoreFileRule, cacheIgnoreTempRule)
+}
+
+func ensureIgnoreRules(dir, comment string, rules ...string) error {
 	path := filepath.Join(dir, ".gitignore")
 	info, err := os.Lstat(path)
 	switch {
 	case err == nil && !info.Mode().IsRegular():
-		return errors.New(".ergo/.gitignore is not a regular file")
+		return errors.New(path + " is not a regular file")
 	case err != nil && !errors.Is(err, os.ErrNotExist):
 		return err
 	}
@@ -84,25 +88,25 @@ func ensureCacheIgnored(dir string) error {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	hasFile := hasIgnoreLine(existing, cacheIgnoreFileRule)
-	hasTemp := hasIgnoreLine(existing, cacheIgnoreTempRule)
-	if hasFile && hasTemp {
+	var missing []string
+	for _, rule := range rules {
+		if !hasIgnoreLine(existing, rule) {
+			missing = append(missing, rule)
+		}
+	}
+	if len(missing) == 0 {
 		return nil
 	}
 	var addition bytes.Buffer
 	if len(existing) > 0 && existing[len(existing)-1] != '\n' {
 		addition.WriteByte('\n')
 	}
-	if !bytes.Contains(existing, []byte(cacheIgnoreComment)) {
-		addition.WriteString(cacheIgnoreComment)
+	if !bytes.Contains(existing, []byte(comment)) {
+		addition.WriteString(comment)
 		addition.WriteByte('\n')
 	}
-	if !hasFile {
-		addition.WriteString(cacheIgnoreFileRule)
-		addition.WriteByte('\n')
-	}
-	if !hasTemp {
-		addition.WriteString(cacheIgnoreTempRule)
+	for _, rule := range missing {
+		addition.WriteString(rule)
 		addition.WriteByte('\n')
 	}
 	flags := os.O_CREATE | os.O_WRONLY | os.O_APPEND

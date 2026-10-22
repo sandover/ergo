@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Personal backlogs with `--user <id>`, external project storage with
+  `--data-dir <path>`, and platform-conventional global project mappings.
+  `--shared` overrides a configured personal default. Existing unconfigured
+  repository-local storage remains unchanged.
+- `info` reports the selected owner, storage directory, and selection source.
+  Result evidence remains relative to the source project even when backlog
+  data is elsewhere. See `ergo quickstart` for configuration and migration;
+  Ergo does not move existing data or perform Git synchronization.
+
 ## [6.0.5] - 2026-09-23
 
 ### Added

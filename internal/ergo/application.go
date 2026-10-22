@@ -3,7 +3,6 @@ package ergo
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -23,7 +22,20 @@ func NewApplication(options RepositoryOptions) *Application {
 func (a *Application) WithRepository(options RepositoryOptions) *Application {
 	application := *a
 	if options.StartDir != "" {
-		application.repository = options
+		application.repository.StartDir = options.StartDir
+	}
+	if options.DataDir != "" {
+		application.repository.DataDir = options.DataDir
+	}
+	if options.User != "" {
+		application.repository.User = options.User
+		application.repository.Shared = false
+	}
+	if options.Shared {
+		application.repository.Shared = true
+		if options.User == "" {
+			application.repository.User = ""
+		}
 	}
 	return &application
 }
@@ -266,10 +278,11 @@ func (a *Application) Claim(request ClaimRequest) (ClaimOutcome, error) {
 	if agentID == "" {
 		return ClaimOutcome{}, classified(ErrorUsage, errors.New("claim requires --agent"))
 	}
-	dir, err := ergoDir(a.repository)
-	if err != nil {
+	var repository Repository
+	if err := repository.Open(a.repository); err != nil {
 		return ClaimOutcome{}, classifyRepositoryError(err)
 	}
+	dir := repository.Dir()
 	id := strings.TrimSpace(request.ID)
 	if id != "" {
 		mutated, err := applyTaskChange(dir, a.repository, id, true, claimChange(agentID))
@@ -277,13 +290,9 @@ func (a *Application) Claim(request ClaimRequest) (ClaimOutcome, error) {
 			return ClaimOutcome{}, classifyRepositoryError(err)
 		}
 		task := mutated.Graph.Tasks[id]
-		return ClaimOutcome{Graph: mutated.Graph, Task: task, ProjectDir: filepath.Dir(dir), Journal: mutated.Journal}, nil
+		return ClaimOutcome{Graph: mutated.Graph, Task: task, ProjectDir: repository.ProjectDir(), Journal: mutated.Journal}, nil
 	}
 
-	var repository Repository
-	if err := repository.openAt(dir, a.repository, systemRepositoryIO()); err != nil {
-		return ClaimOutcome{}, classifyRepositoryError(err)
-	}
 	var chosenID string
 	update, err := repository.UpdateWithJournal(func(graph *Graph) ([]Event, []JournalEntry, error) {
 		ready := readyTasks(graph)

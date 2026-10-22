@@ -15,12 +15,19 @@ type InfoOutcome struct {
 	Project    string
 	Backlog    string
 	Journal    string
+	Owner      string
+	Storage    string
+	Source     string
 }
 
 func (a *Application) Info(request InfoRequest) (InfoOutcome, error) {
-	where, err := a.Where()
+	selected, err := resolveStorage(a.repository, false)
 	if err != nil {
-		return InfoOutcome{}, err
+		return InfoOutcome{}, classifyRepositoryError(err)
+	}
+	backlog, err := selectEventsPath(selected.Dir)
+	if err != nil {
+		return InfoOutcome{}, classifyRepositoryError(err)
 	}
 	executable, err := filepath.Abs(request.Executable)
 	if err != nil {
@@ -32,8 +39,11 @@ func (a *Application) Info(request InfoRequest) (InfoOutcome, error) {
 	return InfoOutcome{
 		Executable: executable,
 		Version:    request.Version,
-		Project:    filepath.Dir(where.Path),
-		Backlog:    filepath.Join(where.Path, backlogFileName),
-		Journal:    filepath.Join(where.Path, journalFileName),
+		Project:    selected.Project,
+		Backlog:    backlog,
+		Journal:    filepath.Join(selected.Dir, journalFileName),
+		Owner:      selected.Owner,
+		Storage:    selected.Dir,
+		Source:     selected.Source,
 	}, nil
 }
