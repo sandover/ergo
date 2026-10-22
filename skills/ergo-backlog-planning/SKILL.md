@@ -11,8 +11,10 @@ say what outcome to produce, what constraints matter, and how the agent will
 know it has finished.
 
 If you do not know the CLI, read `ergo --help` and `ergo quickstart`. Use
-`ergo where` to find the backlog. If none exists, confirm the project root
-before running `ergo init`.
+`ergo where` to find the backlog and `ergo info` to confirm the source project
+and selected owner. Preserve the user's `--user`, `--shared`, and `--data-dir`
+selection throughout the workflow; do not fall back to another backlog. If none
+exists, confirm the project root and storage selection before running `ergo init`.
 
 ## Shape the tasks
 

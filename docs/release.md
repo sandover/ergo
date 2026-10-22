@@ -15,6 +15,10 @@ in `ergo --help`, `ergo quickstart`, and `docs/spec.md`.
   then include useful examples, behavioral boundaries, compatibility, and the
   upgrade path. A generated commit list is never acceptable as final notes.
 - Confirm help, quickstart, spec, architecture, and shipped skill agree.
+- For personal/external storage releases, check default discovery compatibility,
+  platform config/data paths, owner isolation, and source-relative result
+  evidence. Release notes must point to quickstart migration guidance and make
+  clear that Ergo does not synchronize Git or move existing data automatically.
 - Choose the release version and run the version-aware preflight before creating
   the tag:
 

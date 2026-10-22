@@ -19,6 +19,7 @@ import (
 // repository lock before reading the selected log.
 type Repository struct {
 	dir         string
+	projectDir  string
 	eventsPath  string
 	journalPath string
 	lockPath    string
@@ -44,7 +45,10 @@ type InitializeOutcome struct {
 }
 
 func InitializeRepository(dir string) (InitializeOutcome, error) {
-	target := filepath.Join(dir, dataDirName)
+	return initializeStorage(filepath.Join(dir, dataDirName))
+}
+
+func initializeStorage(target string) (InitializeOutcome, error) {
 	_, dirErr := os.Stat(target)
 	eventsPath, err := selectEventsPath(target)
 	if err != nil {
@@ -111,11 +115,15 @@ func systemRepositoryIO() repositoryIO {
 
 // Open discovers and opens the Ergo repository selected by opts.
 func (r *Repository) Open(opts GlobalOptions) error {
-	dir, err := ergoDir(opts)
+	selected, err := resolveStorage(opts, false)
 	if err != nil {
 		return err
 	}
-	return r.openAt(dir, opts, systemRepositoryIO())
+	if err := r.openAt(selected.Dir, opts, systemRepositoryIO()); err != nil {
+		return err
+	}
+	r.projectDir = selected.Project
+	return nil
 }
 
 func (r *Repository) openAt(dir string, opts GlobalOptions, io repositoryIO) error {
@@ -127,6 +135,7 @@ func (r *Repository) openAt(dir string, opts GlobalOptions, io repositoryIO) err
 		return errors.New("repository I/O is incomplete")
 	}
 	r.dir = dir
+	r.projectDir = filepath.Dir(dir)
 	r.eventsPath = eventsPath
 	r.journalPath = journalPathForDir(dir)
 	r.lockPath = filepath.Join(dir, "lock")
@@ -331,7 +340,7 @@ func (r *Repository) Compact() (CompactOutcome, error) {
 }
 
 func (r *Repository) Dir() string        { return r.dir }
-func (r *Repository) ProjectDir() string { return filepath.Dir(r.dir) }
+func (r *Repository) ProjectDir() string { return r.projectDir }
 
 func (r *Repository) load() (*Graph, error) {
 	graph, _, err := r.loadWithRead()

@@ -84,6 +84,9 @@ func validateDepSelf(from, to string) error {
 // RepositoryOptions configures repository discovery and locking.
 type RepositoryOptions struct {
 	StartDir string
+	DataDir  string
+	User     string
+	Shared   bool
 }
 
 // GlobalOptions remains as a compatibility alias while command adapters move

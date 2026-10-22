@@ -1,7 +1,7 @@
 {{BOLD}}ergo{{RESET}} — a local, dependency-aware backlog for coding agents.
 
-Ergo keeps a backlog in the repository so agents and humans can share it across
-sessions. Tasks are stateful and can depend on one another. A task is ready
+Ergo keeps a shared or personal backlog across sessions, in the repository or
+an external data directory. Tasks are stateful and can depend on one another. A task is ready
 when its dependencies are complete. A task with children is an epic; the epic
 completes when its children finish.
 
@@ -40,7 +40,7 @@ attempt finished without satisfying the objective.
   move <id> --root                            move a task to the root
   sequence <A> <B> [<C>...]                   require A before B before C
   unsequence <A> <B> [<C>...]                 remove that order
-  where                                       print the active .ergo path
+  where                                       print the active backlog directory
   info                                        print executable and active backlog information
   prune [--yes]                               preview or apply pruning
   compact                                     compact the event log
@@ -48,7 +48,10 @@ attempt finished without satisfying the objective.
   version                                     print the build version
 
 {{HEADER}}GLOBAL FLAGS{{RESET}}
-  --dir <path>        select a project path or .ergo directory
+  --dir <path>        select a source project path or .ergo directory
+  --data-dir <path>   select a project backlog storage base
+  --user <id>         select an independent personal backlog
+  --shared            override a configured personal default
   --color <mode>      color output: auto, always, or never (default auto)
   -h, --help          print help
   -V, --version       print the build version

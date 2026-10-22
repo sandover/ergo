@@ -6,7 +6,8 @@ preserve. `ergo --help` and `ergo quickstart` are the user manual.
 
 ## System shape
 
-Ergo is a repository-local, dependency-aware backlog. It uses JSONL files and
+Ergo is a local, dependency-aware backlog with shared or personal storage.
+It uses JSONL files and
 an advisory lock instead of a database or daemon. Each command discovers a
 repository, loads a task graph, performs one use case, and writes readable
 output.
@@ -32,8 +33,19 @@ into the public readable output contract.
 
 ## Repository discovery
 
-Ergo searches the selected directory and its ancestors for `.ergo/`. Without
-`--dir`, the selected directory is the process working directory.
+`storage_selection.go` resolves a source project independently from its selected
+backlog directory. It loads platform global configuration, matches canonical
+project roots, applies CLI owner/storage overrides, and returns the source root,
+owner, storage directory, and provenance. The resolver never creates storage.
+Initialization and command discovery share it; only initialization permits a
+missing selected backlog.
+
+Unconfigured shared discovery searches the selected directory and its ancestors
+for `.ergo/`. Without `--dir`, the selected directory is the process working
+directory. Personal/external selection can identify an otherwise uninitialized
+source project through read-only Git worktree discovery or an explicit root.
+The user-facing precedence and platform path contract live in the quickstart.
+No Git synchronization service or background worker exists.
 
 An initialized repository contains one shared journal, a lock, and exactly one
 supported backlog log:
@@ -51,7 +63,10 @@ exists, Ergo uses it. If more than one exists, opening fails and asks the user
 to reconcile them. Ergo does not choose one by precedence, rename a selected
 log, or create `backlog.jsonl` beside an existing supported log.
 
-An opened `Repository` selects its backlog, journal, and lock paths once. Its
+An opened `Repository` selects its backlog, journal, and lock paths once and
+retains the independent source-project path for rendering and result evidence.
+Personal storage uses separate directories, so log selection, caches, and locks
+are naturally scoped to the selected backlog without changing record formats. Its
 view, update, prune, and compact operations provide the persistence boundary
 used by the application.
 

@@ -163,7 +163,7 @@ entry.
 
 ## Journal and results
 
-Every repository has one shared `.ergo/journal.jsonl`. A task journal is the
+Every selected backlog has one shared `journal.jsonl` (by default `.ergo/journal.jsonl`). A task journal is the
 ordered subset of that file whose `task_id` matches the leaf. The backlog owns
 current tasks, dependencies, claims, and lifecycle state. The journal alone
 owns work narrative and results.
@@ -292,7 +292,8 @@ write no graph events.
 
 ## Storage and compatibility
 
-An initialized repository contains:
+Source-project identity is independent of backlog storage. By default an
+initialized repository contains:
 
 ```text
 .ergo/
@@ -300,6 +301,35 @@ An initialized repository contains:
 ├── journal.jsonl
 └── lock
 ```
+
+Global `--data-dir` selects a project-specific storage base. Shared storage is
+the base itself; `--user <id>` selects `users/<id>` beneath it. Without a base,
+personal backlogs use a platform user-data directory keyed by canonical project
+path and user ID. `--shared` overrides a configured personal default and conflicts
+with `--user`. IDs use 1-64 lowercase ASCII letters, digits, hyphens, or underscores
+and exclude Windows reserved device names on all platforms.
+
+Version 1 global `ergo/config.json` uses the platform user configuration directory.
+It supports `default_user` and `projects`, whose entries have `root`, optional
+`ergo_data`, and optional `default_backlog` (shared or personal). Longest canonical
+ancestor matching selects the project mapping. CLI storage and owner selection
+override configuration. Relative config paths resolve beside the config file;
+relative CLI paths resolve from the working directory. Invalid configuration is
+an error, not permission to select another backlog. Full operating guidance is
+owned by `ergo quickstart`.
+
+Discovery, initialization, and all commands use the same selection model.
+Source-project identity comes from the mapping, existing local discovery, or Git
+worktree root; an explicit project root supports non-Git external storage.
+`init [dir]` retains positional precedence and creates the selected backlog.
+Missing personal/external backlogs require initialization, without shared fallback.
+Result paths and Git evidence remain anchored to the source project. `where`
+reports selected storage; `info` additionally reports project, owner, and selection
+provenance. Tasks and dependencies remain local to a backlog.
+
+External/personal initialization ignores local lock and cache files, preserving
+existing ignore content. Backlog and journal formats are unchanged. Ergo performs
+no Git synchronization and does not migrate, remove, or untrack source data.
 
 The selected JSONL file contains transaction records and may begin with a
 snapshot block after compaction. New repositories select `backlog.jsonl`.
@@ -360,7 +390,8 @@ Confirmed prune removes every journal entry for each selected task. Its dry run
 reports both selected tasks and the number of journal entries that confirmation
 would remove.
 
-Every repository and journal view or update acquires `.ergo/lock`. Views share
+Every backlog and journal view or update acquires the selected storage directory's
+`lock` file (by default `.ergo/lock`). Views share
 the lock with other views and return coherent snapshots; a prune dry run is a
 view. Updates hold the lock exclusively, including confirmed prune. An update
 loads the current graph, validates its complete event batch against an isolated

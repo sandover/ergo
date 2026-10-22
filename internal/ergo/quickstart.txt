@@ -23,7 +23,7 @@ Run `ergo <command> --help` for command syntax and options.
 {{HEADER}}2. BACKLOG MODEL{{RESET}}
 
 Each task has a title, optional body, lifecycle state, dependencies, and
-timestamps. The backlog owns that current graph. One repository-wide journal
+timestamps. The backlog owns that current graph. One journal per backlog
 owns every task's work history and results. A task is ready when it is todo and
 every dependency is complete.
 
@@ -55,11 +55,98 @@ any child was canceled, and done otherwise. Epics cannot be nested.
   {{CMD}}ergo where{{RESET}}
   {{CMD}}ergo info{{RESET}}
 
-Ergo discovers `.ergo` by walking upward from the current directory or from
-`--dir <path>`. For `init`, a positional directory takes precedence over
-`--dir`; without either, Ergo initializes the current directory. `where` prints
-the active `.ergo` directory. `info` reports the running executable and version
-together with the active project and backlog paths.
+By default, Ergo discovers `.ergo` by walking upward from the current directory
+or from `--dir <path>`. For `init`, a positional directory takes precedence over
+`--dir`; without either or a project mapping, Ergo initializes the current
+directory. `where` prints the active backlog directory. `info` reports the
+running executable and version, source project, owner, storage and log paths,
+and how storage was selected.
+
+Personal backlogs and external storage
+
+  {{CMD}}ergo --user aren init{{RESET}}
+  {{CMD}}ergo --user aren list{{RESET}}
+  {{CMD}}ergo --data-dir /path/to/backlogs/project-a --user aren init{{RESET}}
+  {{CMD}}ergo --data-dir /path/to/backlogs/project-a --user aren list{{RESET}}
+
+`--dir` selects the source project; `--data-dir` selects a project-specific
+storage base, not a single JSONL file. Shared backlogs live directly in that
+base. `--user <id>` selects `users/<id>` beneath it. Each backlog has its own
+backlog, journal, lock, and cache. Selecting a colleague's ID selects their
+backlog if you have filesystem access; it does not grant permissions. Tasks
+and dependencies do not cross backlogs. `--agent` still identifies the worker
+claiming a task, not the backlog owner.
+
+IDs contain 1-64 lowercase ASCII letters, digits, hyphens, or underscores.
+Windows reserved names such as `con` and `com1` are rejected on every platform.
+Ergo does not infer IDs from Git or operating-system accounts.
+
+Without a configured or explicit storage base, personal backlogs live under
+`<user-data-dir>/ergo/projects/<project-key>/users/<id>`. The project key hashes
+the canonical source path: different projects and worktrees remain separate.
+User data roots are `$XDG_DATA_HOME` or `~/.local/share` on Linux,
+`~/Library/Application Support` on macOS, and `%LOCALAPPDATA%` on Windows.
+Moving a checkout changes its default key; use a mapping for a stable location.
+
+For external or personal storage, Ergo identifies the project using a mapping,
+an existing `.ergo` ancestor, or the Git worktree root, in that order. Without
+any of these, supply `--dir <project-root>` (or `init <project-root>`). Result
+files and their Git evidence always refer to that source project, never the
+external backlog directory. No source-local `.ergo` is required.
+
+Global project mappings
+
+Ergo reads `ergo/config.json` under the platform user configuration directory:
+Linux `$XDG_CONFIG_HOME` or `~/.config`, macOS `~/Library/Application Support`,
+and Windows `%AppData%`. A missing file means no configuration. Malformed files,
+unknown fields, unsupported versions, and duplicate canonical roots are errors.
+Help, quickstart, and version remain available with invalid configuration.
+
+Example (replace the paths for your machine):
+
+  {
+    "version": 1,
+    "default_user": "aren",
+    "projects": [
+      {
+        "root": "/path/to/project-a",
+        "ergo_data": "/path/to/backlog-repo/project-a",
+        "default_backlog": "personal"
+      }
+    ]
+  }
+
+`root` is required. `ergo_data` is optional. `default_backlog` defaults to
+`shared`; `personal` requires `default_user` unless `--user` supplies the ID.
+`default_user` alone does not switch projects to personal backlogs.
+
+The most specific ancestor mapping wins. Paths are canonicalized, including
+symlinks; matching respects directory boundaries. Relative config paths are
+relative to the config file's directory. Relative CLI paths are relative to the
+working directory. Shell substitutions and `~` inside JSON are not expanded.
+On Windows, JSON backslashes must be escaped, or use forward slashes.
+
+Explicit `--data-dir` overrides the mapped storage base. Explicit `--user`
+overrides the configured owner; `--shared` overrides a personal default. These
+two owner flags conflict. Without an explicit or mapped base, shared storage
+remains `<project>/.ergo`, and personal storage uses the user-data location.
+Use a separate base per project unless you intentionally want one backlog.
+
+Repeat the same selection flags on every command, or configure a mapping.
+Only `init` creates a missing backlog; other commands fail instead of falling
+back to shared work. To migrate, stop writers, copy the selected backlog log
+and `journal.jsonl` into the target layout, and run `init` there to establish
+runtime files. Verify `info`, `list`, and `show` before removing the original.
+Do not copy locks or caches, and do not combine legacy and current backlog logs.
+
+Version control is your choice. External/personal initialization adds local
+ignore rules for locks and caches without ignoring the authoritative logs.
+Track the backlog and journal in a separate Git repository if desired. Ergo
+never commits, fetches, merges, or pushes; use your own scripts or scheduler.
+Coordinate copies and Git updates with Ergo writers: filesystem locking does
+not protect against external Git commands. Resolve divergent logs deliberately,
+then verify them with Ergo. Existing tracked source-local files are not moved,
+deleted, or untracked automatically.
 
   {{CMD}}ergo list{{RESET}}                 active work and failed outcomes
   {{CMD}}ergo list --ready{{RESET}}         tasks available to claim
@@ -324,8 +411,9 @@ removes their entries from the shared journal. Compact preserves all explicit
 results, keeps only the newest automatic entry needed to explain each surviving
 task, and migrates legacy messages and results out of the backlog once.
 
-Every task shares `.ergo/journal.jsonl`; the readable Journal section in `show`
-is a filtered rendering of that JSONL, not another file. Leaf show includes the
+Every task in the selected backlog shares its `journal.jsonl` (by default,
+`.ergo/journal.jsonl`); the readable Journal section in `show` is a filtered
+rendering of that JSONL, not another file. Leaf show includes the
 retained task journal. Epic show includes only each child's latest result. List
 keeps the task tree focused on state and readiness, while `list --json` remains
 a journal-free task-picker projection.
@@ -344,4 +432,6 @@ the same task. Commands retain the bounded wait for an incompatible lock.
 With git worktrees, a best practice is to let a supervisor agent manage the
 backlog, in the main checkout. The supervisor can claim and assign the tasks,
 review the work, and mark tasks done. Subagents in worktrees then don't need
-to mutate ergo state. If copies do diverge, merges are usually easy.
+to mutate ergo state. Explicit mappings can also let worktrees share one
+backlog directory. Divergent copies require deliberate reconciliation; a clean
+text merge does not guarantee compatible task state.

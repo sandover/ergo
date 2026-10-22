@@ -34,13 +34,28 @@ func NewRootCommand(app *ergo.Application, streams Streams, buildVersion string)
 	color := colorModeAuto
 	root := &cobra.Command{
 		Use: "ergo", Short: "A dependency-aware backlog for coding agents.",
-		Long:         "Ergo manages a repository-local backlog shared by agents and humans.\nTasks and dependencies persist across sessions and remain safe under\nconcurrent work.",
+		Long:         "Ergo manages shared or personal backlogs for agents and humans.\nTasks and dependencies persist across sessions and remain safe under\nconcurrent work.",
 		SilenceUsage: true, SilenceErrors: true, Version: buildVersion,
 	}
 	root.SetIn(streams.In)
 	root.SetOut(streams.Out)
 	root.SetErr(streams.Err)
-	root.PersistentFlags().StringVar(&options.StartDir, "dir", "", "Run in a specific directory")
+	root.PersistentFlags().StringVar(&options.StartDir, "dir", "", "Select a source project path or .ergo directory")
+	root.PersistentFlags().StringVar(&options.DataDir, "data-dir", "", "Select a project backlog storage base")
+	root.PersistentFlags().StringVar(&options.User, "user", "", "Select a personal backlog by user ID")
+	root.PersistentFlags().BoolVar(&options.Shared, "shared", false, "Select the shared backlog instead of a personal default")
+	root.MarkFlagsMutuallyExclusive("user", "shared")
+	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
+		for _, name := range []string{"dir", "data-dir", "user"} {
+			if cmd.Flags().Changed(name) {
+				value, _ := cmd.Flags().GetString(name)
+				if strings.TrimSpace(value) == "" {
+					return fmt.Errorf("--%s cannot be empty", name)
+				}
+			}
+		}
+		return nil
+	}
 	root.PersistentFlags().Var(&color, "color", "Color output: auto, always, or never")
 	root.SetHelpFunc(func(cmd *cobra.Command, _ []string) {
 		if cmd == root {
@@ -150,7 +165,7 @@ func removedArgumentError(args []string) error {
 func rootInvocation(args []string) string {
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
-		if arg == "--dir" || arg == "--color" {
+		if arg == "--dir" || arg == "--color" || arg == "--data-dir" || arg == "--user" {
 			index++
 			continue
 		}

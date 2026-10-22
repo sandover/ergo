@@ -86,15 +86,8 @@ func resolveErgoDir(start string) (string, error) {
 }
 
 func ergoDir(opts GlobalOptions) (string, error) {
-	start := opts.StartDir
-	if start == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return "", err
-		}
-		start = wd
-	}
-	return resolveErgoDir(start)
+	selected, err := resolveStorage(opts, false)
+	return selected.Dir, err
 }
 
 func repositoryLoadGraph(dir string) (*Graph, error) {
