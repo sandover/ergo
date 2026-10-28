@@ -210,6 +210,46 @@ func TestRenderListJSONWithBody(t *testing.T) {
 	}
 }
 
+func TestListJSONIncludesEachRequestedEpic(t *testing.T) {
+	app := newTestApplication(t)
+	epicA, err := app.CreateTask(CreateTaskRequest{Title: "Epic A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	childA, err := app.CreateTask(CreateTaskRequest{Title: "Child A", EpicID: epicA.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	epicB, err := app.CreateTask(CreateTaskRequest{Title: "Epic B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	childB, err := app.CreateTask(CreateTaskRequest{Title: "Child B", EpicID: epicB.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := app.List(ListOptions{
+		OmitJournal: true,
+		EpicIDs:     []string{epicA.ID, "MISSING", epicB.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := RenderListJSON(&output, listed); err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	for _, id := range []string{epicA.ID, childA.ID, epicB.ID, childB.ID} {
+		if !strings.Contains(text, id) {
+			t.Fatalf("listing missing %s: %s", id, text)
+		}
+	}
+	if strings.Contains(text, "MISSING") {
+		t.Fatalf("listing included unknown epic: %s", text)
+	}
+}
+
 type failingListJSONWriter struct{}
 
 func (failingListJSONWriter) Write([]byte) (int, error) {

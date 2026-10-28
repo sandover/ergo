@@ -360,24 +360,52 @@ func (s *Session) listLockedOpt(request ListRequest, alreadyFresh bool) (ListOut
 	}
 	graph := s.graph
 	graph.prepareDerivedQueries()
-	if request.EpicID != "" {
-		epic := graph.Tasks[request.EpicID]
+	ids := listEpicIDs(request)
+	if len(ids) == 1 {
+		epic := graph.Tasks[ids[0]]
 		if epic == nil || !graph.IsEpic(epic.ID) {
-			return ListOutcome{}, classified(ErrorNotFound, fmt.Errorf("no such epic: %s", request.EpicID))
+			return ListOutcome{}, classified(ErrorNotFound, fmt.Errorf("no such epic: %s", ids[0]))
 		}
 	}
 	all := collectNonContainerTasks(graph)
 	outcome := ListOutcome{
 		Options: request, Graph: graph, Generation: s.generation,
-		Roots:       buildListRoots(graph, request),
+		Roots:       buildListRootsForEpics(graph, request, ids),
 		AllTasks:    all,
 		ActiveTasks: filterActiveTasks(all), ReadyTasks: filterReadyTasks(all, graph),
 	}
-	if request.EpicID != "" {
-		outcome.EpicChildren = collectEpicChildren(request.EpicID, graph)
+	if len(ids) == 1 {
+		outcome.EpicChildren = collectEpicChildren(ids[0], graph)
 		outcome.EpicReady = filterReadyTasks(outcome.EpicChildren, graph)
 	}
 	return outcome, nil
+}
+
+func listEpicIDs(request ListRequest) []string {
+	if len(request.EpicIDs) > 0 {
+		return request.EpicIDs
+	}
+	if request.EpicID != "" {
+		return []string{request.EpicID}
+	}
+	return nil
+}
+
+func buildListRootsForEpics(graph *Graph, request ListRequest, epicIDs []string) []*treeNode {
+	if len(epicIDs) == 0 {
+		return buildListRoots(graph, request)
+	}
+	var roots []*treeNode
+	for _, id := range epicIDs {
+		if epic := graph.Tasks[id]; epic == nil || !graph.IsEpic(epic.ID) {
+			continue
+		}
+		one := request
+		one.EpicID = id
+		one.EpicIDs = nil
+		roots = append(roots, buildListRoots(graph, one)...)
+	}
+	return roots
 }
 
 func (s *Session) Show(request ShowRequest) (ShowOutcome, error) {

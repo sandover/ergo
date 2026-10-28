@@ -126,7 +126,7 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	newCmd.AddCommand(newTaskCmd, newEpicCmd)
 
 	listCmd := &cobra.Command{Use: "list", Short: "List tasks", Args: noArgs("list [--epic <id>] [--ready | --all | --open-forests]")}
-	listCmd.Flags().String("epic", "", "Filter by epic ID")
+	listCmd.Flags().StringArray("epic", nil, "Filter by epic ID (repeatable)")
 	listCmd.Flags().Bool("ready", false, "Show only ready tasks (conflicts with --all and --open-forests)")
 	listCmd.Flags().Bool("all", false, "Show all tasks, including canceled/done (conflicts with --ready and --open-forests)")
 	listCmd.Flags().Bool("open-forests", false, "Live top-level epics plus nested forests, including done descendants (conflicts with --ready and --all)")
@@ -134,7 +134,13 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 	listCmd.Flags().Bool("with-meta", false, "With --json, include timestamps, claim, and depends_on (list JSON version 2)")
 	listCmd.Flags().Bool("with-body", false, "With --json, include stored body bytes (list JSON version 2)")
 	listCmd.RunE = func(cmd *cobra.Command, _ []string) error {
-		epic, _ := cmd.Flags().GetString("epic")
+		epics, _ := cmd.Flags().GetStringArray("epic")
+		epic := ""
+		if len(epics) > 0 {
+			// Keep EpicID set so an older serve still filters to the first epic
+			// instead of listing the whole board.
+			epic = epics[0]
+		}
 		ready, _ := cmd.Flags().GetBool("ready")
 		all, _ := cmd.Flags().GetBool("all")
 		openForests, _ := cmd.Flags().GetBool("open-forests")
@@ -145,7 +151,7 @@ func addCommands(root *cobra.Command, base *ergo.Application, streams Streams, o
 			return err
 		}
 		req := ergo.ListRequest{
-			EpicID: epic, ReadyOnly: ready, ShowAll: all, OpenForests: openForests, OmitJournal: jsonOutput,
+			EpicID: epic, EpicIDs: epics, ReadyOnly: ready, ShowAll: all, OpenForests: openForests, OmitJournal: jsonOutput,
 			JSONWithMeta: withMeta, JSONWithBody: withBody,
 		}
 		if handled, err := tryProxy(cmd, streams, options, noServer, color, "list", req, ""); handled {

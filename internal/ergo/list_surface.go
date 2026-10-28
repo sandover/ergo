@@ -6,7 +6,9 @@ import (
 )
 
 type ListOptions struct {
-	EpicID       string
+	EpicID string
+	// EpicIDs lists more than one epic in a single call. When set, it wins over EpicID.
+	EpicIDs      []string
 	ReadyOnly    bool
 	ShowAll      bool
 	OpenForests  bool
@@ -25,6 +27,16 @@ func RunList(listOpts ListOptions, opts GlobalOptions, render RenderOptions) err
 }
 
 func RenderList(w io.Writer, outcome ListOutcome, useColor bool, width int) {
+	if len(outcome.Options.EpicIDs) > 1 {
+		graph, roots := outcome.Graph, outcome.Roots
+		for _, root := range roots {
+			if root == nil {
+				continue
+			}
+			renderTreeView(w, []*treeNode{root}, graph, useColor, width)
+		}
+		return
+	}
 	epicID := outcome.Options.EpicID
 	readyOnly := outcome.Options.ReadyOnly
 	showAll := outcome.Options.ShowAll
