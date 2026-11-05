@@ -27,7 +27,13 @@ macOS with Homebrew:
 brew install sandover/tap/ergo
 ```
 
-On Windows, download the Windows ZIP for your architecture from the
+On Windows, install with WinGet:
+
+```powershell
+winget install --id Sandover.Ergo --exact
+```
+
+Or download the Windows ZIP for your architecture from the
 [latest GitHub release](https://github.com/sandover/ergo/releases/latest),
 extract `ergo.exe`, and add its directory to your user `PATH`. Open a new
 terminal after changing `PATH`.

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.6] - 2026-11-05
+
+### Fixed
+
+- Homebrew casks now use current install steps to remove macOS quarantine from
+  the Ergo binary without a deprecation warning.
+- The VS Code extension now gives clearer recovery guidance when the Ergo CLI
+  cannot run on Windows.
+
+### Changed
+
+- Task mutation code now uses focused builders while keeping command behavior
+  and stored data unchanged.
+- The planning skill, quickstart, and README now give shorter guidance. The
+  quickstart also explains how to coordinate a backlog across Git worktrees.
+
 ## [6.0.5] - 2026-09-23
 
 ### Added
