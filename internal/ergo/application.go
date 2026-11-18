@@ -56,6 +56,9 @@ func (a *Application) CreateTask(request CreateTaskRequest) (CreateTaskOutcome, 
 	if title == "" {
 		return CreateTaskOutcome{}, classified(ErrorUsage, errors.New(NewTaskUsage))
 	}
+	if err := validateBodyText(request.Body); err != nil {
+		return CreateTaskOutcome{}, err
+	}
 	dir, err := ergoDir(a.repository)
 	if err != nil {
 		return CreateTaskOutcome{}, classifyRepositoryError(err)

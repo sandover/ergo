@@ -1,6 +1,7 @@
 package ergo
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -30,6 +31,17 @@ func TestInfoReportsResolvedExecutableAndRepositoryPaths(t *testing.T) {
 	wantBacklog := filepath.Join(project, ".ergo", "backlog.jsonl")
 	if outcome.Backlog != wantBacklog {
 		t.Errorf("Backlog = %q, want %q", outcome.Backlog, wantBacklog)
+	}
+	for _, name := range []string{plansFileName, oldEventsFileName} {
+		legacy := filepath.Join(project, dataDirName, name)
+		if err := os.Rename(wantBacklog, legacy); err != nil {
+			t.Fatal(err)
+		}
+		outcome, err := NewApplication(RepositoryOptions{StartDir: project}).Info(InfoRequest{Executable: executable})
+		if err != nil || outcome.Backlog != legacy {
+			t.Fatalf("Info backlog = %q, want %q, err=%v", outcome.Backlog, legacy, err)
+		}
+		wantBacklog = legacy
 	}
 }
 

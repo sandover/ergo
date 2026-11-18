@@ -206,9 +206,10 @@ Use focused commands to change existing work:
   {{CMD}}ergo move ABCDEF GHIJKL{{RESET}}
   {{CMD}}ergo move ABCDEF --root{{RESET}}
 
-`body` requires piped stdin and replaces the entire body by default; an empty
-pipe clears it. `--append` instead adds the input bytes literally to the stored
-body under the write lock. It adds no separator or newline, so include any
+Body input and epic files use UTF-8. `body` requires piped stdin and replaces
+the entire body by default. An empty pipe clears it. `--append` adds the input
+bytes literally to the stored body under the write lock. It adds no separator
+or newline, so include any
 desired boundary in the input. Empty append input is a no-op. Move accepts
 leaves only. Its destination must be an epic or a clean,
 unclaimed root todo or draft task with no results; the latter becomes an epic
@@ -288,7 +289,8 @@ Sequence means A before B before C: each later task depends on the preceding
 task. Unsequence removes those adjacent edges. Existing or absent edges are
 no-ops. A failed chain writes no partial edges.
 
-Self-dependencies, cycles, and edges between an epic and its child fail. A
+Self-dependencies, cycles, and edges between an epic and its child fail.
+Sequencing and moving tasks can both create cycles through epic membership. A
 dependency on an epic completes when all its children are done, failed, or
 canceled. This lets fan-in work continue after every branch reports an outcome;
 the epic still renders as failed when any child failed.

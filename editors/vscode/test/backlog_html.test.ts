@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 import { renderBacklog } from "../src/backlog_html";
 import { parseListDocument } from "../src/listing";
 
@@ -77,7 +78,6 @@ test("renders a clickable searchable overview from realistic backlog data", () =
   assert.match(view.html, /data-ready="true"/);
   assert.match(view.html, /data-ready="false"/);
   assert.match(view.html, /group\.tagName === "DETAILS"/);
-  assert.match(view.html, /group\.hidden = query && !epicMatches && groupMatches === 0/);
   assert.match(view.html, /const onlyReady = readyOnly\.checked/);
 	assert.match(view.html, /readyOnly\.addEventListener\("change", \(\) => \{ applyFilters\(\); saveState\(\); \}\)/);
 	assert.match(view.html, /const saved = vscode\.getState\(\) \|\| \{\}/);
@@ -87,6 +87,45 @@ test("renders a clickable searchable overview from realistic backlog data", () =
 	assert.match(view.html, /--text: #8f9598/);
 	assert.match(view.html, /--accent: #8298a0/);
 	assert.deepEqual([...view.itemIds], ["CCKOC2", "BQM4Y5", "OKOKSE", "RKSARF", "EUDZOS", "FAIL01"]);
+});
+
+test("Ready only hides epics with no matching ready children", () => {
+  const { html } = renderBacklog(claimsLibraryBacklog, "vscode-resource:", "fixed-nonce");
+  const script = html.match(/<script nonce="fixed-nonce">([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(script);
+
+  for (const [ready, search, hidden] of [
+    [false, "", true],
+    [false, "citation", true],
+    [true, "", false],
+    [true, "citation", true],
+  ] as const) {
+    const row = { dataset: { search: "child task", ready: String(ready) }, hidden: false };
+    const epic = {
+      tagName: "DETAILS",
+      dataset: { epicSearch: "citation epic" },
+      querySelectorAll: () => [row],
+      hidden: false,
+    };
+    const noMatches = { hidden: true };
+    const inputs = {
+      search: { addEventListener: () => undefined },
+      readyOnly: { addEventListener: () => undefined },
+      noMatches,
+    };
+    runInNewContext(script, {
+      acquireVsCodeApi: () => ({ getState: () => ({ search, readyOnly: true }) }),
+      document: {
+        getElementById: (id: keyof typeof inputs) => inputs[id],
+        querySelectorAll: (selector: string) => selector === "section, details" ? [epic] : [],
+        addEventListener: () => undefined,
+      },
+      window: { addEventListener: () => undefined },
+      requestAnimationFrame: () => undefined,
+    });
+    assert.equal(epic.hidden, hidden, `ready=${ready}, search=${search}`);
+    assert.equal(noMatches.hidden, !hidden);
+  }
 });
 
 test("escapes task content before inserting it into HTML", () => {

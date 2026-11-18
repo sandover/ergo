@@ -79,8 +79,10 @@ func TestCacheCodecRejectsInvalidFiles(t *testing.T) {
 		"missing payload": []byte("{}\n"),
 		"missing newline": bytes.TrimSuffix(data, []byte("\n")),
 		"bad checksum":    bytes.Replace(data, []byte(`"title":"Task"`), []byte(`"title":"Changed"`), 1),
-		"bad version":     resignCache(t, data, []byte(`"version":2`), []byte(`"version":3`)),
-		"unknown field":   resignCache(t, data, []byte(`"version":2`), []byte(`"version":2,"surprise":true`)),
+		"old version": rewriteCache(t, data, func(document *cacheDocument) {
+			document.Version = cacheVersion - 1
+		}),
+		"unknown field": resignCache(t, data, []byte(`"source":{`), []byte(`"surprise":true,"source":{`)),
 		"unknown parent": rewriteCache(t, data, func(document *cacheDocument) {
 			document.Tasks[0].EpicID = "MISSING"
 		}),

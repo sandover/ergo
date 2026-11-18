@@ -10,6 +10,56 @@ import (
 	"testing"
 )
 
+func TestMoveRejectsPromotionWithJournalResult(t *testing.T) {
+	dir := setupErgo(t)
+	destination := createLifecycleTask(t, dir)
+	source := createLifecycleTask(t, dir)
+	if _, stderr, code := runErgo(t, dir, "", "result", destination, "Preserve this evidence"); code != 0 {
+		t.Fatalf("result failed: %s", stderr)
+	}
+	_, stderr, code := runErgo(t, dir, "", "move", source, destination)
+	if code == 0 || !strings.Contains(stderr, "results attached") {
+		t.Fatalf("move code=%d stderr=%q", code, stderr)
+	}
+	if got := showTaskOutput(t, dir, destination); !strings.Contains(got, "Preserve this evidence") {
+		t.Fatalf("destination lost its result: %s", got)
+	}
+}
+
+func TestRejectsCyclesThroughEpicMembership(t *testing.T) {
+	for _, method := range []string{"sequence", "move through completion", "move through inheritance"} {
+		t.Run(method, func(t *testing.T) {
+			dir := setupErgo(t)
+			epic := createLifecycleTask(t, dir)
+			child := createLifecycleTask(t, dir)
+			outside := createLifecycleTask(t, dir)
+			run := func(args ...string) {
+				t.Helper()
+				if _, stderr, code := runErgo(t, dir, "", args...); code != 0 {
+					t.Fatalf("%v failed: %s", args, stderr)
+				}
+			}
+			var rejected []string
+			switch method {
+			case "sequence":
+				run("move", child, epic)
+				rejected = []string{"sequence", epic, outside, child}
+			case "move through completion":
+				run("sequence", epic, outside, child)
+				rejected = []string{"move", child, epic}
+			case "move through inheritance":
+				run("sequence", child, outside, epic)
+				rejected = []string{"move", child, epic}
+			}
+			before := countEventLines(t, dir)
+			_, stderr, code := runErgo(t, dir, "", rejected...)
+			if code == 0 || !strings.Contains(stderr, "cycle") || countEventLines(t, dir) != before {
+				t.Fatalf("%v must fail without appending: code=%d stderr=%q", rejected, code, stderr)
+			}
+		})
+	}
+}
+
 func TestMovePromotesDestinationAndReturnsToRoot(t *testing.T) {
 	dir := setupErgo(t)
 	destination := createLifecycleTask(t, dir)

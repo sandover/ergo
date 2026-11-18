@@ -360,6 +360,10 @@ func replayEventsOntoRaw(graph *Graph, events []Event) (*Graph, error) {
 			if err != nil {
 				return nil, replayDecodeError(context, event.Type, data.ID, fmt.Errorf("invalid ts: %w", err))
 			}
+			// Preserve the body the user saw before the legacy title became explicit.
+			if strings.TrimSpace(task.Title) == "" && strings.TrimSpace(data.Title) != "" {
+				_, task.Body = deriveTitleAndBodyFromLegacy(task.Body)
+			}
 			task.Title = data.Title
 			task.UpdatedAt = maxTime(task.UpdatedAt, ts)
 		case eventBody:

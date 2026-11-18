@@ -108,11 +108,11 @@ func derivedEpicStateForTasks(children []*Task) string {
 		return "empty"
 	}
 	allFinished := true
-	allCanceled := true
+	anyCanceled := false
 	anyFailed := false
 	for _, child := range children {
 		allFinished = allFinished && isFinishedState(child.State)
-		allCanceled = allCanceled && child.State == stateCanceled
+		anyCanceled = anyCanceled || child.State == stateCanceled
 		anyFailed = anyFailed || child.State == stateFailed
 	}
 	if !allFinished {
@@ -121,7 +121,7 @@ func derivedEpicStateForTasks(children []*Task) string {
 	if anyFailed {
 		return stateFailed
 	}
-	if allCanceled {
+	if anyCanceled {
 		return stateCanceled
 	}
 	return stateDone
@@ -306,4 +306,40 @@ func isReachable(graph *Graph, start, target string, visited map[string]bool) bo
 		}
 	}
 	return false
+}
+
+// workReaches follows both stored dependencies and the prerequisites implied
+// by epic membership. An epic waits for its children to finish, and each child
+// inherits its epic's dependencies.
+func (graph *Graph) workReaches(start, target string, includeTargetChildren bool) bool {
+	graph.ensureIndexes()
+	visited := make(map[string]bool)
+	var visit func(string) bool
+	visit = func(id string) bool {
+		task := graph.Tasks[id]
+		if task == nil || visited[id] {
+			return false
+		}
+		if id == target || (includeTargetChildren && task.EpicID == target) {
+			return true
+		}
+		visited[id] = true
+		for dependency := range graph.Deps[id] {
+			if visit(dependency) {
+				return true
+			}
+		}
+		for dependency := range graph.Deps[task.EpicID] {
+			if visit(dependency) {
+				return true
+			}
+		}
+		for _, child := range graph.childrenByEpic[id] {
+			if visit(child.ID) {
+				return true
+			}
+		}
+		return false
+	}
+	return visit(start)
 }

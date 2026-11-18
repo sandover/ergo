@@ -18,9 +18,9 @@ type InfoOutcome struct {
 }
 
 func (a *Application) Info(request InfoRequest) (InfoOutcome, error) {
-	where, err := a.Where()
-	if err != nil {
-		return InfoOutcome{}, err
+	var repository Repository
+	if err := repository.Open(a.repository); err != nil {
+		return InfoOutcome{}, classifyRepositoryError(err)
 	}
 	executable, err := filepath.Abs(request.Executable)
 	if err != nil {
@@ -32,8 +32,8 @@ func (a *Application) Info(request InfoRequest) (InfoOutcome, error) {
 	return InfoOutcome{
 		Executable: executable,
 		Version:    request.Version,
-		Project:    filepath.Dir(where.Path),
-		Backlog:    filepath.Join(where.Path, backlogFileName),
-		Journal:    filepath.Join(where.Path, journalFileName),
+		Project:    repository.ProjectDir(),
+		Backlog:    repository.eventsPath,
+		Journal:    repository.journalPath,
 	}, nil
 }

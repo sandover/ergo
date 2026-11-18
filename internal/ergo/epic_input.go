@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode/utf8"
 )
 
 // EpicTaskInput describes one child task in an epic file.
@@ -22,6 +23,9 @@ func ParseEpicFile(path string) ([]EpicTaskInput, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
+	}
+	if !utf8.Valid(content) {
+		return nil, fmt.Errorf("%s: epic file must be valid UTF-8", path)
 	}
 
 	chunks := splitEpicChunks(strings.ReplaceAll(string(content), "\r\n", "\n"))

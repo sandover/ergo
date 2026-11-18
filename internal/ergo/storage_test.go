@@ -339,7 +339,7 @@ func TestAppendTransactionPreservesLegacyEventsAndReplaysBatch(t *testing.T) {
 func TestAppendTransactionRepairsTruncatedTail(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, plansFileName)
-	legacy := `{"type":"noop","ts":"t","data":{}}` + "\n"
+	legacy := "\n" + `{"type":"noop","ts":"t","data":{}}` + "\n\n"
 	if err := os.WriteFile(path, []byte(legacy+`{"type":"transaction","version":1,"events":[`), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -353,9 +353,31 @@ func TestAppendTransactionRepairsTruncatedTail(t *testing.T) {
 	if strings.Contains(string(data), `"events":[{"type":"transaction"`) {
 		t.Fatalf("truncated bytes were concatenated with the new transaction: %s", data)
 	}
+	if !strings.HasPrefix(string(data), legacy) {
+		t.Fatal("tail repair changed bytes before the interrupted record")
+	}
 	events, err := readEvents(path)
 	if err != nil || len(events) != 2 {
 		t.Fatalf("events=%d err=%v log=%s", len(events), err, data)
+	}
+}
+
+func TestTransactionAtRecordLimitCanBeRead(t *testing.T) {
+	path := filepath.Join(t.TempDir(), backlogFileName)
+	event := Event{Type: "body", Data: json.RawMessage(`{"body":""}`)}
+	batch := []Event{event}
+	empty, err := marshalTransaction(batch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := strings.Repeat("x", maxLogRecordBytes-(len(empty)-1))
+	batch[0].Data = json.RawMessage(`{"body":"` + body + `"}`)
+	if err := appendEvents(path, batch); err != nil {
+		t.Fatal(err)
+	}
+	events, err := readEvents(path)
+	if err != nil || len(events) != 1 {
+		t.Fatalf("read at record limit: events=%d, err=%v", len(events), err)
 	}
 }
 

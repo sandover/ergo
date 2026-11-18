@@ -18,7 +18,7 @@ import (
 
 const (
 	cacheFileName = "cache.json"
-	cacheVersion  = 2
+	cacheVersion  = 3
 )
 
 type cacheEnvelope struct {

@@ -189,7 +189,7 @@ export function renderBacklog(
         }
         if (group.tagName === "DETAILS") {
           const epicMatches = !query || group.dataset.epicSearch.includes(query);
-          group.hidden = query && !epicMatches && groupMatches === 0;
+          group.hidden = groupMatches === 0 && (onlyReady || (query !== "" && !epicMatches));
           if (!group.hidden) visibleGroups++;
           if ((epicMatches || groupMatches) && query) group.open = true;
         } else {

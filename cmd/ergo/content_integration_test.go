@@ -8,11 +8,62 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 )
+
+func TestBodyWritesRejectInvalidUTF8(t *testing.T) {
+	dir := setupErgo(t)
+	id := createLifecycleTask(t, dir)
+	before := countEventLines(t, dir)
+	invalid := "body\xff"
+	epicFile := filepath.Join(dir, "epic.md")
+	if err := os.WriteFile(epicFile, []byte("# Child\nBody\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"body", id},
+		{"body", id, "--append"},
+		{"new", "task", "Task"},
+		{"new", "epic", "Epic", "--file", epicFile},
+	} {
+		_, stderr, code := runErgo(t, dir, invalid, args...)
+		if code == 0 || !strings.Contains(stderr, "valid UTF-8") {
+			t.Fatalf("%v: code=%d stderr=%q", args, code, stderr)
+		}
+	}
+	if err := os.WriteFile(epicFile, []byte("# Child\n"+invalid), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, stderr, code := runErgo(t, dir, "", "new", "epic", "Epic", "--file", epicFile)
+	if code == 0 || !strings.Contains(stderr, "valid UTF-8") || countEventLines(t, dir) != before {
+		t.Fatalf("invalid bodies must fail without appending: code=%d stderr=%q", code, stderr)
+	}
+}
+
+func TestLegacyTitleEditPreservesBody(t *testing.T) {
+	dir := setupErgo(t)
+	log := filepath.Join(dir, ".ergo", "backlog.jsonl")
+	event := `{"type":"new_task","ts":"2024-01-01T00:00:00Z","data":{"id":"LEGACY","state":"todo","body":"Original title\nOriginal body\n","created_at":"2024-01-01T00:00:00Z"}}`
+	if err := os.WriteFile(log, []byte(event+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	before, stderr, code := runErgo(t, dir, "", "show", "LEGACY", "--body")
+	if code != 0 || before != "Original body\n" {
+		t.Fatalf("unexpected legacy body: body=%q stderr=%q code=%d", before, stderr, code)
+	}
+	if _, stderr, code := runErgo(t, dir, "", "title", "LEGACY", "Renamed"); code != 0 {
+		t.Fatalf("title failed: %s", stderr)
+	}
+	after, stderr, code := runErgo(t, dir, "", "show", "LEGACY", "--body")
+	if code != 0 || after != before {
+		t.Fatalf("rename changed body: before=%q after=%q stderr=%q code=%d", before, after, stderr, code)
+	}
+}
 
 func TestTitleCommandOnTaskAndContainer(t *testing.T) {
 	dir := setupErgo(t)

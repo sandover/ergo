@@ -8,6 +8,7 @@ package ergo
 import (
 	"errors"
 	"strings"
+	"unicode/utf8"
 )
 
 type UpdateTitleRequest struct{ ID, Title string }
@@ -44,6 +45,9 @@ type UpdateBodyOutcome struct {
 }
 
 func (a *Application) UpdateBody(request UpdateBodyRequest) (UpdateBodyOutcome, error) {
+	if err := validateBodyText(string(request.Body)); err != nil {
+		return UpdateBodyOutcome{}, err
+	}
 	dir, err := ergoDir(a.repository)
 	if err != nil {
 		return UpdateBodyOutcome{}, classifyRepositoryError(err)
@@ -56,6 +60,13 @@ func (a *Application) UpdateBody(request UpdateBodyRequest) (UpdateBodyOutcome, 
 		ID: request.ID, Bytes: len(outcome.Graph.Tasks[request.ID].Body),
 		Changed: len(outcome.ChangedFields) > 0,
 	}, nil
+}
+
+func validateBodyText(body string) error {
+	if !utf8.ValidString(body) {
+		return classified(ErrorUsage, errors.New("task and epic bodies must be valid UTF-8"))
+	}
+	return nil
 }
 
 type MoveRequest struct {
@@ -78,7 +89,7 @@ func (a *Application) Move(request MoveRequest) (MoveOutcome, error) {
 	if err != nil {
 		return MoveOutcome{}, classifyRepositoryError(err)
 	}
-	outcome, err := applyTaskChange(dir, a.repository, request.ID, false, moveChange(request.DestinationID))
+	outcome, err := applyTaskChange(dir, a.repository, request.ID, !request.ToRoot, moveChange(request.DestinationID))
 	if err != nil {
 		return MoveOutcome{}, classifyRepositoryError(err)
 	}

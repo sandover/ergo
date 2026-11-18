@@ -781,6 +781,33 @@ func TestPathAndCreationConfirmations(t *testing.T) {
 	}
 }
 
+func TestRelativeDirectoryDiscoversAncestorsAndBuildsAbsoluteLinks(t *testing.T) {
+	dir := setupErgo(t)
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0755); err != nil {
+		t.Fatal(err)
+	}
+	want, stderr, code := runErgo(t, sub, "", "where")
+	if code != 0 {
+		t.Fatalf("where failed: %s", stderr)
+	}
+	got, stderr, code := runErgo(t, sub, "", "--dir", ".", "where")
+	if code != 0 || got != want {
+		t.Fatalf("relative where: got=%q want=%q stderr=%q code=%d", got, want, stderr, code)
+	}
+	id := createLifecycleTask(t, dir)
+	if err := os.WriteFile(filepath.Join(dir, "report.md"), []byte("Evidence"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, stderr, code := runErgo(t, dir, "", "result", id, "Report", "--file", "report.md"); code != 0 {
+		t.Fatalf("result failed: %s", stderr)
+	}
+	got, stderr, code = runErgo(t, filepath.Dir(dir), "", "--dir", filepath.Base(dir), "show", id)
+	if code != 0 || !strings.Contains(got, "[report.md](file:///") {
+		t.Fatalf("relative show did not generate an absolute file link: stdout=%q stderr=%q code=%d", got, stderr, code)
+	}
+}
+
 func TestInitDirectorySelection(t *testing.T) {
 	t.Run("global dir", func(t *testing.T) {
 		workingDir := t.TempDir()

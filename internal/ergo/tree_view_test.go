@@ -38,12 +38,12 @@ func TestDerivedEpicState(t *testing.T) {
 			want: "canceled",
 		},
 		{
-			name: "mixed done and canceled counts as done",
+			name: "finished epic with a canceled child is canceled",
 			children: []*treeNode{
 				{task: &Task{ID: "T1", State: stateDone}},
 				{task: &Task{ID: "T2", State: stateCanceled}},
 			},
-			want: "done",
+			want: "canceled",
 		},
 		{
 			name: "finished epic with failed child is failed",
@@ -151,7 +151,7 @@ func TestFilterAndCollapseNodes(t *testing.T) {
 				children: []*treeNode{
 					{task: &Task{ID: "T1", State: stateDone}},
 					{task: &Task{ID: "T2", State: stateDone}},
-					{task: &Task{ID: "T3", State: stateCanceled}}, // counts toward done
+					{task: &Task{ID: "T3", State: stateDone}},
 				},
 			},
 		}

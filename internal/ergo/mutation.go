@@ -115,6 +115,19 @@ func moveChange(destinationID string) taskChange {
 		if destinationID == task.EpicID {
 			return taskChangeResult{}, nil
 		}
+		if destinationID != "" {
+			// Check the proposed placement on the repository's working copy.
+			task.EpicID = destinationID
+			graph.rebuildIndexes()
+			if graph.workReaches(task.ID, destinationID, false) {
+				return taskChangeResult{}, errors.New("move would create a dependency cycle")
+			}
+			for dependency := range graph.Deps[destinationID] {
+				if graph.workReaches(dependency, task.ID, false) {
+					return taskChangeResult{}, errors.New("move would create a dependency cycle")
+				}
+			}
+		}
 		event, err := newEvent("epic", now, EpicAssignEvent{ID: task.ID, EpicID: destinationID, TS: formatTime(now)})
 		if err != nil {
 			return taskChangeResult{}, err

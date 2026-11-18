@@ -37,6 +37,9 @@ func (a *Application) CreateEpic(request CreateEpicRequest) (CreateEpicOutcome, 
 	if strings.TrimSpace(request.FilePath) == "" || strings.TrimSpace(request.Title) == "" {
 		return CreateEpicOutcome{}, classified(ErrorUsage, errors.New(NewEpicUsage))
 	}
+	if err := validateBodyText(request.Body); err != nil {
+		return CreateEpicOutcome{}, err
+	}
 	tasks, err := ParseEpicFile(request.FilePath)
 	if err != nil {
 		var pathError *os.PathError

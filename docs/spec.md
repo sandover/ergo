@@ -109,9 +109,10 @@ file contains Markdown chunks separated by a line that is exactly `---`. Each
 chunk begins with `# Title`; the remaining text becomes the child body. Titles
 must be unique within the file. File order creates no dependencies.
 
-Optional piped stdin becomes the literal epic body. Ergo parses and validates
-the full file before it writes one atomic batch. Empty files, malformed chunks,
-and duplicate titles write nothing. `--draft` gives every child the `draft`
+Optional piped stdin becomes the literal epic body. Body input and the epic
+file must use UTF-8. Ergo parses and validates the full file before it writes
+one atomic batch. Empty files, malformed chunks, and duplicate titles write
+nothing. `--draft` gives every child the `draft`
 state in that same atomic batch. Success names the epic and every child and
 reports task and dependency counts.
 
@@ -198,8 +199,8 @@ attaches a file.
 
 `title` trims surrounding whitespace and rejects an empty value.
 
-`body` requires piped stdin. It replaces the stored body literally by default.
-An empty pipe clears the body. `--append` adds the piped bytes to the current
+`body` requires UTF-8 text on piped stdin. It replaces the stored body literally
+by default. An empty pipe clears the body. `--append` adds the piped bytes to the current
 body under the write lock. Ergo adds no separator or newline. Empty append input
 is a no-op. Leaves and epics both support title and body changes. A write that
 produces the current value appends no event.
@@ -216,7 +217,8 @@ each adjacent pair. `unsequence` removes the same edges. Existing links and
 absent links are no-ops. Ergo validates the complete chain before writing, so a
 failed chain writes no partial edges.
 
-Ergo rejects self-dependencies, ancestry edges, and cycles. A dependency on an
+Ergo rejects self-dependencies, ancestry edges, and cycles. Cycle checks account
+for epic membership when adding dependencies or moving tasks. A dependency on an
 epic finishes when that epic finishes. A child inherits dependencies assigned
 to its epic. `done`, `failed`, and `canceled` leaves satisfy dependencies.
 `blocked`, `doing`, `todo`, and legacy `error` leaves do not.

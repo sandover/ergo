@@ -43,7 +43,8 @@ func writeLinkEvents(dir string, opts GlobalOptions, eventType string, edges []s
 				if _, exists := working.Deps[from][to]; exists {
 					continue
 				}
-				if hasCycle(working, from, to) {
+				// An epic's new dependency also applies to each of its children.
+				if working.workReaches(to, from, true) {
 					return nil, errors.New("dependency would create a cycle")
 				}
 			} else {

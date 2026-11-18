@@ -50,6 +50,10 @@ type eventLogRead struct {
 }
 
 func resolveErgoDir(start string) (string, error) {
+	start, err := filepath.Abs(start)
+	if err != nil {
+		return "", err
+	}
 	current := start
 	for {
 		candidate := filepath.Join(current, dataDirName)
@@ -168,7 +172,7 @@ func inspectEventLog(path string) (eventLogRead, error) {
 func scanEventLog(reader io.Reader, path string, prefix backlogSource, endsWithNewline, allowSnapshot bool) (eventLogRead, error) {
 	result := eventLogRead{recordCount: prefix.Records, lineCount: prefix.Lines, validBytes: prefix.Bytes}
 	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 0, 64*1024), maxLogRecordBytes)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxLogRecordBytes+1) // Include the newline.
 	scanner.Split(scanLinesPreservingCarriageReturn)
 	var pending []byte
 	pendingNo := 0
@@ -232,7 +236,7 @@ func scanEventLog(reader io.Reader, path string, prefix backlogSource, endsWithN
 	for scanner.Scan() {
 		currentNo++
 		line := append([]byte(nil), scanner.Bytes()...) // copy (scanner buffer is reused)
-		if pending != nil {
+		if pendingNo != 0 {
 			if err := processLine(pendingNo, pending); err != nil {
 				return eventLogRead{}, err
 			}
@@ -249,7 +253,7 @@ func scanEventLog(reader io.Reader, path string, prefix backlogSource, endsWithN
 		return eventLogRead{}, err
 	}
 
-	if pending != nil {
+	if pendingNo != 0 {
 		if err := processLine(pendingNo, pending); err != nil {
 			// Only malformed JSON in an unterminated final record is a
 			// recoverable interrupted write. A complete JSON value with an
