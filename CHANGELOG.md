@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.7] - 2026-11-18
+
+### Fixed
+
+- Interrupted writes recover safely when the backlog contains blank lines.
+  Ergo can read transactions at the 10 MiB write limit.
+- `sequence` and `move` reject new dependency cycles through epic membership.
+  A move cannot promote a task that already has a recorded result.
+- Renaming a legacy task preserves its body. Body writes reject invalid UTF-8
+  before saving.
+- Relative `--dir` paths find ancestor backlogs and produce absolute result
+  links. `ergo info` reports the selected backlog file, including legacy names.
+- A finished epic with a canceled child reports `canceled` when no child failed.
+
+Ergo rebuilds its local replay cache as needed. Backlogs and journals require
+no migration.
+
 ## [6.0.6] - 2026-11-05
 
 ### Fixed
@@ -839,7 +856,8 @@ read that log.
 - State machine with enforced transitions
 - Epic-to-epic dependencies
 
-[Unreleased]: https://github.com/sandover/ergo/compare/v6.0.4...HEAD
+[Unreleased]: https://github.com/sandover/ergo/compare/v6.0.7...HEAD
+[6.0.7]: https://github.com/sandover/ergo/compare/v6.0.6...v6.0.7
 [6.0.4]: https://github.com/sandover/ergo/compare/v6.0.3...v6.0.4
 [6.0.3]: https://github.com/sandover/ergo/compare/v6.0.2...v6.0.3
 [6.0.2]: https://github.com/sandover/ergo/compare/v6.0.1...v6.0.2

@@ -87,7 +87,7 @@
     "package": "vsce package"
   },
   "dependencies": {
-    "markdown-it": "^14.1.0"
+    "markdown-it": "14.3.3"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
