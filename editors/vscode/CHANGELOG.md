@@ -1,5 +1,10 @@
 # Change Log
 
+## 6.1.1
+
+- Hide epics with no matching ready tasks when Ready only is on.
+- Update the Markdown renderer to `markdown-it` 14.3.3 for security fixes.
+
 ## 6.1.0
 
 - Restyle the backlog with the softer Solar Eclipse Ashen palette.

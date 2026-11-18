@@ -7,7 +7,7 @@ Ergo Backlog turns a repository's dependency-aware [Ergo](https://github.com/san
 ## What you can do
 
 - **Scan the active backlog.** See tasks grouped under their epics, with compact status and dependency cues.
-- **Focus on ready work.** Filter out blocked, draft, and in-progress tasks while keeping their epic context visible.
+- **Focus on ready work.** See ready tasks under their epics.
 - **Find anything quickly.** Search tasks and epics by title or six-character Ergo ID.
 - **Read task and epic details.** Open the selected item as a formatted Markdown preview in its own editor tab.
 - **Open the backlog naturally.** Select `.ergo/backlog.jsonl` in the Explorer to see the backlog view instead of the raw event log.
@@ -54,7 +54,7 @@ The overview preserves the structure that helps you choose and understand work:
 - Status glyphs distinguish ready, blocked, active, and completed work.
 - Draft work uses `◌`: it remains searchable and visible, but the ready-only
   filter excludes it until `ergo open <id>` makes it ordinary todo work.
-- The **Ready tasks only** filter narrows the task list without hiding its epic context.
+- **Ready only** shows ready tasks and the epics they belong to.
 - Clicking an Ergo ID opens that task or epic in a readable detail tab.
 
 Use **Reopen Editor With → Text Editor** when you specifically want to inspect the underlying JSONL event log.

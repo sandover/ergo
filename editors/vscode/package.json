@@ -2,7 +2,7 @@
   "name": "ergo-backlog",
   "displayName": "Ergo Backlog",
   "description": "Browse a dependency-aware Ergo backlog without leaving VS Code.",
-  "version": "6.1.0",
+  "version": "6.1.1",
   "publisher": "sandover",
   "preview": false,
   "icon": "assets/icon.png",
